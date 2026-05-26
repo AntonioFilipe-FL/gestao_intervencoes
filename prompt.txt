@@ -1,0 +1,13 @@
+"Olá! Estamos a desenvolver uma Web App de Gestão de Intervenções. 
+  > 
+  > O que já foi feito:
+  > - Projeto Next.js (App Router + TS + Tailwind v4) inicializado na pasta /webapp.
+  > - Dependências instaladas: Supabase, shadcn/ui, react-hook-form, zod.
+  > - Criado ficheiro .env.example.
+  > 
+  > Para avançar agora:
+  > 1. Já tenho as chaves do Supabase (URL e Anon Key).
+  > 2. Aqui está a lista de colunas da minha Google Sheet atual para definirmos a base de dados:
+  >    [COLA AQUI A TUA LISTA DE COLUNAS]
+  > 
+  > Com base nisto, ajuda-me a criar o esquema SQL para o Supabase e os tipos TypeScript/Zod para os formulários."

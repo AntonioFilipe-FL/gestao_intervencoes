@@ -1,0 +1,24 @@
+
+✦ Reescrevi o script de migração com uma lógica muito mais potente para resolver estes problemas de campos vazios.
+
+  O que mudou:
+   1. Busca Flexível: Agora o script não procura pelo nome exato da coluna. Ele normaliza tudo (remove acentos, espaços e maiúsculas) e tenta encontrar o campo que mais se assemelha. Por exemplo, ele sabe que AÃ§Ã£o
+      efetuada deve ser mapeado para ação efetuada.
+   2. Sincronização de Nomes: Fiz o mesmo para os conteúdos das células. Se no CSV estiver AF e na base de dados af, o script agora consegue fazer a ligação corretamente.
+   3. Datas Reais: A lógica de data foi isolada para garantir que, se houver uma data válida no CSV, ela tem prioridade total sobre a data de hoje.
+
+  Como aplicar agora:
+
+   1. Limpar a tabela (SQL Editor):
+
+   1     TRUNCATE TABLE gestao_interv.interventions;
+
+   2. Correr a nova migração (Terminal):
+   1     npx tsx migrate.ts
+
+  Este novo script deverá preencher finalmente o Técnico, Motivo, Tipo de Intervenção e a Ação Efetuada, mantendo as datas originais do ficheiro. Verifique o terminal para confirmar se vê as mensagens de
+  "Processados...".
+
+
+   npx tsx migrate.ts - migrar csv
+   npm run dev - arrancar

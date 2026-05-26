@@ -1,0 +1,40 @@
+PLANO DE DESENVOLVIMENTO: WEB APP PARA GESTÃO DE INTERVENÇÕES TÉCNICAS
+
+1. OBJETIVO E MOTIVAÇÃO
+O objetivo é criar uma aplicação web moderna e segura para gerir registos de intervenções técnicas, migrando a infraestrutura atual (Google Sheets) para uma base de dados relacional robusta (Supabase/PostgreSQL). A solução vai permitir diferentes níveis de acesso (Admin vs. Read-Only), facilitando o registo e a consulta de dados, validando formulários e preparando o sistema para integração com APIs (como validação de IMEIs). O projeto incluirá uma fase crítica de migração dos dados históricos do Google Sheets para o Supabase.
+
+2. ARQUITETURA E TECNOLOGIAS (STACK)
+- Frontend & Backend: Next.js (React).
+- Base de Dados e Autenticação: Supabase (PostgreSQL open-source). O Supabase lidará com a base de dados relacional e a autenticação via Google OAuth.
+- Estilização e UI: Tailwind CSS em conjunto com shadcn/ui.
+- Gestão de Estado/Formulários: React Hook Form + Zod.
+- Alojamento: Vercel.
+
+3. ESTRUTURA DA SOLUÇÃO E MODELAÇÃO DE DADOS
+
+3.1. Base de Dados Relacional (PostgreSQL)
+Tabelas relacionadas para garantir a integridade dos dados:
+- Tabela users_profiles: Gere os acessos (email e role: Admin ou User).
+- Tabela clientes: Armazena os clientes, incorporando a classificação Venda / Aluguer.
+- Tabelas de Apoio (Lookups): tecnicos, tipos_intervencao, motivos, equipamentos, acessorios, etc.
+- Tabela intervencoes: Tabela principal com todas as colunas de registo (~40 colunas), com ligações (chaves estrangeiras) para as tabelas de apoio.
+
+3.2. Gestão de Acessos (RBAC) via Supabase
+- Login via Google OAuth.
+- Row Level Security (RLS) para garantir que Users apenas leem e Admins podem inserir/editar.
+
+3.3. Funcionalidades Principais
+1. Script de Migração Inicial: Para importar os dados históricos das Sheets para o Supabase.
+2. Painel de Consulta (Dashboard): Listagem com filtros por Cliente, Técnico, Matrícula e Tipo de Intervenção.
+3. Formulário de Registo (Admins): Inserção de dados com dropdowns dinâmicos.
+4. Módulo de Integração (API IMEI): Preparado para validar IMEIs em tempo real.
+
+4. FASES DE IMPLEMENTAÇÃO
+- Fase 1: Configuração do Supabase, Modelação da BD e Auth.
+- Fase 2: Migração de Dados (Processamento de Clientes Venda/Aluguer e Histórico).
+- Fase 3: Desenvolvimento do Frontend (Next.js), Dashboard e Filtros.
+- Fase 4: Formulários de Registo, Validações (Zod) e Deploy.
+
+5. PRÓXIMOS PASSOS (AÇÃO REQUERIDA)
+1. Extrair os dados da Google Sheet atual (CSV/Excel) para análise da estrutura.
+2. Definir o mapeamento exato das colunas para a nova base de dados.
