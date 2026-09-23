@@ -2,11 +2,15 @@
 
 A app (Next.js) e a base de dados (PostgreSQL) ficam no mesmo projeto Railway.
 
-## 1. Criar o projeto
+## 1. Criar o serviço
 
-1. Railway → **New Project** → **Deploy from GitHub repo** → escolher o repositório.
-   - Em **Settings → Source**, definir **Root Directory** = `webapp`.
-2. No mesmo projeto: **+ New** → **Database** → **PostgreSQL**.
+A app é um **serviço novo dentro do projeto Railway que já tem o PostgreSQL** (a BD é partilhada;
+as tabelas ficam isoladas no esquema `gestao_interv`). Estar no mesmo projeto permite usar a rede
+privada e a referência `${{Postgres.DATABASE_URL}}` — sem custos de egress entre app e BD.
+
+1. Abrir o projeto existente → **+ Create** → **GitHub Repo** → `AntonioFilipe-FL/gestao_intervencoes`.
+2. No novo serviço, **Settings → Source → Root Directory** = `webapp`.
+3. Confirmar que o nome do serviço de BD é `Postgres` (se for outro, ajustar a referência abaixo).
 
 ## 2. Variáveis do serviço da app (Variables)
 
@@ -17,9 +21,17 @@ A app (Next.js) e a base de dados (PostgreSQL) ficam no mesmo projeto Railway.
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | credenciais OAuth do Google Cloud |
 | `APP_URL` | `https://<app>.up.railway.app` (ou domínio próprio) |
 | `ADMIN_EMAILS` | o teu email (fica admin no primeiro login) |
+| `NEXT_TELEMETRY_DISABLED` | `1` |
 
 Em **Settings → Networking → Generate Domain** para obter o URL público.
 O Railway deteta o Next.js e corre `npm run build` / `npm run start` automaticamente.
+
+### App Sleeping (poupar custos)
+
+No serviço **da app** (não no Postgres): **Settings → Deploy → Serverless** (App Sleeping) → ativar.
+A app adormece após ~10 min sem tráfego e acorda no pedido seguinte (primeiro acesso demora alguns segundos).
+As ligações à BD fecham ao fim de 30 s sem uso (`idle_timeout` em `src/lib/db.ts`), para não impedirem o sono.
+**Não ativar no Postgres** — é usado também pelo outro projeto.
 
 ## 3. Google OAuth
 
