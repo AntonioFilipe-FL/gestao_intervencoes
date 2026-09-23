@@ -1,82 +1,46 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { sql } from '@/lib/db'
+import { getCurrentUser, requireAdmin } from '@/lib/auth'
 
-/**
- * Obtém todos os perfis (emails autorizados e seus papéis)
- */
+/** Lista de emails autorizados e respetivos papéis (só admins) */
 export async function getUserRoles() {
-  const supabase = await createClient()
-  
-  const { data, error } = await supabase
-    .schema('gestao_interv')
-    .from('profiles')
-    .select('*')
-    .order('email')
-  
-  if (error) {
-    console.error('Error fetching profiles:', error)
-    return []
-  }
-  
-  return data
+  await requireAdmin()
+  return sql<{ email: string; role: string }[]>`select email, role from profiles order by email`
 }
 
-/**
- * Atualiza ou adiciona um perfil (email + papel)
- */
+/** Adiciona ou atualiza um email autorizado */
 export async function updateUserRole(email: string, role: string) {
-  const supabase = await createClient()
-  
-  const { error } = await supabase
-    .schema('gestao_interv')
-    .from('profiles')
-    .upsert({ email: email.toLowerCase().trim(), role })
-  
-  if (error) {
-    console.error('Error updating profile:', error)
-    return { success: false, error: error.message }
+  try {
+    const me = await requireAdmin()
+    const e = email.toLowerCase().trim()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) throw new Error('Email inválido')
+    if (!['admin', 'user'].includes(role)) throw new Error('Papel inválido')
+    if (e === me.email.toLowerCase() && role !== 'admin') throw new Error('Não pode retirar a si próprio o papel de admin.')
+    await sql`insert into profiles (email, role) values (${e}, ${role})
+              on conflict (email) do update set role = excluded.role`
+    revalidatePath('/settings')
+    return { success: true as const }
+  } catch (e) {
+    return { success: false as const, error: (e as Error).message }
   }
-  
-  revalidatePath('/settings')
-  return { success: true }
 }
 
-/**
- * Remove um email da lista autorizada
- */
+/** Remove um email da lista autorizada */
 export async function deleteUserProfile(email: string) {
-  const supabase = await createClient()
-  const { error } = await supabase
-    .schema('gestao_interv')
-    .from('profiles')
-    .delete()
-    .eq('email', email)
-
-  if (error) return { success: false, error: error.message }
-  
-  revalidatePath('/settings')
-  return { success: true }
+  try {
+    const me = await requireAdmin()
+    if (email.toLowerCase() === me.email.toLowerCase()) throw new Error('Não pode remover o seu próprio acesso.')
+    await sql`delete from profiles where email = ${email.toLowerCase()}`
+    revalidatePath('/settings')
+    return { success: true as const }
+  } catch (e) {
+    return { success: false as const, error: (e as Error).message }
+  }
 }
 
-/**
- * Verifica se o utilizador logado é Admin
- */
 export async function isAdmin() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  
-  if (!user) return false
-  
-  const { data, error } = await supabase
-    .schema('gestao_interv')
-    .from('profiles')
-    .select('role')
-    .ilike('email', user.email || '')
-    .maybeSingle()
-    
-  if (error || !data) return false
-  
-  return data.role === 'admin'
+  const user = await getCurrentUser()
+  return user?.role === 'admin'
 }

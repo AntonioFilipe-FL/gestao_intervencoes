@@ -6,7 +6,7 @@ import { isAdmin } from '@/actions/users'
 import { UserManagement } from '@/components/settings/UserManagement'
 
 export default async function SettingsPage() {
-  const data = await getReferenceData()
+  const data = await getReferenceData(false)
   const userIsAdmin = await isAdmin()
 
   return (

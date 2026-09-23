@@ -1,5 +1,6 @@
 import { getInterventions } from '@/services/database'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { getCurrentUser } from '@/lib/auth'
 import Link from 'next/link'
 import {
   Card,
@@ -40,17 +41,22 @@ export default async function InterventionsPage({ searchParams }: Props) {
   }
 
   const hasFilters = clientSearch || techSearch || plateSearch
+  const user = await getCurrentUser()
+  const pageHref = (p: number) =>
+    `/interventions?${new URLSearchParams({ page: String(p), client: clientSearch, tech: techSearch, plate: plateSearch })}`
 
   return (
     <div className="p-8 space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold">Intervenções</h1>
-          <p className="text-muted-foreground">Total de {count.toLocaleString()} registos</p>
+          <p className="text-muted-foreground">Total de {count.toLocaleString('pt-PT')} registos</p>
         </div>
-        <Link href="/interventions/new">
-          <Button size="lg">Nova Intervenção</Button>
-        </Link>
+        {user?.role === 'admin' && (
+          <Link href="/interventions/new" className={buttonVariants({ size: 'lg' })}>
+            Nova Intervenção
+          </Link>
+        )}
       </div>
 
       <Card>
@@ -65,15 +71,13 @@ export default async function InterventionsPage({ searchParams }: Props) {
               <Input name="tech" placeholder="Nome do técnico..." defaultValue={techSearch} />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-700 uppercase">Matrícula</label>
-              <Input name="plate" placeholder="Matrícula..." defaultValue={plateSearch} />
+              <label className="text-sm font-bold text-gray-700 uppercase">Matrícula / IMEI</label>
+              <Input name="plate" placeholder="Matrícula ou IMEI..." defaultValue={plateSearch} />
             </div>
             <div className="flex gap-2">
               <Button type="submit" variant="secondary" size="sm" className="px-6 h-9 font-bold">Filtrar</Button>
               {hasFilters && (
-                <Button type="button" variant="ghost" size="sm" className="h-9" asChild>
-                  <Link href="/interventions">Limpar</Link>
-                </Button>
+                <Link href="/interventions" className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'h-9' })}>Limpar</Link>
               )}
             </div>
           </form>
@@ -102,7 +106,7 @@ export default async function InterventionsPage({ searchParams }: Props) {
                           {interv.license_plate || '---'}
                         </span>
                         <span>•</span>
-                        <span>{new Date(interv.intervention_date).toLocaleDateString('pt-PT')}</span>
+                        <span>{interv.intervention_date.split('-').reverse().join('/')}</span>
                         <span>•</span>
                         <span>{interv.technician?.name}</span>
                       </div>
@@ -112,10 +116,10 @@ export default async function InterventionsPage({ searchParams }: Props) {
                     </Badge>
                   </div>
                 </CardHeader>
-                {interv.action_description && (
+                {(interv.action_description || interv.motive_text) && (
                   <CardContent>
                     <p className="text-sm text-gray-600 line-clamp-2 italic">
-                      "{interv.action_description}"
+                      &ldquo;{interv.action_description ?? interv.motive_text}&rdquo;
                     </p>
                   </CardContent>
                 )}
@@ -128,27 +132,23 @@ export default async function InterventionsPage({ searchParams }: Props) {
       {/* Paginação */}
       {totalPages > 1 && (
         <div className="flex justify-center items-center gap-4 py-8">
-          <Button
-            variant="outline"
-            disabled={currentPage <= 1}
-            asChild
+          <Link
+            href={pageHref(currentPage - 1)}
+            aria-disabled={currentPage <= 1}
+            className={buttonVariants({ variant: 'outline', className: currentPage <= 1 ? 'pointer-events-none opacity-50' : '' })}
           >
-            <Link href={`/interventions?page=${currentPage - 1}&client=${clientSearch}&tech=${techSearch}&plate=${plateSearch}`}>
-              Anterior
-            </Link>
-          </Button>
+            Anterior
+          </Link>
           <span className="text-sm font-medium">
             Página {currentPage} de {totalPages}
           </span>
-          <Button
-            variant="outline"
-            disabled={currentPage >= totalPages}
-            asChild
+          <Link
+            href={pageHref(currentPage + 1)}
+            aria-disabled={currentPage >= totalPages}
+            className={buttonVariants({ variant: 'outline', className: currentPage >= totalPages ? 'pointer-events-none opacity-50' : '' })}
           >
-            <Link href={`/interventions?page=${currentPage + 1}&client=${clientSearch}&tech=${techSearch}&plate=${plateSearch}`}>
-              Próxima
-            </Link>
-          </Button>
+            Próxima
+          </Link>
         </div>
       )}
     </div>

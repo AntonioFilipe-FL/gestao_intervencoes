@@ -124,7 +124,7 @@ export function UserManagement() {
                   <TableCell className="text-right flex justify-end gap-2">
                     <Select
                       defaultValue={user.role}
-                      onValueChange={(value) => handleRoleChange(user.email, value)}
+                      onValueChange={(value) => value && handleRoleChange(user.email, value)}
                     >
                       <SelectTrigger className="w-[120px]">
                         <SelectValue placeholder="Papel" />
@@ -169,7 +169,7 @@ export function UserManagement() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="role">Papel de Acesso</Label>
-              <Select value={newRole} onValueChange={setNewRole}>
+              <Select value={newRole} onValueChange={(v) => setNewRole(v ?? 'user')}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

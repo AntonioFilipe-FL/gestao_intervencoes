@@ -1,16 +1,9 @@
-import { createClient } from '@/utils/supabase/server'
+import { sql } from '@/lib/db'
+import { requireUser } from '@/lib/auth'
 
 export default async function TechniciansPage() {
-  const supabase = await createClient()
-  const { data: technicians, error } = await supabase
-    .schema('gestao_interv')
-    .from('technicians')
-    .select('*')
-    .order('name')
-
-  if (error) {
-    return <div>Erro ao carregar técnicos: {error.message}</div>
-  }
+  await requireUser()
+  const technicians = await sql<{ id: string; name: string; active: boolean }[]>`select id, name, active from technicians order by name`
 
   return (
     <div className="p-8">

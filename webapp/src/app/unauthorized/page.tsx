@@ -1,4 +1,4 @@
-import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 import Link from 'next/link'
 
 export default function UnauthorizedPage() {
@@ -20,9 +20,9 @@ export default function UnauthorizedPage() {
           Se considera que isto é um erro, por favor contacte o administrador do sistema da Frotcom.
         </div>
         <div className="pt-4">
-          <Button asChild className="w-full bg-[#cf0a2c] hover:bg-[#b00926]">
-            <Link href="/login">Voltar para o Login</Link>
-          </Button>
+          <Link href="/login" className={buttonVariants({ className: 'w-full bg-[#cf0a2c] hover:bg-[#b00926] text-white' })}>
+            Voltar para o Login
+          </Link>
         </div>
       </div>
     </div>

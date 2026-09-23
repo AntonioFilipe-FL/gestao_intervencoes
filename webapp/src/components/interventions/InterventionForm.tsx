@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { createClient } from '@/utils/supabase/client'
+import { createIntervention } from '@/actions/interventions'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
@@ -24,10 +24,12 @@ interface Props {
   referenceData: ReferenceData
 }
 
+const toItems = (list: { id: string; name: string }[] | null) =>
+  (list ?? []).map((i) => ({ value: i.id, label: i.name }))
+
 export function InterventionForm({ referenceData }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const supabase = createClient()
 
   const {
     register,
@@ -57,9 +59,9 @@ export function InterventionForm({ referenceData }: Props) {
   const VALID_VALIDATORS = ['TC', 'SP', 'MA', 'HV', 'MS', 'AF']
 
   // Auto-fill client data
-  const handleClientChange = (clientName: string, onChange: (val: string) => void) => {
-    onChange(clientName)
-    const client = referenceData.clients?.find((c) => c.name === clientName)
+  const handleClientChange = (clientId: string, onChange: (val: string) => void) => {
+    onChange(clientId)
+    const client = referenceData.clients?.find((c) => c.id === clientId)
     if (client) {
       setValue('venda_aluguer', client.venda_aluguer || '')
       setValue('nos_vdf', client.nos_vdf || '')
@@ -70,35 +72,12 @@ export function InterventionForm({ referenceData }: Props) {
   const onSubmit = async (values: InterventionFormValues) => {
     setLoading(true)
     try {
-      // Map names back to IDs for the database
-      const mappedValues = {
-        ...values,
-        technician_id: referenceData.technicians?.find(t => t.name === values.technician_id)?.id || null,
-        client_id: referenceData.clients?.find(c => c.name === values.client_id)?.id || null,
-        intervention_type_id: referenceData.interventionTypes?.find(t => t.name === values.intervention_type_id)?.id || null,
-        motive_id: referenceData.motives?.find(m => m.name === values.motive_id)?.id || null,
-        equipment_id: referenceData.equipmentList?.find(e => e.name === values.equipment_id)?.id || null,
-        stock_exit_warehouse_id: referenceData.warehouses?.find(w => w.name === values.stock_exit_warehouse_id)?.id || null,
-        stock_entry_warehouse_id: referenceData.warehouses?.find(w => w.name === values.stock_entry_warehouse_id)?.id || null,
-        bundle_id: referenceData.bundles?.find(b => b.name === values.bundle_id)?.id || null,
-        platform_id: referenceData.platforms?.find(p => p.name === values.platform_id)?.id || null,
-        validated_by: referenceData.technicians?.find(t => t.name === values.validated_by)?.id || null,
-        // Ensure optional date strings are handled correctly
-        validation_date: values.validation_date || null,
-        intervention_date: values.intervention_date || new Date().toISOString().split('T')[0],
-      }
-
-      const { error } = await supabase
-        .schema('gestao_interv')
-        .from('interventions')
-        .insert([mappedValues])
-
-      if (error) throw error
-
-      router.push('/interventions')
+      const result = await createIntervention(values)
+      if (!result.success) throw new Error(result.error)
+      router.push(`/interventions/${result.id}`)
       router.refresh()
-    } catch (error: any) {
-      alert('Erro ao salvar intervenção: ' + error.message)
+    } catch (error) {
+      alert('Erro ao guardar intervenção: ' + (error as Error).message)
     } finally {
       setLoading(false)
     }
@@ -132,13 +111,13 @@ export function InterventionForm({ referenceData }: Props) {
               name="technician_id"
               control={control}
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select items={toItems(referenceData.technicians)} value={field.value ?? ''} onValueChange={field.onChange}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Selecione o técnico" />
                   </SelectTrigger>
                   <SelectContent>
                     {referenceData.technicians?.map((t) => (
-                      <SelectItem key={t.id} value={t.name}>
+                      <SelectItem key={t.id} value={t.id}>
                         {t.name}
                       </SelectItem>
                     ))}
@@ -157,13 +136,13 @@ export function InterventionForm({ referenceData }: Props) {
               name="client_id"
               control={control}
               render={({ field }) => (
-                <Select value={field.value} onValueChange={(v) => handleClientChange(v, field.onChange)}>
+                <Select items={toItems(referenceData.clients)} value={field.value ?? ''} onValueChange={(v) => handleClientChange(v ?? '', field.onChange)}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Selecione o cliente" />
                   </SelectTrigger>
                   <SelectContent>
                     {referenceData.clients?.map((c) => (
-                      <SelectItem key={c.id} value={c.name}>
+                      <SelectItem key={c.id} value={c.id}>
                         {c.name}
                       </SelectItem>
                     ))}
@@ -182,13 +161,13 @@ export function InterventionForm({ referenceData }: Props) {
               name="intervention_type_id"
               control={control}
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select items={toItems(referenceData.interventionTypes)} value={field.value ?? ''} onValueChange={field.onChange}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Selecione o tipo" />
                   </SelectTrigger>
                   <SelectContent>
                     {referenceData.interventionTypes?.map((t) => (
-                      <SelectItem key={t.id} value={t.name}>
+                      <SelectItem key={t.id} value={t.id}>
                         {t.name}
                       </SelectItem>
                     ))}
@@ -244,13 +223,13 @@ export function InterventionForm({ referenceData }: Props) {
               name="equipment_id"
               control={control}
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select items={toItems(referenceData.equipmentList)} value={field.value ?? ''} onValueChange={field.onChange}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Selecione o equipamento" />
                   </SelectTrigger>
                   <SelectContent>
                     {referenceData.equipmentList?.map((e) => (
-                      <SelectItem key={e.id} value={e.name}>
+                      <SelectItem key={e.id} value={e.id}>
                         {e.name}
                       </SelectItem>
                     ))}
@@ -279,13 +258,13 @@ export function InterventionForm({ referenceData }: Props) {
                 name="motive_id"
                 control={control}
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select items={toItems(referenceData.motives)} value={field.value ?? ''} onValueChange={field.onChange}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Selecione o motivo" />
                     </SelectTrigger>
                     <SelectContent>
                       {referenceData.motives?.map((m) => (
-                        <SelectItem key={m.id} value={m.name}>
+                        <SelectItem key={m.id} value={m.id}>
                           {m.name}
                         </SelectItem>
                       ))}
@@ -343,13 +322,13 @@ export function InterventionForm({ referenceData }: Props) {
               name="stock_exit_warehouse_id"
               control={control}
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select items={toItems(referenceData.warehouses)} value={field.value ?? ''} onValueChange={field.onChange}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Selecione o armazém" />
                   </SelectTrigger>
                   <SelectContent>
                     {referenceData.warehouses?.filter(w => w.type !== 'entrada').map((w) => (
-                      <SelectItem key={w.id} value={w.name}>
+                      <SelectItem key={w.id} value={w.id}>
                         {w.name}
                       </SelectItem>
                     ))}
@@ -389,13 +368,13 @@ export function InterventionForm({ referenceData }: Props) {
               name="stock_entry_warehouse_id"
               control={control}
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select items={toItems(referenceData.warehouses)} value={field.value ?? ''} onValueChange={field.onChange}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Selecione o armazém" />
                   </SelectTrigger>
                   <SelectContent>
                     {referenceData.warehouses?.filter(w => w.type !== 'saida').map((w) => (
-                      <SelectItem key={w.id} value={w.name}>
+                      <SelectItem key={w.id} value={w.id}>
                         {w.name}
                       </SelectItem>
                     ))}
@@ -460,13 +439,13 @@ export function InterventionForm({ referenceData }: Props) {
                 name="bundle_id"
                 control={control}
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select items={toItems(referenceData.bundles)} value={field.value ?? ''} onValueChange={field.onChange}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Selecione o bundle" />
                     </SelectTrigger>
                     <SelectContent>
                       {referenceData.bundles?.map((b) => (
-                        <SelectItem key={b.id} value={b.name}>
+                        <SelectItem key={b.id} value={b.id}>
                           {b.name}
                         </SelectItem>
                       ))}
@@ -481,13 +460,13 @@ export function InterventionForm({ referenceData }: Props) {
                 name="platform_id"
                 control={control}
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select items={toItems(referenceData.platforms)} value={field.value ?? ''} onValueChange={field.onChange}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Selecione a plataforma" />
                     </SelectTrigger>
                     <SelectContent>
                       {referenceData.platforms?.map((p) => (
-                        <SelectItem key={p.id} value={p.name}>
+                        <SelectItem key={p.id} value={p.id}>
                           {p.name}
                         </SelectItem>
                       ))}
@@ -525,7 +504,7 @@ export function InterventionForm({ referenceData }: Props) {
                 name="validated_by"
                 control={control}
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select items={toItems(referenceData.technicians)} value={field.value ?? ''} onValueChange={field.onChange}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Selecione..." />
                     </SelectTrigger>
@@ -533,7 +512,7 @@ export function InterventionForm({ referenceData }: Props) {
                       {referenceData.technicians
                         ?.filter((t) => VALID_VALIDATORS.includes(t.name))
                         .map((t) => (
-                          <SelectItem key={t.id} value={t.name}>
+                          <SelectItem key={t.id} value={t.id}>
                             {t.name}
                           </SelectItem>
                         ))}

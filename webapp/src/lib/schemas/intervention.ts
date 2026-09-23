@@ -1,87 +1,89 @@
 import * as z from 'zod'
 
+/** Selects devolvem o id (uuid) ou '' quando nada está escolhido */
+const requiredId = (msg: string) => z.uuid(msg)
+const optionalId = z.union([z.uuid(), z.literal('')]).optional()
+const text = z.string().trim().max(2000).optional()
+
 export const interventionSchema = z.object({
   // Datas
-  intervention_date: z.string().min(1, 'Data da intervenção é obrigatória'),
-  validation_date: z.string().optional(),
+  intervention_date: z.iso.date('Data da intervenção é obrigatória'),
+  validation_date: z.union([z.iso.date(), z.literal('')]).optional(),
 
-  // Técnico
-  technician_id: z.string().uuid('Selecione um técnico'),
+  // Quem / onde
+  technician_id: requiredId('Selecione um técnico'),
+  client_id: requiredId('Selecione um cliente'),
+  venda_aluguer: text,
+  nos_vdf: text,
+  report_projeto: text,
+  intervention_type_id: requiredId('Selecione o tipo de intervenção'),
 
-  // Cliente
-  client_id: z.string().uuid('Selecione um cliente'),
-  venda_aluguer: z.string().optional(),
-  nos_vdf: z.string().optional(),
-  report_projeto: z.string().optional(),
-
-  // Tipo de Intervenção
-  intervention_type_id: z.string().uuid('Selecione o tipo de intervenção'),
-
-  // Identificação Viatura / Equipamento
-  license_plate: z.string().optional(),
-  imei: z.string().optional(),
-
-  // Equipamento Principal
-  equipment_id: z.string().uuid().optional().nullable(),
-  warranty_rental: z.string().optional(),
+  // Identificação viatura / equipamento
+  license_plate: text,
+  imei: z.union([z.string().trim().regex(/^\d{15}$/, 'O IMEI deve ter 15 dígitos'), z.literal('')]).optional(),
+  equipment_id: optionalId,
+  warranty_rental: text,
 
   // Intranet
-  intranet_account: z.string().optional(),
-  intranet_license_plate: z.string().optional(),
+  intranet_account: text,
+  intranet_license_plate: text,
 
-  // Motivo e Descrição
-  motive_id: z.string().uuid('Selecione o motivo'),
-  action_description: z.string().optional(),
-  assisted_material: z.string().optional(),
+  // Motivo e descrição (motivo só é obrigatório em assistências — ver refine abaixo)
+  motive_id: optionalId,
+  action_description: text,
+  assisted_material: text,
 
-  // Equipamento Gasto
-  spent_equipment: z.string().optional(),
-  spent_equipment_imei: z.string().optional(),
+  // Equipamento / acessórios gastos
+  spent_equipment: text,
+  spent_equipment_imei: text,
+  accessory_spent_1: text,
+  accessory_spent_2: text,
+  accessory_spent_3: text,
+  accessory_spent_4: text,
+  accessory_spent_5: text,
 
-  // Acessórios Gastos
-  accessory_spent_1: z.string().optional(),
-  accessory_spent_2: z.string().optional(),
-  accessory_spent_3: z.string().optional(),
-  accessory_spent_4: z.string().optional(),
-  accessory_spent_5: z.string().optional(),
-
-  // Equipamento a Dar Entrada
-  equipment_return: z.string().optional(),
-
-  // Acessórios a Dar Entrada
-  accessory_return_1: z.string().optional(),
-  accessory_return_2: z.string().optional(),
-  accessory_return_3: z.string().optional(),
-  accessory_return_4: z.string().optional(),
-  accessory_return_5: z.string().optional(),
+  // Entrada de material
+  equipment_return: text,
+  accessory_return_1: text,
+  accessory_return_2: text,
+  accessory_return_3: text,
+  accessory_return_4: text,
+  accessory_return_5: text,
 
   // Faturação
-  billing: z.string().optional(),
-  billing_observations: z.string().optional(),
-  billing_email: z.string().email('E-mail inválido').optional().or(z.literal('')),
+  billing: text,
+  billing_observations: text,
+  billing_email: text,
 
-  // Configuração / Bundle
-  bundle_id: z.string().uuid().optional().nullable(),
-  dtc_active_realtime: z.string().optional(),
-  configuration: z.string().optional(),
-  platform_id: z.string().uuid().optional().nullable(),
+  // Configuração
+  bundle_id: optionalId,
+  dtc_active_realtime: text,
+  configuration: text,
+  platform_id: optionalId,
 
   // Outros
-  observations: z.string().optional(),
-  wow: z.string().optional(),
-  services_status: z.string().optional(),
+  observations: text,
+  wow: text,
+  services_status: text,
 
   // Validação
-  validated_by: z.string().uuid().optional().nullable(),
+  validated_by: optionalId,
 
-  // CRM / Documentos
-  crm_vehicle: z.string().optional(),
-  contract_addendum: z.string().optional(),
-  zoho_form: z.string().optional(),
+  // CRM / documentos
+  crm_vehicle: text,
+  contract_addendum: text,
+  zoho_form: text,
 
   // Armazéns
-  stock_exit_warehouse_id: z.string().uuid().optional().nullable(),
-  stock_entry_warehouse_id: z.string().uuid().optional().nullable(),
+  stock_exit_warehouse_id: optionalId,
+  stock_entry_warehouse_id: optionalId,
 })
 
 export type InterventionFormValues = z.infer<typeof interventionSchema>
+
+/** Converte '' em null para gravar na BD */
+export function toDbValues(values: InterventionFormValues) {
+  return Object.fromEntries(
+    Object.entries(values).map(([k, v]) => [k, typeof v === 'string' && v.trim() === '' ? null : v ?? null])
+  ) as Record<keyof InterventionFormValues, string | null>
+}

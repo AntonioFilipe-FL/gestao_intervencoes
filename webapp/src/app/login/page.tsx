@@ -1,19 +1,14 @@
-'use client'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
-import { createClient } from '@/utils/supabase/client'
-import { Button } from '@/components/ui/button'
+const ERRORS: Record<string, string> = {
+  state: 'A sessão de login expirou. Tente novamente.',
+  email: 'A conta Google não tem um email verificado.',
+  oauth: 'Não foi possível concluir o login com Google. Tente novamente.',
+}
 
-export default function LoginPage() {
-  const supabase = createClient()
-
-  const handleGoogleLogin = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
-  }
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error } = await searchParams
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4">
@@ -23,11 +18,14 @@ export default function LoginPage() {
           <p className="mt-2 text-gray-600">Faça login para continuar</p>
         </div>
         
+        {error && (
+          <p className="text-sm text-center text-red-600 bg-red-50 rounded-md p-3">{ERRORS[error] ?? ERRORS.oauth}</p>
+        )}
+
         <div className="mt-8">
-          <Button 
-            onClick={handleGoogleLogin}
-            variant="outline"
-            className="w-full flex items-center justify-center gap-3 h-12 bg-white text-gray-700 border-gray-300 hover:bg-gray-50 font-medium"
+          <a
+            href="/auth/google"
+            className={cn(buttonVariants({ variant: 'outline' }), "w-full flex items-center justify-center gap-3 h-12 bg-white text-gray-700 border-gray-300 hover:bg-gray-50 font-medium")}
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
@@ -48,7 +46,7 @@ export default function LoginPage() {
               />
             </svg>
             Entrar com Google
-          </Button>
+          </a>
         </div>
       </div>
     </div>

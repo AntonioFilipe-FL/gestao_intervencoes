@@ -1,18 +1,8 @@
-'use client'
-
 import Link from 'next/link'
-import { createClient } from '@/utils/supabase/client'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import type { CurrentUser } from '@/lib/auth'
 
-export function Navbar() {
-  const supabase = createClient()
-  const router = useRouter()
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    router.refresh()
-  }
+export function Navbar({ user }: { user: CurrentUser }) {
 
   return (
     <nav className="bg-[#cf0a2c] text-white shadow-md" style={{ fontFamily: 'var(--font-lato), Helvetica, Arial, sans-serif' }}>
@@ -55,16 +45,17 @@ export function Navbar() {
               </Link>
             </div>
           </div>
-          <div className="flex items-center">
-            <Button 
-              variant="ghost" 
-              onClick={handleSignOut}
+          <form action="/auth/logout" method="post" className="flex items-center gap-3">
+            <span className="hidden md:inline text-sm text-white/80">{user.email}</span>
+            <Button
+              type="submit"
+              variant="ghost"
               className="text-white hover:bg-white/10"
               style={{ fontSize: '17px' }}
             >
               Sair
             </Button>
-          </div>
+          </form>
         </div>
       </div>
     </nav>
