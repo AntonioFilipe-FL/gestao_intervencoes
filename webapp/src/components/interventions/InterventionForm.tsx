@@ -79,6 +79,7 @@ export function InterventionForm({ referenceData }: Props) {
     try {
       const result = await createIntervention(values)
       if (!result.success) throw new Error(result.error)
+      if (result.emailWarning) alert(result.emailWarning)
       router.push(`/interventions/${result.id}`)
       router.refresh()
     } catch (error) {

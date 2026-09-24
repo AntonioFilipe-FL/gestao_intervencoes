@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { sql } from '@/lib/db'
 import { createSession } from '@/lib/session'
+import { encryptSecret } from '@/lib/crypto'
 import { appUrl, exchangeCode, OAUTH_STATE_COOKIE, OAUTH_VERIFIER_COOKIE } from '@/lib/google'
 
 /** Emails em ADMIN_EMAILS (separados por vírgula) são autorizados como admin no primeiro login. */
@@ -34,6 +35,11 @@ export async function GET(request: Request) {
     }
     const [profile] = await sql`select role from profiles where email = ${email}`
     if (!profile) return NextResponse.redirect(`${base}/unauthorized`)
+
+    if (user.refreshToken) {
+      await sql`update profiles set google_refresh_token = ${encryptSecret(user.refreshToken)}, gmail_send_granted_at = now()
+                where email = ${email}`
+    }
 
     await createSession({ email, name: user.name, picture: user.picture })
     return NextResponse.redirect(`${base}/interventions`)

@@ -1,4 +1,6 @@
 import { getInterventionById } from '@/services/database'
+import { requireUser } from '@/lib/auth'
+import { BillingEmailStatus } from '@/components/interventions/BillingEmailStatus'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -48,7 +50,7 @@ interface Props {
 
 export default async function InterventionDetailsPage({ params }: Props) {
   const { id } = await params
-  const intervention = await getInterventionById(id)
+  const [user, intervention] = await Promise.all([requireUser(), getInterventionById(id)])
 
   if (!intervention) {
     notFound()
@@ -153,6 +155,14 @@ export default async function InterventionDetailsPage({ params }: Props) {
               <DetailItem label="Faturar?" value={intervention.billing} />
               <DetailItem label="Email de Faturação" value={intervention.billing_email} />
               <DetailItem label="Observações de Faturação" value={intervention.billing_observations} />
+              <Separator />
+              <BillingEmailStatus
+                id={intervention.id}
+                notifiedAt={intervention.billing_notified_at}
+                notifiedBy={intervention.billing_notified_by}
+                error={intervention.billing_notify_error}
+                canSend={user.role === 'admin'}
+              />
             </CardContent>
           </Card>
 

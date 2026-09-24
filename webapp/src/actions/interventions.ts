@@ -4,6 +4,14 @@ import { revalidatePath } from 'next/cache'
 import { sql } from '@/lib/db'
 import { requireAdmin } from '@/lib/auth'
 import { interventionSchema, toDbValues, type AccessoryLine } from '@/lib/schemas/intervention'
+import { isBillable, notifyBilling } from '@/lib/billing-notification'
+import { headers } from 'next/headers'
+
+async function appUrl() {
+  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, '')
+  const h = await headers()
+  return `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('x-forwarded-host') ?? h.get('host')}`
+}
 
 /** Junta linhas repetidas do mesmo acessório somando as quantidades */
 const merge = (lines: AccessoryLine[]) => {
@@ -33,11 +41,26 @@ export async function createIntervention(input: unknown) {
       return row.id as string
     })
 
+    // Faturar = Sim → email automático à financeira, a partir da conta de quem gravou
+    let emailWarning: string | undefined
+    if (isBillable(parsed.data.billing)) {
+      const r = await notifyBilling(id, user, await appUrl())
+      if (!r.ok) emailWarning = `O registo foi gravado, mas o email à financeira não foi enviado: ${r.error}`
+    }
+
     revalidatePath('/interventions')
     revalidatePath('/reports')
-    return { success: true as const, id }
+    return { success: true as const, id, emailWarning }
   } catch (e) {
     console.error('Erro ao criar intervenção:', e)
     return { success: false as const, error: (e as Error).message }
   }
+}
+
+/** Reenvia manualmente o email à financeira (ex.: após um erro) */
+export async function resendBillingEmail(id: string) {
+  const user = await requireAdmin()
+  const r = await notifyBilling(id, user, await appUrl())
+  revalidatePath(`/interventions/${id}`)
+  return r
 }

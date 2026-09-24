@@ -211,3 +211,15 @@ begin
 end $$;
 
 select gestao_interv.backfill_material();
+
+-- =============================================================================
+-- Notificação automática à financeira (email enviado pela conta Google do utilizador)
+-- =============================================================================
+alter table profiles
+  add column if not exists google_refresh_token text,          -- cifrado (AES-256-GCM, chave derivada de AUTH_SECRET)
+  add column if not exists gmail_send_granted_at timestamptz;
+
+alter table interventions
+  add column if not exists billing_notified_at timestamptz,    -- quando o email à financeira foi enviado
+  add column if not exists billing_notified_by text,           -- conta que enviou
+  add column if not exists billing_notify_error text;          -- último erro de envio (se houver)

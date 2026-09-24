@@ -43,6 +43,16 @@ Em *Authorized redirect URIs* adicionar:
 
 Se o ecrã de consentimento estiver em modo *Internal* (Google Workspace), só contas `@pt.frotcom.com` conseguem entrar.
 
+### Envio de email à financeira (Faturar = Sim)
+
+O email sai da conta Gmail de quem grava o registo (fica nos "Enviados" dessa pessoa).
+
+1. Google Cloud Console → **APIs & Services → Library → Gmail API → Enable**.
+2. **OAuth consent screen → Data access / Scopes → Add** `https://www.googleapis.com/auth/gmail.send`
+   (com o ecrã em modo **Internal** não é preciso verificação da Google).
+3. Opcional: variável `BILLING_EMAIL_TO` no Railway (por omissão `financeira@pt.frotcom.com`).
+4. Cada utilizador tem de **sair e voltar a entrar** uma vez para autorizar o envio.
+
 ## 4. Criar tabelas e migrar os dados (a partir do teu PC)
 
 No `.env.local` define `DATABASE_URL` com o **DATABASE_PUBLIC_URL** do serviço Postgres. Depois:

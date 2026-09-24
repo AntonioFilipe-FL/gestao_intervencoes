@@ -4,6 +4,9 @@ import crypto from 'crypto'
 export const OAUTH_STATE_COOKIE = 'gi_oauth_state'
 export const OAUTH_VERIFIER_COOKIE = 'gi_oauth_verifier'
 
+/** Permissão para enviar emails em nome do utilizador (não dá acesso à leitura da caixa de correio). */
+export const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send'
+
 /** URL pública da app (no Railway: https://<serviço>.up.railway.app ou domínio próprio) */
 export function appUrl(request: Request) {
   if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, '')
@@ -29,11 +32,13 @@ export function authorizationUrl(request: Request, state: string, challenge: str
     client_id: process.env.AUTH_GOOGLE_ID!,
     redirect_uri: redirectUri(request),
     response_type: 'code',
-    scope: 'openid email profile',
+    scope: `openid email profile ${GMAIL_SEND_SCOPE}`,
+    access_type: 'offline',        // devolve refresh_token para enviar emails mais tarde
+    include_granted_scopes: 'true',
     state,
     code_challenge: challenge,
     code_challenge_method: 'S256',
-    prompt: 'select_account',
+    prompt: 'consent select_account', // garante que o refresh_token é sempre devolvido
   }).toString()
   return url.toString()
 }
@@ -52,11 +57,14 @@ export async function exchangeCode(request: Request, code: string, verifier: str
     }),
   })
   if (!res.ok) throw new Error(`Google token: ${res.status} ${await res.text()}`)
-  const { access_token } = (await res.json()) as { access_token: string }
+  const tokens = (await res.json()) as { access_token: string; refresh_token?: string; scope?: string }
+  const { access_token } = tokens
 
   const info = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
     headers: { Authorization: `Bearer ${access_token}` },
   })
   if (!info.ok) throw new Error(`Google userinfo: ${info.status}`)
-  return (await info.json()) as { email: string; email_verified: boolean; name?: string; picture?: string }
+  const user = (await info.json()) as { email: string; email_verified: boolean; name?: string; picture?: string }
+  const canSend = (tokens.scope ?? '').split(' ').includes(GMAIL_SEND_SCOPE)
+  return { ...user, refreshToken: canSend ? tokens.refresh_token : undefined }
 }
