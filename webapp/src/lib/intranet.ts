@@ -144,11 +144,25 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
 
     // ---------------- IMEIs ----------------
     try {
-      // 1) pedido global (por parceiro); 2) se vier vazio, pedido por cada conta (accountId)
+      // Tentativas por ordem; um erro (ex.: 403 sem permissão) passa à seguinte:
+      //   1) sem parâmetros   2) só partnerId   3) partnerId + searchAllFCPs   4) conta a conta (accountId)
       const partnerId = process.env.INTRANET_PARTNER_ID || loginPartnerId
-      const qs = new URLSearchParams({ searchAllFCPs: 'true', ...(partnerId ? { partnerId } : {}) })
-      let raw: (Json & { __accountId?: string })[] = asList(await getJson(`/api/devices?${qs}`, token))
-      let mode = 'global'
+      const attempts: [string, string][] = [['global', '/api/devices']]
+      if (partnerId) {
+        attempts.push(['parceiro', `/api/devices?partnerId=${encodeURIComponent(partnerId)}`])
+        attempts.push(['parceiro, todos os FCP', `/api/devices?partnerId=${encodeURIComponent(partnerId)}&searchAllFCPs=true`])
+      }
+      let raw: (Json & { __accountId?: string })[] = []
+      let mode = ''
+      const attemptErrors: string[] = []
+      for (const [label, path] of attempts) {
+        try {
+          raw = asList(await getJson(path, token))
+          if (raw.length > 0) { mode = label; break }
+        } catch (e) {
+          attemptErrors.push(`${label}: ${(e as Error).message.slice(0, 80)}`)
+        }
+      }
       if (raw.length === 0) {
         mode = 'por conta'
         const out: (Json & { __accountId?: string })[] = []
@@ -168,12 +182,12 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
         }
         await Promise.all(Array.from({ length: 10 }, worker))
         raw = out
-        if (failures) result.devices.error = `${failures} conta(s) falharam ao obter equipamentos (ex.: ${firstError.slice(0, 150)}).`
+        if (failures) result.devices.error = `${failures} de ${accounts.length} conta(s) falharam ao obter equipamentos (ex.: ${firstError.slice(0, 150)}).`
       }
       result.devices.total = raw.length
       result.devices.mode = mode
       if (raw.length === 0 && !result.devices.error) {
-        result.devices.error = 'A Intranet não devolveu equipamentos em /api/devices (nem globalmente nem por conta).'
+        result.devices.error = `A Intranet não devolveu equipamentos em /api/devices (nem globalmente nem por conta).${attemptErrors.length ? ' Tentativas: ' + attemptErrors.join(' | ') : ''}`
       }
       const clientByAccount = new Map(
         (await sql<{ id: string; intranet_account_id: string }[]>`
