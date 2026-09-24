@@ -82,21 +82,21 @@ export function UserManagement() {
     }
   }
 
-  if (loading) return <div className="py-4 text-center">A carregar utilizadores...</div>
+  if (loading) return <div className="py-4 text-center text-fc-dark-60">A carregar utilizadores…</div>
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-xl font-semibold">Gestão de Acessos</h2>
-          <p className="text-xs text-muted-foreground">Gerir emails autorizados e seus papéis no sistema.</p>
+          <h2>Gestão de acessos</h2>
+          <p className="fc-small text-fc-dark-60">Gerir emails autorizados e seus papéis no sistema.</p>
         </div>
-        <Button onClick={() => setIsAddOpen(true)} className="flex gap-2">
-          <Plus className="w-4 h-4" /> Adicionar Utilizador
+        <Button onClick={() => setIsAddOpen(true)}>
+          <Plus /> Adicionar utilizador
         </Button>
       </div>
 
-      <div className="border rounded-md">
+      <div className="border border-fc-dark-20">
         <Table>
           <TableHeader>
             <TableRow>
@@ -108,7 +108,7 @@ export function UserManagement() {
           <TableBody>
             {users.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={3} className="py-8 text-center text-fc-dark-60">
                   Nenhum utilizador autorizado encontrado.
                 </TableCell>
               </TableRow>
@@ -137,10 +137,10 @@ export function UserManagement() {
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                      className="text-fc-danger hover:bg-fc-danger/10"
                       onClick={() => handleDelete(user.email)}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 />
                     </Button>
                   </TableCell>
                 </TableRow>

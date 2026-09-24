@@ -52,23 +52,23 @@ export function SettingsTable({ title, table, items, extraColumns = [] }: Props)
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">{title}</h2>
-        <Button size="sm" onClick={handleAdd} className="flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Adicionar
+        <h2>{title}</h2>
+        <Button onClick={handleAdd}>
+          <Plus /> Adicionar
         </Button>
       </div>
 
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-fc-dark-40" />
         <Input
           placeholder="Procurar..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="pl-10"
+          className="pl-8"
         />
       </div>
 
-      <div className="border rounded-md">
+      <div className="border border-fc-dark-20">
         <Table>
           <TableHeader>
             <TableRow>
@@ -83,7 +83,7 @@ export function SettingsTable({ title, table, items, extraColumns = [] }: Props)
           <TableBody>
             {!filteredItems || filteredItems.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={3 + extraColumns.length} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={3 + extraColumns.length} className="py-8 text-center text-fc-dark-60">
                   Nenhum item encontrado.
                 </TableCell>
               </TableRow>
@@ -95,13 +95,13 @@ export function SettingsTable({ title, table, items, extraColumns = [] }: Props)
                     <TableCell key={col.key}>{item[col.key] || '---'}</TableCell>
                   ))}
                   <TableCell>
-                    <Badge variant={item.active ? 'default' : 'secondary'}>
+                    <Badge variant={item.active ? 'success' : 'secondary'}>
                       {item.active ? 'Ativo' : 'Inativo'}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => handleEdit(item)}>
-                      <Edit2 className="w-4 h-4" />
+                      <Edit2 />
                     </Button>
                   </TableCell>
                 </TableRow>

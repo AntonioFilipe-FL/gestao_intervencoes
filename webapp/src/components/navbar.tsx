@@ -1,63 +1,42 @@
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
 import type { CurrentUser } from '@/lib/auth'
+import { NavLinks } from '@/components/nav-links'
 
 export function Navbar({ user }: { user: CurrentUser }) {
+  const links = [
+    { href: '/interventions', label: 'Intervenções', exact: true },
+    ...(user.role === 'admin' ? [{ href: '/interventions/new', label: 'Novo registo' }] : []),
+    { href: '/reports', label: 'Relatórios' },
+    { href: '/settings', label: 'Configurações' },
+  ]
 
   return (
-    <nav className="bg-[#cf0a2c] text-white shadow-md" style={{ fontFamily: 'var(--font-lato), Helvetica, Arial, sans-serif' }}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          <div className="flex">
-            <div className="flex-shrink-0 flex items-center">
-              <Link href="/" className="font-bold text-white" style={{ fontSize: '17px' }}>
-                Gestão Intervenções
-              </Link>
-            </div>
-            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-              <Link
-                href="/interventions"
-                className="text-white/90 hover:text-white inline-flex items-center px-1 pt-1 font-medium border-b-2 border-transparent hover:border-white transition-colors"
-                style={{ fontSize: '17px' }}
-              >
-                Intervenções
-              </Link>
-              <Link
-                href="/interventions/new"
-                className="text-white/90 hover:text-white inline-flex items-center px-1 pt-1 font-medium border-b-2 border-transparent hover:border-white transition-colors"
-                style={{ fontSize: '17px' }}
-              >
-                Novo Registo
-              </Link>
-              <Link
-                href="/reports"
-                className="text-white/90 hover:text-white inline-flex items-center px-1 pt-1 font-medium border-b-2 border-transparent hover:border-white transition-colors"
-                style={{ fontSize: '17px' }}
-              >
-                Relatórios
-              </Link>
-              <Link
-                href="/settings"
-                className="text-white/90 hover:text-white inline-flex items-center px-1 pt-1 font-medium border-b-2 border-transparent hover:border-white transition-colors"
-                style={{ fontSize: '17px' }}
-              >
-                Configurações
-              </Link>
-            </div>
-          </div>
-          <form action="/auth/logout" method="post" className="flex items-center gap-3">
-            <span className="hidden md:inline text-sm text-white/80">{user.email}</span>
-            <Button
+    <header>
+      {/* Barra superior */}
+      <div className="bg-fc-dark-100 text-white">
+        <div className="mx-auto flex h-12 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <Link href="/interventions" className="flex items-center gap-3">
+            <span className="h-6 w-1.5 bg-fc-red" aria-hidden />
+            <span className="text-[15px] font-bold tracking-[0.04em] uppercase">Frotcom</span>
+            <span className="text-[13px] font-light tracking-[0.02em] text-fc-dark-40 uppercase">Gestão de intervenções</span>
+          </Link>
+          <form action="/auth/logout" method="post" className="flex items-center gap-4">
+            <span className="hidden text-[12px] text-fc-dark-40 md:inline">{user.email}</span>
+            <button
               type="submit"
-              variant="ghost"
-              className="text-white hover:bg-white/10"
-              style={{ fontSize: '17px' }}
+              className="cursor-pointer text-[11px] tracking-[0.02em] text-fc-dark-40 uppercase transition-colors hover:text-white"
             >
               Sair
-            </Button>
+            </button>
           </form>
         </div>
       </div>
-    </nav>
+      {/* Navegação secundária */}
+      <nav className="border-b border-fc-dark-10 bg-white">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <NavLinks links={links} />
+        </div>
+      </nav>
+    </header>
   )
 }

@@ -9,7 +9,7 @@ export default async function NewInterventionPage() {
   const referenceData = await getReferenceData()
 
   return (
-    <div className="container mx-auto py-10">
+    <div>
       <InterventionForm referenceData={referenceData} />
     </div>
   )

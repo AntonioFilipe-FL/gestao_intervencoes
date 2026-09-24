@@ -12,8 +12,8 @@ const fmtDate = (d: string | null) => (d ? d.split('-').reverse().join('/') : nu
 function DetailItem({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <p className="text-sm font-medium text-muted-foreground">{label}</p>
-      <p className="text-base">{value || '---'}</p>
+      <p className="fc-label">{label}</p>
+      <p className="text-[13px] text-fc-dark-100">{value || '—'}</p>
     </div>
   )
 }
@@ -31,24 +31,24 @@ export default async function InterventionDetailsPage({ params }: Props) {
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
+    <div className="mx-auto max-w-7xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <Link href="/interventions" className={buttonVariants({ variant: 'outline', size: 'icon' })} aria-label="Voltar">
-            <ArrowLeft className="w-4 h-4" />
+          <Link href="/interventions" className={buttonVariants({ variant: 'inverse', size: 'icon' })} aria-label="Voltar">
+            <ArrowLeft />
           </Link>
           <div>
-            <h1 className="text-3xl font-bold">Detalhes da Intervenção</h1>
-            <p className="text-muted-foreground">
+            <h1>Detalhes da intervenção</h1>
+            <p className="fc-small text-fc-dark-60">
               {intervention.created_by ? `Registado por ${intervention.created_by}` : intervention.legacy_layout ? 'Importado da Google Sheet' : null}
             </p>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Coluna Principal */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className="lg:col-span-2 space-y-5">
           <Card>
             <CardHeader>
               <CardTitle>Informação Geral</CardTitle>
@@ -77,7 +77,7 @@ export default async function InterventionDetailsPage({ params }: Props) {
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <Card>
               <CardHeader>
                 <CardTitle>Material Gasto (Saída)</CardTitle>
@@ -87,8 +87,8 @@ export default async function InterventionDetailsPage({ params }: Props) {
                 <DetailItem label="IMEI Equipamento" value={intervention.spent_equipment_imei} />
                 <Separator />
                 <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">Acessórios Gastos</p>
-                  <ul className="list-disc pl-5 space-y-1 text-sm">
+                  <p className="fc-label">Acessórios Gastos</p>
+                  <ul className="list-disc space-y-0.5 pl-5">
                     {intervention.accessory_spent_1 && <li>{intervention.accessory_spent_1}</li>}
                     {intervention.accessory_spent_2 && <li>{intervention.accessory_spent_2}</li>}
                     {intervention.accessory_spent_3 && <li>{intervention.accessory_spent_3}</li>}
@@ -109,8 +109,8 @@ export default async function InterventionDetailsPage({ params }: Props) {
                 <DetailItem label="Equipamento" value={intervention.equipment_return} />
                 <Separator />
                 <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">Acessórios Retomados</p>
-                  <ul className="list-disc pl-5 space-y-1 text-sm">
+                  <p className="fc-label">Acessórios Retomados</p>
+                  <ul className="list-disc space-y-0.5 pl-5">
                     {intervention.accessory_return_1 && <li>{intervention.accessory_return_1}</li>}
                     {intervention.accessory_return_2 && <li>{intervention.accessory_return_2}</li>}
                     {intervention.accessory_return_3 && <li>{intervention.accessory_return_3}</li>}
@@ -126,7 +126,7 @@ export default async function InterventionDetailsPage({ params }: Props) {
         </div>
 
         {/* Coluna Lateral */}
-        <div className="space-y-8">
+        <div className="space-y-5">
           <Card>
             <CardHeader>
               <CardTitle>Status e Validação</CardTitle>

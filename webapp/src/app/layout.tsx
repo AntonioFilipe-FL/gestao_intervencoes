@@ -1,27 +1,19 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Lato } from "next/font/google";
+import { Lato } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/navbar";
 import { getCurrentUser } from "@/lib/auth";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
+// Tipografia do FROTCOM Styleguide: Lato (light, regular, bold)
 const lato = Lato({
   variable: "--font-lato",
-  weight: ["400", "700"],
+  weight: ["300", "400", "700"],
+  style: ["normal", "italic"],
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "Gestão de Intervenções",
+  title: "Gestão de Intervenções · Frotcom",
   description: "Sistema de gestão de intervenções técnicas",
 };
 
@@ -33,11 +25,8 @@ export default async function RootLayout({
   const user = await getCurrentUser();
 
   return (
-    <html
-      lang="pt"
-      className={`${geistSans.variable} ${geistMono.variable} ${lato.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col bg-gray-50 text-gray-900">
+    <html lang="pt" className={`${lato.variable} h-full antialiased`}>
+      <body className="flex min-h-full flex-col bg-fc-grey-100 text-fc-dark-100">
         {user && <Navbar user={user} />}
         <main className="flex-1">{children}</main>
       </body>

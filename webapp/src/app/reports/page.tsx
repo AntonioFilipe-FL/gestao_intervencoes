@@ -17,13 +17,13 @@ type StatsCardProps = { title: string; value: number; icon: React.ComponentType<
 function StatsCard({ title, value, icon: Icon, description }: StatsCardProps) {
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
+      <CardHeader className="grid-cols-[1fr_auto]">
+        <CardTitle>{title}</CardTitle>
+        <Icon className="size-4 text-fc-dark-40" />
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold">{value?.toLocaleString('pt-PT')}</div>
-        <p className="text-xs text-muted-foreground">{description}</p>
+        <div className="text-[28px] leading-9 font-light text-fc-dark-100">{value?.toLocaleString('pt-PT')}</div>
+        <p className="fc-small text-fc-dark-60">{description}</p>
       </CardContent>
     </Card>
   )
@@ -36,13 +36,13 @@ export default async function ReportsPage() {
 
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
+    <div className="mx-auto max-w-7xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">
       <div>
-        <h1 className="text-3xl font-bold">Relatórios e Estatísticas</h1>
-        <p className="text-muted-foreground">Visão geral da operação e métricas de desempenho.</p>
+        <h1>Relatórios e estatísticas</h1>
+        <p className="fc-small text-fc-dark-60">Visão geral da operação e métricas de desempenho.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatsCard 
           title="Total Intervenções" 
           value={totals.interventions} 
@@ -69,7 +69,7 @@ export default async function ReportsPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <Card className="col-span-1">
           <CardHeader>
             <CardTitle>Intervenções por mês (últimos 12 meses)</CardTitle>
@@ -78,14 +78,14 @@ export default async function ReportsPage() {
             <div className="space-y-3">
               {byMonth.map(({ month, count }) => (
                 <div key={month} className="flex items-center gap-4">
-                  <div className="w-16 text-sm font-medium capitalize">{monthLabel(month)}</div>
-                  <div className="flex-1 h-4 bg-red-50 rounded-full overflow-hidden">
-                    <div className="h-full bg-[#cf0a2c]" style={{ width: `${(count / maxMonth) * 100}%` }} />
+                  <div className="w-14 text-[12px] text-fc-dark-60 capitalize">{monthLabel(month)}</div>
+                  <div className="h-3 flex-1 overflow-hidden bg-fc-grey-100">
+                    <div className="h-full bg-fc-light-100" style={{ width: `${(count / maxMonth) * 100}%` }} />
                   </div>
-                  <div className="w-12 text-sm text-right font-mono">{count}</div>
+                  <div className="w-12 text-right text-[12px] tabular-nums">{count}</div>
                 </div>
               ))}
-              {byMonth.length === 0 && <p className="text-sm text-muted-foreground">Sem dados.</p>}
+              {byMonth.length === 0 && <p className="text-fc-dark-60">Sem dados.</p>}
             </div>
           </CardContent>
         </Card>
@@ -98,14 +98,14 @@ export default async function ReportsPage() {
             <div className="space-y-3">
               {byTech.map(({ name, count }) => (
                 <div key={name} className="flex items-center gap-4">
-                  <div className="w-24 text-sm font-medium truncate">{name}</div>
-                  <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-gray-700" style={{ width: `${(count / maxTech) * 100}%` }} />
+                  <div className="w-24 truncate text-[12px] text-fc-dark-60">{name}</div>
+                  <div className="h-3 flex-1 overflow-hidden bg-fc-grey-100">
+                    <div className="h-full bg-fc-dark-80" style={{ width: `${(count / maxTech) * 100}%` }} />
                   </div>
-                  <div className="w-12 text-sm text-right font-mono">{count}</div>
+                  <div className="w-12 text-right text-[12px] tabular-nums">{count}</div>
                 </div>
               ))}
-              {byTech.length === 0 && <p className="text-sm text-muted-foreground">Sem dados.</p>}
+              {byTech.length === 0 && <p className="text-fc-dark-60">Sem dados.</p>}
             </div>
           </CardContent>
         </Card>

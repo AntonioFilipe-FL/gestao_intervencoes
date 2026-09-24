@@ -84,29 +84,32 @@ export function InterventionForm({ referenceData }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 max-w-5xl mx-auto p-4 pb-20">
-      <h1 className="text-3xl font-bold">Nova Intervenção</h1>
+    <form onSubmit={handleSubmit(onSubmit)} className="mx-auto max-w-5xl space-y-5 px-4 pt-6 pb-20 sm:px-6 lg:px-8">
+      <div className="space-y-1">
+        <h1>Nova intervenção</h1>
+        <p className="fc-small text-fc-dark-60">Os campos assinalados com * são obrigatórios.</p>
+      </div>
 
       {/* Seção 1: Informações Básicas */}
       <Card>
         <CardHeader>
           <CardTitle>Informações Gerais</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="intervention_date">Data da Intervenção</Label>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="intervention_date">Data da Intervenção <span className="text-fc-red">*</span></Label>
             <Input
               id="intervention_date"
               type="date"
               {...register('intervention_date')}
             />
             {errors.intervention_date && (
-              <p className="text-sm text-red-500">{errors.intervention_date.message}</p>
+              <p className="fc-small text-fc-danger">{errors.intervention_date.message}</p>
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label>Técnico</Label>
+          <div className="space-y-1.5">
+            <Label>Técnico <span className="text-fc-red">*</span></Label>
             <Controller
               name="technician_id"
               control={control}
@@ -126,12 +129,12 @@ export function InterventionForm({ referenceData }: Props) {
               )}
             />
             {errors.technician_id && (
-              <p className="text-sm text-red-500">{errors.technician_id.message}</p>
+              <p className="fc-small text-fc-danger">{errors.technician_id.message}</p>
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label>Cliente</Label>
+          <div className="space-y-1.5">
+            <Label>Cliente <span className="text-fc-red">*</span></Label>
             <Controller
               name="client_id"
               control={control}
@@ -151,12 +154,12 @@ export function InterventionForm({ referenceData }: Props) {
               )}
             />
             {errors.client_id && (
-              <p className="text-sm text-red-500">{errors.client_id.message}</p>
+              <p className="fc-small text-fc-danger">{errors.client_id.message}</p>
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label>Tipo de Intervenção</Label>
+          <div className="space-y-1.5">
+            <Label>Tipo de Intervenção <span className="text-fc-red">*</span></Label>
             <Controller
               name="intervention_type_id"
               control={control}
@@ -176,7 +179,7 @@ export function InterventionForm({ referenceData }: Props) {
               )}
             />
             {errors.intervention_type_id && (
-              <p className="text-sm text-red-500">{errors.intervention_type_id.message}</p>
+              <p className="fc-small text-fc-danger">{errors.intervention_type_id.message}</p>
             )}
           </div>
         </CardContent>
@@ -187,18 +190,18 @@ export function InterventionForm({ referenceData }: Props) {
         <CardHeader>
           <CardTitle>Detalhes do Cliente</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-2">
+        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4">
+          <div className="space-y-1.5">
             <Label htmlFor="venda_aluguer">Venda / Aluguer</Label>
-            <Input id="venda_aluguer" {...register('venda_aluguer')} readOnly className="bg-gray-100" />
+            <Input id="venda_aluguer" {...register('venda_aluguer')} readOnly className="bg-fc-grey-100 text-fc-dark-60" />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="nos_vdf">NOS / VDF</Label>
-            <Input id="nos_vdf" {...register('nos_vdf')} readOnly className="bg-gray-100" />
+            <Input id="nos_vdf" {...register('nos_vdf')} readOnly className="bg-fc-grey-100 text-fc-dark-60" />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="report_projeto">Report / Projeto</Label>
-            <Input id="report_projeto" {...register('report_projeto')} readOnly className="bg-gray-100" />
+            <Input id="report_projeto" {...register('report_projeto')} readOnly className="bg-fc-grey-100 text-fc-dark-60" />
           </div>
         </CardContent>
       </Card>
@@ -208,16 +211,16 @@ export function InterventionForm({ referenceData }: Props) {
         <CardHeader>
           <CardTitle>Identificação e Equipamento</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
+          <div className="space-y-1.5">
             <Label htmlFor="license_plate">Matrícula</Label>
             <Input id="license_plate" {...register('license_plate')} placeholder="00-AA-00" />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="imei">IMEI</Label>
             <Input id="imei" {...register('imei')} />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label>Equipamento Principal</Label>
             <Controller
               name="equipment_id"
@@ -238,7 +241,7 @@ export function InterventionForm({ referenceData }: Props) {
               )}
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="warranty_rental">Garantia / Aluguer</Label>
             <Input id="warranty_rental" {...register('warranty_rental')} placeholder="Ex: Garantia (1 ano)" />
           </div>
@@ -251,8 +254,8 @@ export function InterventionForm({ referenceData }: Props) {
           <CardTitle>Motivo e Descrição</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
+            <div className="space-y-1.5">
               <Label>Motivo</Label>
               <Controller
                 name="motive_id"
@@ -273,15 +276,15 @@ export function InterventionForm({ referenceData }: Props) {
                 )}
               />
               {errors.motive_id && (
-                <p className="text-sm text-red-500">{errors.motive_id.message}</p>
+                <p className="fc-small text-fc-danger">{errors.motive_id.message}</p>
               )}
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="assisted_material">Material Assistido</Label>
               <Input id="assisted_material" {...register('assisted_material')} placeholder="Ex: Antena, Cabo..." />
             </div>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="action_description">Ação Efetuada / Descrição Intervenção</Label>
             <Textarea id="action_description" {...register('action_description')} rows={4} />
           </div>
@@ -294,12 +297,12 @@ export function InterventionForm({ referenceData }: Props) {
           <CardTitle>Material Gasto (Saída)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
+            <div className="space-y-1.5">
               <Label htmlFor="spent_equipment">Equipamento Gasto</Label>
               <Input id="spent_equipment" {...register('spent_equipment')} />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="spent_equipment_imei">IMEI Equipamento Gasto</Label>
               <Input id="spent_equipment_imei" {...register('spent_equipment_imei')} />
             </div>
@@ -316,7 +319,7 @@ export function InterventionForm({ referenceData }: Props) {
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label>Armazém de Saída</Label>
             <Controller
               name="stock_exit_warehouse_id"
@@ -346,7 +349,7 @@ export function InterventionForm({ referenceData }: Props) {
           <CardTitle>Material Retomado (Entrada)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="equipment_return">Equipamento a Dar Entrada</Label>
             <Input id="equipment_return" {...register('equipment_return')} />
           </div>
@@ -362,7 +365,7 @@ export function InterventionForm({ referenceData }: Props) {
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label>Armazém de Entrada</Label>
             <Controller
               name="stock_entry_warehouse_id"
@@ -393,7 +396,7 @@ export function InterventionForm({ referenceData }: Props) {
             <CardTitle>Faturação</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label>Faturar?</Label>
               <Controller
                 name="billing"
@@ -414,14 +417,14 @@ export function InterventionForm({ referenceData }: Props) {
                 )}
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="billing_email">Email Faturação</Label>
               <Input id="billing_email" type="email" {...register('billing_email')} />
               {errors.billing_email && (
-                <p className="text-sm text-red-500">{errors.billing_email.message}</p>
+                <p className="fc-small text-fc-danger">{errors.billing_email.message}</p>
               )}
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="billing_observations">Observações Faturação</Label>
               <Textarea id="billing_observations" {...register('billing_observations')} />
             </div>
@@ -433,7 +436,7 @@ export function InterventionForm({ referenceData }: Props) {
             <CardTitle>Configuração / Bundle</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label>Bundle</Label>
               <Controller
                 name="bundle_id"
@@ -454,7 +457,7 @@ export function InterventionForm({ referenceData }: Props) {
                 )}
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label>Plataforma</Label>
               <Controller
                 name="platform_id"
@@ -475,11 +478,11 @@ export function InterventionForm({ referenceData }: Props) {
                 )}
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="configuration">Configuração</Label>
               <Input id="configuration" {...register('configuration')} />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="dtc_active_realtime">DTC Ativo Real time</Label>
               <Input id="dtc_active_realtime" {...register('dtc_active_realtime')} />
             </div>
@@ -493,12 +496,12 @@ export function InterventionForm({ referenceData }: Props) {
           <CardTitle>Dados Finais e Validação</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4">
+            <div className="space-y-1.5">
               <Label htmlFor="validation_date">Data de Validação</Label>
               <Input id="validation_date" type="date" {...register('validation_date')} />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label>Validado Por</Label>
               <Controller
                 name="validated_by"
@@ -521,33 +524,33 @@ export function InterventionForm({ referenceData }: Props) {
                 )}
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="wow">WOW</Label>
               <Input id="wow" {...register('wow')} />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
+            <div className="space-y-1.5">
               <Label htmlFor="observations">Observações Gerais</Label>
               <Textarea id="observations" {...register('observations')} />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="services_status">Serviços Ativo/Desativo</Label>
               <Textarea id="services_status" {...register('services_status')} />
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-4">
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="crm_vehicle">Viatura CRM</Label>
               <Input id="crm_vehicle" {...register('crm_vehicle')} />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="contract_addendum">Contrato / Adenda</Label>
               <Input id="contract_addendum" {...register('contract_addendum')} />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="zoho_form">Formulário Zoho</Label>
               <Input id="zoho_form" {...register('zoho_form')} />
             </div>
@@ -555,12 +558,12 @@ export function InterventionForm({ referenceData }: Props) {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end gap-4">
-        <Button type="button" variant="outline" onClick={() => router.back()}>
+      <div className="sticky bottom-0 -mx-4 flex justify-end gap-2 border-t border-fc-dark-20 bg-white/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+        <Button type="button" variant="inverse" size="lg" onClick={() => router.back()}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={loading}>
-          {loading ? 'A guardar...' : 'Guardar Intervenção'}
+        <Button type="submit" size="lg" disabled={loading}>
+          {loading ? 'A guardar…' : 'Guardar intervenção'}
         </Button>
       </div>
     </form>

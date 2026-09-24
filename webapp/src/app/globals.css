@@ -5,11 +5,27 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --color-fc-red: var(--fc-red);
+  --color-fc-dark-100: var(--fc-blue-dark-100);
+  --color-fc-dark-80: var(--fc-blue-dark-80);
+  --color-fc-dark-60: var(--fc-blue-dark-60);
+  --color-fc-dark-40: var(--fc-blue-dark-40);
+  --color-fc-dark-20: var(--fc-blue-dark-20);
+  --color-fc-dark-10: var(--fc-blue-dark-10);
+  --color-fc-light-100: var(--fc-blue-light-100);
+  --color-fc-light-60: var(--fc-blue-light-60);
+  --color-fc-light-30: var(--fc-blue-light-30);
+  --color-fc-grey-100: var(--fc-grey-light-100);
+  --color-fc-grey-80: var(--fc-grey-light-80);
+  --color-fc-danger: var(--fc-danger);
+  --color-fc-warning: var(--fc-warning);
+  --color-fc-success: var(--fc-success);
+  --color-fc-info: var(--fc-info);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-lato), var(--font-sans), ui-sans-serif, system-ui;
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-lato), var(--font-sans);
+  --font-sans: var(--font-lato, "Lato"), "Lato", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-heading: var(--font-lato, "Lato"), "Lato", Helvetica, Arial, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,82 +65,86 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
+  /* ---- FROTCOM Styleguide v0.5 — paleta ---- */
+  --fc-red: #cf0a2c;
+  --fc-blue-dark-100: #263646;
+  --fc-blue-dark-80: #4d5a66;
+  --fc-blue-dark-60: #76808a;
+  --fc-blue-dark-40: #a2a8af;
+  --fc-blue-dark-20: #d0d2d6;
+  --fc-blue-dark-10: #ededed;
+  --fc-blue-light-100: #0081c9;
+  --fc-blue-light-60: #52b2df;
+  --fc-blue-light-30: #b1d8ee;
+  --fc-orange: #f5a623;
+  --fc-green: #75cc18;
+  --fc-grey-light-100: #f5f5f5;
+  --fc-grey-light-80: #fafafa;
+  --fc-danger: #e02d36;
+  --fc-warning: #f5a623;
+  --fc-success: #65b312;
+  --fc-info: #0074b3;
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* ---- tokens shadcn mapeados para a paleta Frotcom ---- */
+  --background: var(--fc-grey-light-100);
+  --foreground: var(--fc-blue-dark-100);
+  --card: #ffffff;
+  --card-foreground: var(--fc-blue-dark-100);
+  --popover: #ffffff;
+  --popover-foreground: var(--fc-blue-dark-100);
+  --primary: var(--fc-blue-light-100);
+  --primary-foreground: #ffffff;
+  --secondary: var(--fc-blue-dark-100);
+  --secondary-foreground: #ffffff;
+  --muted: var(--fc-grey-light-100);
+  --muted-foreground: var(--fc-blue-dark-60);
+  --accent: var(--fc-grey-light-100);
+  --accent-foreground: var(--fc-blue-dark-100);
+  --destructive: var(--fc-danger);
+  --border: var(--fc-blue-dark-20);
+  --input: var(--fc-blue-dark-40);
+  --ring: var(--fc-blue-light-60);
+  --chart-1: var(--fc-blue-light-100);
+  --chart-2: var(--fc-blue-dark-80);
+  --chart-3: var(--fc-blue-light-60);
+  --chart-4: var(--fc-orange);
+  --chart-5: var(--fc-green);
+  --radius: 0.125rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: var(--fc-blue-dark-100);
+  --sidebar-primary: var(--fc-blue-dark-100);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--fc-grey-light-100);
+  --sidebar-accent-foreground: var(--fc-blue-dark-100);
+  --sidebar-border: var(--fc-blue-dark-20);
+  --sidebar-ring: var(--fc-blue-light-60);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
   html {
     @apply font-sans;
   }
+  /* Body copy: 13px/20px */
+  body {
+    @apply bg-background text-foreground;
+    font-size: 13px;
+    line-height: 20px;
+  }
+  /* Headings: uppercase, tamanhos do styleguide */
+  h1 { font-size: 18px; line-height: 24px; text-transform: uppercase; font-weight: 700; }
+  h2 { font-size: 15px; line-height: 20px; text-transform: uppercase; font-weight: 700; }
+  h3 { font-size: 13px; line-height: 18px; text-transform: uppercase; font-weight: 700; }
+  h4 { font-size: 11px; line-height: 16px; text-transform: uppercase; font-weight: 700; }
+  a { color: inherit; }
+}
+
+@layer components {
+  /* Lead body copy 15px/22px e small text 12px/18px */
+  .fc-lead { font-size: 15px; line-height: 22px; }
+  .fc-small { font-size: 12px; line-height: 18px; }
+  /* Rótulo de campo/secção (11px uppercase) */
+  .fc-label { font-size: 11px; line-height: 16px; text-transform: uppercase; color: var(--fc-blue-dark-60); letter-spacing: 0.02em; }
 }

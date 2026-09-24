@@ -11,23 +11,24 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const { error } = await searchParams
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4">
-      <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-md border border-gray-200">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold">Gestão de Intervenções</h1>
-          <p className="mt-2 text-gray-600">Faça login para continuar</p>
+    <div className="flex min-h-screen flex-col items-center justify-center bg-fc-dark-100 p-4">
+      <div className="w-full max-w-sm border-t-4 border-fc-red bg-white p-8 shadow-[0_4px_16px_rgba(0,0,0,0.3)]">
+        <div className="space-y-1 text-center">
+          <p className="text-[15px] font-bold tracking-[0.04em] uppercase">Frotcom</p>
+          <h1 className="font-light">Gestão de intervenções</h1>
+          <p className="fc-small pt-2 text-fc-dark-60">Entre com a sua conta Google da empresa.</p>
         </div>
         
         {error && (
-          <p className="text-sm text-center text-red-600 bg-red-50 rounded-md p-3">{ERRORS[error] ?? ERRORS.oauth}</p>
+          <p className="mt-6 bg-fc-danger/20 px-3 py-2 text-center text-[13px] text-[#b31d25]">{ERRORS[error] ?? ERRORS.oauth}</p>
         )}
 
         <div className="mt-8">
           <a
             href="/auth/google"
-            className={cn(buttonVariants({ variant: 'outline' }), "w-full flex items-center justify-center gap-3 h-12 bg-white text-gray-700 border-gray-300 hover:bg-gray-50 font-medium")}
+            className={cn(buttonVariants({ variant: 'inverse', size: 'lg' }), 'w-full gap-3')}
           >
-            <svg className="w-5 h-5" viewBox="0 0 24 24">
+            <svg className="size-4" viewBox="0 0 24 24" aria-hidden>
               <path
                 fill="#4285F4"
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
