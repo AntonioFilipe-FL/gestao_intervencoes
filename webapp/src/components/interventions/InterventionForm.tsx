@@ -12,6 +12,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { createIntervention } from '@/actions/interventions'
 import { AccessoryPicker } from '@/components/interventions/AccessoryPicker'
 import { SearchableSelect } from '@/components/ui/searchable-select'
+import { ImeiField } from '@/components/interventions/ImeiField'
+
+const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '')
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
@@ -29,6 +32,8 @@ export function InterventionForm({ referenceData, billingRecipients }: Props) {
     register,
     handleSubmit,
     setValue,
+    getValues,
+    watch,
     control,
     formState: { errors },
   } = useForm<InterventionFormInput, unknown, InterventionFormValues>({
@@ -52,6 +57,8 @@ export function InterventionForm({ referenceData, billingRecipients }: Props) {
       accessories_returned: [],
     },
   })
+
+  const selectedClientId = watch('client_id')
 
   // List of valid names for validators
   const VALID_VALIDATORS = ['TC', 'SP', 'MA', 'HV', 'MS', 'AF']
@@ -205,7 +212,24 @@ export function InterventionForm({ referenceData, billingRecipients }: Props) {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="imei">IMEI</Label>
-            <Input id="imei" {...register('imei')} />
+            <Controller
+              name="imei"
+              control={control}
+              render={({ field }) => (
+                <ImeiField
+                  id="imei"
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  clientId={selectedClientId || undefined}
+                  clientName={referenceData.clients?.find((c) => c.id === selectedClientId)?.name}
+                  onPick={(d) => {
+                    if (d.license_plate && !getValues('license_plate')) setValue('license_plate', d.license_plate)
+                    const eq = d.model && referenceData.equipmentList?.find((e) => fold(e.name) === fold(d.model!))
+                    if (eq && !getValues('equipment_id')) setValue('equipment_id', eq.id)
+                  }}
+                />
+              )}
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Equipamento Principal</Label>
@@ -296,7 +320,22 @@ export function InterventionForm({ referenceData, billingRecipients }: Props) {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="spent_equipment_imei">IMEI equipamento gasto</Label>
-              <Input id="spent_equipment_imei" {...register('spent_equipment_imei')} />
+              <Controller
+                name="spent_equipment_imei"
+                control={control}
+                render={({ field }) => (
+                  <ImeiField
+                    id="spent_equipment_imei"
+                    scope="global"
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    onPick={(d) => {
+                      const eq = d.model && referenceData.equipmentList?.find((e) => fold(e.name) === fold(d.model!))
+                      if (eq && !getValues('spent_equipment_id')) setValue('spent_equipment_id', eq.id)
+                    }}
+                  />
+                )}
+              />
             </div>
           </div>
 

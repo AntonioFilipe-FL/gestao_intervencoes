@@ -231,3 +231,25 @@ create table if not exists app_settings (
   updated_at timestamptz not null default now(),
   updated_by text
 );
+
+-- =============================================================================
+-- Integração com a Intranet Frotcom (clientes = accounts, IMEIs = devices)
+-- =============================================================================
+alter table clients
+  add column if not exists intranet_account_id text,
+  add column if not exists intranet_short_name text,
+  add column if not exists intranet_synced_at  timestamptz;
+create unique index if not exists clients_intranet_uq on clients (intranet_account_id) where intranet_account_id is not null;
+
+create table if not exists devices (
+  imei                text primary key,
+  intranet_device_id  text,
+  intranet_account_id text,
+  client_id           uuid references clients(id),
+  model               text,
+  license_plate       text,
+  active              boolean not null default true,
+  synced_at           timestamptz not null default now()
+);
+create index if not exists devices_client_idx on devices (client_id);
+create index if not exists devices_account_idx on devices (intranet_account_id);

@@ -27,7 +27,7 @@ interface Props {
   title: string
   table: string
   items: Item[] | null
-  extraColumns?: { label: string; key: string }[]
+  extraColumns?: { label: string; key: string; readOnly?: boolean }[]
 }
 
 export function SettingsTable({ title, table, items, extraColumns = [] }: Props) {
@@ -116,7 +116,7 @@ export function SettingsTable({ title, table, items, extraColumns = [] }: Props)
         item={selectedItem}
         isOpen={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
-        extraFields={extraColumns}
+        extraFields={extraColumns.filter((c) => !c.readOnly)}
       />
     </div>
   )
