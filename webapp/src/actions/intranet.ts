@@ -20,6 +20,11 @@ export type DeviceOption = { imei: string; model: string | null; license_plate: 
 /** IMEIs ativos de um cliente (para o campo IMEI do formulário) */
 export async function getClientDevices(clientId: string): Promise<DeviceOption[]> {
   await requireUser()
+  // conta da Intranet ainda sem cliente na BD → IMEIs dessa conta
+  const pending = /^intranet:([\w-]+)$/.exec(clientId)
+  if (pending)
+    return sql<DeviceOption[]>`select imei, model, license_plate from devices
+                               where intranet_account_id = ${pending[1]} and active order by license_plate nulls last, imei`
   if (!/^[0-9a-f-]{36}$/i.test(clientId)) return []
   return sql<DeviceOption[]>`select imei, model, license_plate from devices
                              where client_id = ${clientId} and active order by license_plate nulls last, imei`

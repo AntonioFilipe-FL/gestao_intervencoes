@@ -318,7 +318,7 @@ export async function linkPending(intranetId: string, clientId: string) {
     // passa a usar o nome da Intranet, salvo se outro cliente já tiver esse nome
     const [clash] = await tx`select id from clients where lower(name) = lower(${p.name}) and id <> ${clientId}`
     await tx`update clients set intranet_account_id = ${intranetId}, intranet_short_name = ${p.name}, active = true,
-             intranet_synced_at = now() ${clash ? tx`` : tx`, name = ${p.name}`} where id = ${clientId}`
+             intranet_synced_at = now() ${clash || c.name === p.name ? tx`` : tx`, name = ${p.name}, sheet_names = array_append(coalesce(sheet_names, '{}'), ${c.name}::text)`} where id = ${clientId}`
     await attachDevices(tx as unknown as typeof sql, intranetId, clientId)
     await tx`delete from intranet_pending where intranet_account_id = ${intranetId}`
   })
@@ -403,4 +403,66 @@ export async function syncInBackgroundIfStale(by: string) {
 export async function waitForAutoSync() {
   if (autoSyncRunning) await autoSyncRunning
   return autoSyncRunning === null
+}
+
+// ---------------------------------------------------------------------------
+// Lista de clientes do formulário (nomes da Intranet)
+// ---------------------------------------------------------------------------
+
+export type ClientOption = { value: string; label: string; hint?: string }
+
+/** Valor usado no formulário para uma conta da Intranet que ainda não tem cliente na BD */
+export const PENDING_PREFIX = 'intranet:'
+
+/**
+ * Clientes para o formulário: os ligados à Intranet (com o nome da Intranet) + as contas da Intranet
+ * ainda por associar (o cliente é criado ao gravar). Os clientes que só existem na folha antiga
+ * deixam de aparecer — exceto o cliente atual do registo que se está a editar.
+ * Sem nenhuma sincronização feita, mostra todos os clientes como antes.
+ */
+export async function getClientOptions(currentClientId?: string | null): Promise<ClientOption[]> {
+  const linked = await sql<{ id: string; name: string }[]>`
+    select id, name from clients where intranet_account_id is not null and active order by lower(name)`
+  if (linked.length === 0) {
+    const all = await sql<{ id: string; name: string }[]>`select id, name from clients where active or id = ${currentClientId ?? null} order by lower(name)`
+    return all.map(c => ({ value: c.id, label: c.name }))
+  }
+  const [pending, current] = await Promise.all([
+    getPendingAccounts().then(r => r.pending.filter(p => p.status === 'pending')),
+    currentClientId && !linked.some(c => c.id === currentClientId)
+      ? sql<{ id: string; name: string }[]>`select id, name from clients where id = ${currentClientId}`
+      : Promise.resolve([] as { id: string; name: string }[]),
+  ])
+  const opts: ClientOption[] = [
+    ...linked.map(c => ({ value: c.id, label: c.name })),
+    ...pending.map(p => ({
+      value: PENDING_PREFIX + p.intranet_account_id,
+      label: p.name,
+      hint: p.suggestion
+        ? `Conta da Intranet ainda sem cliente na BD. Parece ser "${p.suggestion.name}" (da folha antiga) — se for, associe-a em Definições › Intranet antes de gravar, para não duplicar o cliente.`
+        : 'Conta da Intranet ainda sem cliente na BD — o cliente é criado automaticamente ao gravar.',
+    })),
+    ...current.map(c => ({ value: c.id, label: `${c.name} (sem ligação à Intranet)` })),
+  ]
+  return opts.sort((a, b) => a.label.localeCompare(b.label, 'pt'))
+}
+
+/** Converte o valor escolhido no formulário no id do cliente (cria o cliente a partir da conta da Intranet, se preciso) */
+export async function resolveClientId(value: string): Promise<string> {
+  if (!value.startsWith(PENDING_PREFIX)) return value
+  const intranetId = value.slice(PENDING_PREFIX.length)
+  const find = async () => {
+    const [c] = await sql<{ id: string }[]>`select id from clients where intranet_account_id = ${intranetId}`
+    return c?.id
+  }
+  let id = await find()
+  if (id) return id
+  await createFromPending([intranetId])
+  id = await find()
+  if (id) return id
+  // já existia um cliente com o mesmo nome (ligado a outra conta) → usa esse
+  const [p] = await sql<{ name: string }[]>`select name from intranet_pending where intranet_account_id = ${intranetId}`
+  const [same] = p ? await sql<{ id: string }[]>`select id from clients where lower(name) = lower(${p.name})` : []
+  if (same) return same.id
+  throw new Error('Não foi possível criar o cliente a partir da Intranet. Sincronize de novo e tente outra vez.')
 }

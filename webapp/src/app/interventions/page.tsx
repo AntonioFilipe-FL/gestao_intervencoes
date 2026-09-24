@@ -13,7 +13,7 @@ import { Pagination } from '@/components/pagination'
 const PAGE_SIZE = 25
 
 interface Props {
-  searchParams: Promise<{ page?: string; client?: string; tech?: string; plate?: string }>
+  searchParams: Promise<{ page?: string; client?: string; tech?: string; plate?: string; from?: string; to?: string }>
 }
 
 const fmtDate = (d: string) => d.split('-').reverse().join('/')
@@ -24,10 +24,12 @@ export default async function InterventionsPage({ searchParams }: Props) {
   const clientSearch = params.client || ''
   const techSearch = params.tech || ''
   const plateSearch = params.plate || ''
+  const dateFrom = params.from || ''
+  const dateTo = params.to || ''
 
   const [user, { interventions, totalPages, count, error }] = await Promise.all([
     getCurrentUser(),
-    getInterventions({ page: currentPage, pageSize: PAGE_SIZE, clientSearch, techSearch, plateSearch }),
+    getInterventions({ page: currentPage, pageSize: PAGE_SIZE, clientSearch, techSearch, plateSearch, dateFrom, dateTo }),
   ])
 
   if (error) {
@@ -38,9 +40,9 @@ export default async function InterventionsPage({ searchParams }: Props) {
     )
   }
 
-  const hasFilters = clientSearch || techSearch || plateSearch
+  const hasFilters = clientSearch || techSearch || plateSearch || dateFrom || dateTo
   const pageHref = (p: number) =>
-    `/interventions?${new URLSearchParams({ page: String(p), client: clientSearch, tech: techSearch, plate: plateSearch })}`
+    `/interventions?${new URLSearchParams({ page: String(p), client: clientSearch, tech: techSearch, plate: plateSearch, from: dateFrom, to: dateTo })}`
   const from = count === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
   const to = Math.min(currentPage * PAGE_SIZE, count)
 
@@ -61,7 +63,7 @@ export default async function InterventionsPage({ searchParams }: Props) {
       {/* Filtros */}
       <Card>
         <CardContent className="py-4">
-          <form className="grid grid-cols-1 items-end gap-4 md:grid-cols-[1fr_1fr_1fr_auto]">
+          <form className="grid grid-cols-1 items-end gap-4 md:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_9.5rem_9.5rem_auto]">
             <div className="space-y-1.5">
               <Label htmlFor="client">Cliente</Label>
               <Input id="client" name="client" placeholder="Nome do cliente" defaultValue={clientSearch} />
@@ -73,6 +75,14 @@ export default async function InterventionsPage({ searchParams }: Props) {
             <div className="space-y-1.5">
               <Label htmlFor="plate">Matrícula / IMEI</Label>
               <Input id="plate" name="plate" placeholder="Matrícula ou IMEI" defaultValue={plateSearch} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="from">Data de</Label>
+              <Input id="from" name="from" type="date" defaultValue={dateFrom} max={dateTo || undefined} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="to">Data até</Label>
+              <Input id="to" name="to" type="date" defaultValue={dateTo} min={dateFrom || undefined} />
             </div>
             <div className="flex gap-2">
               <button type="submit" className={buttonVariants({ variant: 'secondary' })}>Filtrar</button>

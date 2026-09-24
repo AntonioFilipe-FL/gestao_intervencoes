@@ -9,23 +9,30 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { createIntervention } from '@/actions/interventions'
+import { createIntervention, updateIntervention } from '@/actions/interventions'
 import { AccessoryPicker } from '@/components/interventions/AccessoryPicker'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 import { ImeiField } from '@/components/interventions/ImeiField'
+import { PlateField } from '@/components/interventions/PlateField'
+import type { ClientOption } from '@/lib/intranet'
 import { getPlateImeis, type PlateImeis } from '@/actions/intranet'
 
 const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '')
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface Props {
   referenceData: ReferenceData
   /** destinatários do email automático (variável BILLING_EMAIL_TO) */
   billingRecipients: string[]
+  /** clientes com o nome da Intranet (ver getClientOptions) */
+  clientOptions: ClientOption[]
+  /** ao editar: id do registo e valores atuais */
+  initial?: { id: string; values: InterventionFormInput; billingNotified: boolean }
 }
 
-export function InterventionForm({ referenceData, billingRecipients }: Props) {
+export function InterventionForm({ referenceData, billingRecipients, clientOptions, initial }: Props) {
+  const editing = !!initial
   const router = useRouter()
   const [loading, setLoading] = useState(false)
 
@@ -39,7 +46,7 @@ export function InterventionForm({ referenceData, billingRecipients }: Props) {
     formState: { errors },
   } = useForm<InterventionFormInput, unknown, InterventionFormValues>({
     resolver: zodResolver(interventionSchema),
-    defaultValues: {
+    defaultValues: initial?.values ?? {
       intervention_date: new Date().toISOString().split('T')[0],
       technician_id: '',
       client_id: '',
@@ -63,6 +70,8 @@ export function InterventionForm({ referenceData, billingRecipients }: Props) {
   const selectedClientId = watch('client_id')
   const plate = watch('license_plate')
   const [plateImeis, setPlateImeis] = useState<PlateImeis | null>(null)
+  // ao editar, a matrícula já gravada não volta a preencher os IMEIs (só se for alterada)
+  const initialPlate = useRef(initial ? (initial.values.license_plate ?? '') : null)
 
   // Matrícula → IMEI atual (Intranet) para o material gasto e IMEI anterior para o material retomado.
   // Só preenche campos vazios, para não apagar o que o utilizador escreveu.
@@ -74,11 +83,15 @@ export function InterventionForm({ referenceData, billingRecipients }: Props) {
       const r = await getPlateImeis(p)
       if (cancel) return
       setPlateImeis(r)
+      if (initialPlate.current !== null && initialPlate.current === plate) return
+      initialPlate.current = null
       if (r.current && !getValues('spent_equipment_imei')) setValue('spent_equipment_imei', r.current.imei)
       if (r.previous && !getValues('return_equipment_imei')) setValue('return_equipment_imei', r.previous.imei)
     }, 400)
     return () => { cancel = true; clearTimeout(t) }
   }, [plate, getValues, setValue])
+
+  const clientHint = clientOptions.find((c) => c.value === selectedClientId)?.hint
 
   // List of valid names for validators
   const VALID_VALIDATORS = ['TC', 'SP', 'MA', 'HV', 'MS', 'AF']
@@ -97,7 +110,7 @@ export function InterventionForm({ referenceData, billingRecipients }: Props) {
   const onSubmit = async (values: InterventionFormValues) => {
     setLoading(true)
     try {
-      const result = await createIntervention(values)
+      const result = initial ? await updateIntervention(initial.id, values) : await createIntervention(values)
       if (!result.success) throw new Error(result.error)
       if (result.emailWarning) alert(result.emailWarning)
       router.push(`/interventions/${result.id}`)
@@ -112,7 +125,7 @@ export function InterventionForm({ referenceData, billingRecipients }: Props) {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="mx-auto max-w-5xl space-y-5 px-4 pt-6 pb-20 sm:px-6 lg:px-8">
       <div className="space-y-1">
-        <h1>Nova intervenção</h1>
+        <h1>{editing ? 'Editar intervenção' : 'Nova intervenção'}</h1>
         <p className="fc-small text-fc-dark-60">Os campos assinalados com * são obrigatórios.</p>
       </div>
 
@@ -164,13 +177,14 @@ export function InterventionForm({ referenceData, billingRecipients }: Props) {
                 <SearchableSelect
                   id="client_id"
                   invalid={!!errors.client_id}
-                  options={(referenceData.clients ?? []).map((c) => ({ value: c.id, label: c.name }))}
+                  options={clientOptions}
                   value={field.value ?? ''}
                   onChange={(v) => handleClientChange(v, field.onChange)}
-                  placeholder="Selecione o cliente"
+                  placeholder="Selecione o cliente (nome na Intranet)"
                 />
               )}
             />
+            {clientHint && <p className="fc-small text-fc-dark-60">{clientHint}</p>}
             {errors.client_id && (
               <p className="fc-small text-fc-danger">{errors.client_id.message}</p>
             )}
@@ -228,7 +242,23 @@ export function InterventionForm({ referenceData, billingRecipients }: Props) {
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="license_plate">Matrícula</Label>
-            <Input id="license_plate" {...register('license_plate')} placeholder="00-AA-00" />
+            <Controller
+              name="license_plate"
+              control={control}
+              render={({ field }) => (
+                <PlateField
+                  id="license_plate"
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  clientId={selectedClientId || undefined}
+                  onPick={(d) => {
+                    if (!getValues('imei')) setValue('imei', d.imei)
+                    const eq = d.model && referenceData.equipmentList?.find((e) => fold(e.name) === fold(d.model!))
+                    if (eq && !getValues('equipment_id')) setValue('equipment_id', eq.id)
+                  }}
+                />
+              )}
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="imei">IMEI</Label>
@@ -241,7 +271,7 @@ export function InterventionForm({ referenceData, billingRecipients }: Props) {
                   value={field.value ?? ''}
                   onChange={field.onChange}
                   clientId={selectedClientId || undefined}
-                  clientName={referenceData.clients?.find((c) => c.id === selectedClientId)?.name}
+                  clientName={clientOptions.find((c) => c.value === selectedClientId)?.label}
                   onPick={(d) => {
                     if (d.license_plate && !getValues('license_plate')) setValue('license_plate', d.license_plate)
                     const eq = d.model && referenceData.equipmentList?.find((e) => fold(e.name) === fold(d.model!))
@@ -509,7 +539,11 @@ export function InterventionForm({ referenceData, billingRecipients }: Props) {
             <div className="space-y-1.5">
               <Label htmlFor="billing_recipients">Email à financeira</Label>
               <Input id="billing_recipients" value={billingRecipients.join(', ')} readOnly tabIndex={-1} className="bg-fc-grey-100 text-fc-dark-60" />
-              <p className="fc-small text-fc-dark-60">Enviado automaticamente ao gravar com Faturar = Sim.</p>
+              <p className="fc-small text-fc-dark-60">
+                {initial?.billingNotified
+                  ? 'O email à financeira já foi enviado para este registo (não é reenviado ao gravar).'
+                  : 'Enviado automaticamente ao gravar com Faturar = Sim.'}
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="billing_observations">Observações Faturação</Label>
@@ -614,6 +648,11 @@ export function InterventionForm({ referenceData, billingRecipients }: Props) {
             </div>
           </div>
 
+          <div className="space-y-1.5">
+            <Label htmlFor="account_services">Serviços da conta — Driving Behavior / sensor de porta</Label>
+            <Input id="account_services" {...register('account_services')} />
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-4">
             <div className="space-y-1.5">
               <Label htmlFor="crm_vehicle">Viatura CRM</Label>
@@ -636,7 +675,7 @@ export function InterventionForm({ referenceData, billingRecipients }: Props) {
           Cancelar
         </Button>
         <Button type="submit" size="lg" disabled={loading}>
-          {loading ? 'A guardar…' : 'Guardar intervenção'}
+          {loading ? 'A guardar…' : editing ? 'Guardar alterações' : 'Guardar intervenção'}
         </Button>
       </div>
     </form>

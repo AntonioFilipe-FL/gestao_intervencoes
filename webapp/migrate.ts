@@ -5,6 +5,15 @@
  *   npm run migrate:dry               # não toca na BD; gera migration_report.json
  *   npm run migrate                   # migra (idempotente: pode correr várias vezes)
  *   npx tsx migrate.ts --no-create    # não cria valores em falta nas tabelas de apoio
+ *   npx tsx migrate.ts --include-duplicates   # importa também linhas que parecem já ter sido registadas na app
+ *
+ * Re-importar CSVs atualizados é seguro:
+ *  - linhas já importadas são atualizadas (chave legacy_key), as novas são inseridas;
+ *  - registos EDITADOS na app nunca são sobrepostos;
+ *  - linhas novas da Sheet que coincidem (data + matrícula/IMEI) com um registo criado na app não são
+ *    importadas (ficam listadas em migration_report.json → possiveisDuplicados);
+ *  - clientes renomeados para o nome da Intranet continuam a ser reconhecidos pelo nome antigo da Sheet.
+ *  - a importação não envia emails à financeira.
  *
  * Pré-requisito: npm run db:schema (cria as tabelas).
  * DATABASE_URL em .env.local — no Railway, copiar o DATABASE_PUBLIC_URL do serviço Postgres.
@@ -20,12 +29,20 @@ dotenv.config({ path: '.env.local' })
 
 const DRY_RUN = process.argv.includes('--dry-run')
 const NO_CREATE = process.argv.includes('--no-create')
+const INCLUDE_DUPLICATES = process.argv.includes('--include-duplicates')
 const SCHEMA = 'gestao_interv'
 const BATCH = 500
 
 const ROOT = path.join(__dirname, '..')
-const LISTS_CSV = path.join(ROOT, 'Validação de formulários e controlo logistica - Listas de dados - NÃO MEXER.csv')
-const MAIN_CSV = path.join(ROOT, 'Validação de formulários e controlo logistica - Validação de Formulários .csv')
+/** Encontra o CSV pelo início do nome (a exportação da Google Sheet nem sempre dá o mesmo nome exato) */
+const findCsv = (prefix: string) => {
+  const k = (s: string) => s.normalize('NFC').toLowerCase()
+  const f = fs.readdirSync(ROOT).find(n => k(n).startsWith(k(prefix)) && k(n).endsWith('.csv'))
+  if (!f) throw new Error(`CSV não encontrado em ${ROOT}: "${prefix}….csv"`)
+  return path.join(ROOT, f)
+}
+const LISTS_CSV = findCsv('Validação de formulários e controlo logistica - Listas de dados')
+const MAIN_CSV = findCsv('Validação de formulários e controlo logistica - Validação de Formulários')
 
 // ---------------------------------------------------------------------------
 // Utilitários
@@ -133,7 +150,10 @@ const EXPECTED_HEADER = [
   'servicosativodesativo', 'validadopor', 'viaturacrm', 'contratoadenda', 'formulariozoho',
   'armazemdesaidadestock', 'armazemdeentradadestock',
 ]
-const C = Object.fromEntries(EXPECTED_HEADER.map((k, i) => [k, i])) as Record<string, number>
+/** Colunas opcionais (acrescentadas à Sheet depois) — importadas se existirem */
+const OPTIONAL_HEADER = ['servicosdacontadrivingbehaviorsensordeporta']
+/** Índice de cada coluna pelo nome do cabeçalho (preenchido ao ler o CSV; a ordem das colunas pode mudar) */
+let C: Record<string, number> = {}
 
 /**
  * Layout antigo (2022 / início 2023): várias colunas estão deslocadas na Sheet.
@@ -175,18 +195,25 @@ type RefMap = Map<string, { id: string; name: string }>
 async function main() {
   console.log(`--- Migração ${DRY_RUN ? '(DRY-RUN, sem escrita na BD)' : ''} ---`)
 
-  const sql = DRY_RUN
-    ? (null as unknown as postgres.Sql)
-    : postgres(process.env.DATABASE_URL!, { max: 4, onnotice: () => {}, connection: { search_path: `${SCHEMA},public` } })
   if (!DRY_RUN && !process.env.DATABASE_URL) throw new Error('DATABASE_URL não definido em .env.local')
+  // no dry-run a BD (se existir DATABASE_URL) só é lida, para o relatório refletir o que vai acontecer
+  const db = process.env.DATABASE_URL
+    ? postgres(process.env.DATABASE_URL, { max: 4, onnotice: () => {}, connection: { search_path: `${SCHEMA},public` } })
+    : null
+  const sql = DRY_RUN ? (null as unknown as postgres.Sql) : db!
+  const readDb = db // leitura (também no dry-run)
+  console.log(`CSV principal: ${path.basename(MAIN_CSV)}`)
 
   // 1. Ler CSVs (UTF-8!)
   const lists: Record<string, string>[] = parse(fs.readFileSync(LISTS_CSV, 'utf8'), { columns: true, bom: true, skip_empty_lines: true })
   const rowsRaw: string[][] = parse(fs.readFileSync(MAIN_CSV, 'utf8'), { bom: true, relax_column_count: true })
   const header = rowsRaw.shift()!.map(norm)
-  EXPECTED_HEADER.forEach((k, i) => {
-    if (header[i] !== k) throw new Error(`Cabeçalho inesperado na coluna ${i}: "${header[i]}" (esperado "${k}"). A Sheet mudou de estrutura?`)
-  })
+  C = {}
+  header.forEach((k, i) => { if (!(k in C)) C[k] = i })
+  const missing = EXPECTED_HEADER.filter(k => !(k in C))
+  if (missing.length) throw new Error(`Colunas em falta no CSV: ${missing.join(', ')}. A Sheet mudou de estrutura?`)
+  const extra = header.filter(k => k && !EXPECTED_HEADER.includes(k) && !OPTIONAL_HEADER.includes(k))
+  if (extra.length) console.warn(`Aviso: colunas novas na Sheet que não são importadas: ${extra.join(', ')}`)
   // Ano e Mês são fórmulas na Sheet: linhas só com essas duas colunas estão vazias
   const rows = rowsRaw.filter(r => r.slice(2).some(c => c && c.trim()))
   console.log(`Linhas na folha principal: ${rows.length}`)
@@ -201,11 +228,11 @@ async function main() {
   const maps: Record<string, RefMap> = {}
   const loadMap = async (key: string) => {
     const m: RefMap = new Map()
-    if (DRY_RUN) {
+    if (!readDb) {
       // Simula a BD com as Listas de dados
       for (const col of LOOKUPS[key].listColumns) for (const n of listCol(col)) m.set(norm(n), { id: `dry:${n}`, name: n })
     } else {
-      const data = await sql<{ id: string; name: string }[]>`select id, name from ${sql(LOOKUPS[key].table)}`
+      const data = await readDb<{ id: string; name: string }[]>`select id, name from ${readDb(LOOKUPS[key].table)}`
       for (const i of data) m.set(norm(i.name), i)
     }
     maps[key] = m
@@ -214,13 +241,17 @@ async function main() {
 
   // Clientes
   const clientMap: RefMap = new Map()
+  const clientAliases: RefMap = new Map() // nome na Sheet → cliente atual (aprendido dos registos já importados)
   const loadClients = async () => {
     clientMap.clear()
-    if (DRY_RUN) {
+    if (!readDb) {
       for (const n of listCol('Cliente')) clientMap.set(norm(n), { id: `dry:${n}`, name: n })
     } else {
-      const data = await sql<{ id: string; name: string }[]>`select id, name from clients`
+      const data = await readDb<{ id: string; name: string; sheet_names: string[] | null }[]>`select id, name, sheet_names from clients`
       for (const c of data) clientMap.set(norm(c.name), c)
+      // nomes antigos da Sheet de clientes renomeados para o nome da Intranet
+      for (const c of data) for (const n of c.sheet_names ?? []) if (!clientMap.has(norm(n))) clientMap.set(norm(n), c)
+      for (const [k, c] of clientAliases) if (!clientMap.has(k)) clientMap.set(k, c)
     }
   }
   await loadClients()
@@ -297,6 +328,7 @@ async function main() {
           wow: val(g('wow')),
           validated_by: val(g('servicosativodesativo')),
           services_status: null,
+          account_services: null,
           crm_vehicle: val(g('validadopor')),
         }
       : {
@@ -325,6 +357,7 @@ async function main() {
           wow: val(g('wow')),
           validated_by: val(g('validadopor')),
           services_status: val(g('servicosativodesativo')),
+          account_services: val(g('servicosdacontadrivingbehaviorsensordeporta')),
           crm_vehicle: val(g('viaturacrm')),
         }
 
@@ -339,6 +372,34 @@ async function main() {
 
     return { sheetRow, legacy_key, ...base, ...variant }
   })
+
+  // 3b. Registos já na BD: chaves importadas, registos editados na app e registos criados na app
+  const existing = new Map<string, { client_id: string | null; edited: boolean }>()
+  const appRows: { id: string; intervention_date: string; plate: string | null; imei: string | null }[] = []
+  if (readDb) {
+    for (const r of await readDb<{ legacy_key: string; client_id: string | null; edited: boolean }[]>`
+      select legacy_key, client_id, updated_by is not null as edited from interventions where legacy_key is not null`)
+      existing.set(r.legacy_key, { client_id: r.client_id, edited: r.edited })
+    appRows.push(...await readDb<typeof appRows>`
+      select id, intervention_date::text, gestao_interv.plate_norm(license_plate) as plate, nullif(btrim(imei), '') as imei
+      from interventions where legacy_key is null`)
+    // o cliente de cada linha já importada diz-nos a que cliente corresponde o nome da Sheet (mesmo que renomeado)
+    const votes = new Map<string, Map<string, number>>()
+    for (const m of mapped) {
+      const e = existing.get(m.legacy_key)
+      if (!e?.client_id || !m.client) continue
+      const v = votes.get(norm(m.client)) ?? new Map<string, number>()
+      v.set(e.client_id, (v.get(e.client_id) ?? 0) + 1)
+      votes.set(norm(m.client), v)
+    }
+    const byId = new Map([...clientMap.values()].map(c => [c.id, c]))
+    for (const [k, v] of votes) {
+      const best = [...v.entries()].sort((a, b) => b[1] - a[1])[0][0]
+      const c = byId.get(best)
+      if (c) clientAliases.set(k, c)
+    }
+    for (const [k, c] of clientAliases) if (!clientMap.has(k)) clientMap.set(k, c)
+  }
 
   // 4. Criar valores em falta nas tabelas de apoio
   const need: Record<string, Map<string, string>> = {}
@@ -451,6 +512,7 @@ async function main() {
       observations: m.observations,
       wow: m.wow,
       services_status: m.services_status,
+      account_services: m.account_services,
       validated_by: id('technicians', m.validated_by),
       crm_vehicle: m.crm_vehicle,
       contract_addendum: m.contract_addendum,
@@ -460,10 +522,62 @@ async function main() {
     }
   })
 
-  const toWrite = records.filter(r => r.intervention_date)
+  // 5b. Classificar: novas / a atualizar / protegidas (editadas na app) / possíveis duplicados
+  const pn = (p: string | null) => (p ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '') || null
+  const appIndex = new Map<string, string>()
+  for (const a of appRows) {
+    if (a.plate) appIndex.set(`${a.intervention_date}|p:${a.plate}`, a.id)
+    if (a.imei) appIndex.set(`${a.intervention_date}|i:${a.imei}`, a.id)
+  }
+  const stats = { novos: 0, atualizados: 0, protegidosEditadosNaApp: 0, possiveisDuplicados: 0, completadosNaSheet: 0 }
+  const duplicates: { linhaSheet: number; data: string; matricula: string | null; imei: string | null; registoApp: string }[] = []
+  const sheetRowOf = new Map(mapped.map(m => [m.legacy_key, m.sheetRow]))
+
+  // Linhas já importadas cuja chave mudou porque foram completadas/corrigidas na Sheet depois
+  // (ex.: matrícula ou IMEI preenchidos mais tarde) → reaproveita o registo em vez de duplicar.
+  // Emparelha pela data + técnico + cliente + tipo, pela ordem na Sheet.
+  const coarse = (r: { intervention_date: string | null; technician_id: string | null; client_id: string | null; intervention_type_id: string | null }) =>
+    [r.intervention_date, r.technician_id, r.client_id, r.intervention_type_id].join('|')
+  const rekey = new Map<string, string>() // chave nova → chave antiga
+  const orphanKeys = [...existing.keys()].filter(k => !sheetRowOf.has(k))
+  if (readDb && orphanKeys.length) {
+    const orphans = await readDb<{ legacy_key: string; intervention_date: string; technician_id: string | null; client_id: string | null; intervention_type_id: string | null }[]>`
+      select legacy_key, intervention_date::text, technician_id, client_id, intervention_type_id
+      from interventions where legacy_key = any(${orphanKeys}) order by created_at, legacy_key`
+    const buckets = new Map<string, string[]>()
+    for (const o of orphans) { const k = coarse(o); buckets.set(k, [...(buckets.get(k) ?? []), o.legacy_key]) }
+    for (const r of records) {
+      if (existing.has(r.legacy_key)) continue
+      const old = buckets.get(coarse(r))?.shift()
+      if (old) { rekey.set(r.legacy_key, old); existing.set(r.legacy_key, existing.get(old)!) }
+    }
+  }
+  stats.completadosNaSheet = rekey.size
+  const toWrite = records.filter(r => {
+    if (!r.intervention_date) return false
+    const e = existing.get(r.legacy_key)
+    if (e?.edited) { stats.protegidosEditadosNaApp++; return false }
+    if (e) { stats.atualizados++; return true }
+    const p = pn(r.license_plate), i = (r.imei ?? '').trim() || null
+    const dup = (p && appIndex.get(`${r.intervention_date}|p:${p}`)) || (i && appIndex.get(`${r.intervention_date}|i:${i}`))
+    if (dup && !INCLUDE_DUPLICATES) {
+      stats.possiveisDuplicados++
+      duplicates.push({ linhaSheet: sheetRowOf.get(r.legacy_key)!, data: r.intervention_date, matricula: r.license_plate, imei: r.imei, registoApp: dup })
+      return false
+    }
+    stats.novos++
+    return true
+  })
+  console.log(`Novos: ${stats.novos} | a atualizar: ${stats.atualizados} | editados na app (não mexidos): ${stats.protegidosEditadosNaApp} | possíveis duplicados de registos da app (não importados): ${stats.possiveisDuplicados}`)
 
   // 6. Escrever (upsert por legacy_key)
   let ok = 0, failed = 0
+  if (!DRY_RUN && rekey.size) {
+    await sql.begin(async tx => {
+      for (const [novo, antigo] of rekey) await tx`update interventions set legacy_key = ${novo} where legacy_key = ${antigo}`
+    })
+    console.log(`Registos completados/corrigidos na Sheet reaproveitados: ${rekey.size}`)
+  }
   if (!DRY_RUN) {
     for (let i = 0; i < toWrite.length; i += BATCH) {
       const batch = toWrite.slice(i, i + BATCH)
@@ -474,6 +588,7 @@ async function main() {
           insert into interventions ${sql(batch as any, cols as any)}
           on conflict (legacy_key) do update set
           ${sql.unsafe(updates.map(c => `"${c}" = excluded."${c}"`).join(', '))}
+          where interventions.updated_by is null
         `
         ok += batch.length
         console.log(`Gravados ${ok} / ${toWrite.length}`)
@@ -492,6 +607,11 @@ async function main() {
     linhas: rows.length,
     layout: layoutCount,
     gravados: DRY_RUN ? 0 : ok,
+    ...stats,
+    clientesReconhecidosPeloNomeAntigo: clientAliases.size,
+    // linhas importadas antes que já não aparecem na Sheet (apagadas, ou editadas em data/técnico/cliente/tipo/matrícula/IMEI/equipamento)
+    naBdMasJaNaoNaSheet: orphanKeys.length - rekey.size,
+    possiveisDuplicadosDetalhe: duplicates,
     falhados: failed,
     ignoradosSemData: issues.semData,
     dataPorFallback: issues.dataPorFallback,
@@ -505,7 +625,7 @@ async function main() {
     const [{ n }] = await sql`select gestao_interv.backfill_material() as n`
     console.log(`Material gasto/retomado ligado às listas em ${n} registos`)
   }
-  if (!DRY_RUN) await sql.end()
+  if (db) await db.end()
   fs.writeFileSync(path.join(__dirname, 'migration_report.json'), JSON.stringify(report, null, 2), 'utf8')
   console.log(`\nLayout atual: ${layoutCount.atual} | layout antigo (2022): ${layoutCount.antigo}`)
   console.log(`Sem data (ignoradas): ${issues.semData.length} | data por fallback: ${issues.dataPorFallback} | sem cliente: ${issues.semCliente}`)

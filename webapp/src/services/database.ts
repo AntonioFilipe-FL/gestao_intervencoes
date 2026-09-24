@@ -21,18 +21,26 @@ export async function getInterventions({
   clientSearch = '',
   techSearch = '',
   plateSearch = '',
+  dateFrom = '',
+  dateTo = '',
 }: {
   page?: number
   pageSize?: number
   clientSearch?: string
   techSearch?: string
   plateSearch?: string
+  /** YYYY-MM-DD (inclusive) */
+  dateFrom?: string
+  dateTo?: string
 } = {}) {
   await requireUser()
   try {
     const like = (s: string) => `%${s.replace(/[\\%_]/g, m => '\\' + m)}%`
+    const isDate = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d)
     const where = sql`
       where true
+      ${isDate(dateFrom) ? sql`and i.intervention_date >= ${dateFrom}::date` : sql``}
+      ${isDate(dateTo) ? sql`and i.intervention_date <= ${dateTo}::date` : sql``}
       ${clientSearch ? sql`and c.name ilike ${like(clientSearch)}` : sql``}
       ${techSearch ? sql`and t.name ilike ${like(techSearch)}` : sql``}
       ${plateSearch ? sql`and (i.license_plate ilike ${like(plateSearch)} or i.imei ilike ${like(plateSearch)} or i.crm_vehicle ilike ${like(plateSearch)})` : sql``}

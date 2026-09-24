@@ -287,3 +287,12 @@ create table if not exists device_plate_history (
 );
 create index if not exists device_plate_history_plate_idx on device_plate_history (plate_norm, seen_to);
 create index if not exists interventions_plate_norm_idx on interventions (gestao_interv.plate_norm(license_plate));
+
+-- Edição de registos: quem alterou por último
+alter table interventions add column if not exists updated_by text;
+
+-- Nomes antigos (da Google Sheet) de clientes renomeados para o nome da Intranet — usados na re-importação de CSVs
+alter table clients add column if not exists sheet_names text[];
+
+-- Coluna nova da Sheet: "Serviços da conta - driving Behavior / sensor de porta"
+alter table interventions add column if not exists account_services text;

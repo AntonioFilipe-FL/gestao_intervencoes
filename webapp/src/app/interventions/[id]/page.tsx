@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Pencil } from 'lucide-react'
 
 const fmtDate = (d: string | null) => (d ? d.split('-').reverse().join('/') : null)
 
@@ -67,9 +67,15 @@ export default async function InterventionDetailsPage({ params }: Props) {
             <h1>Detalhes da intervenção</h1>
             <p className="fc-small text-fc-dark-60">
               {intervention.created_by ? `Registado por ${intervention.created_by}` : intervention.legacy_layout ? 'Importado da Google Sheet' : null}
+              {intervention.updated_by ? ` · Editado por ${intervention.updated_by} em ${new Date(intervention.updated_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' })}` : null}
             </p>
           </div>
         </div>
+        {user.role === 'admin' && (
+          <Link href={`/interventions/${intervention.id}/edit`} className={buttonVariants({ size: 'lg' })}>
+            <Pencil /> Editar
+          </Link>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -144,6 +150,7 @@ export default async function InterventionDetailsPage({ params }: Props) {
               <DetailItem label="Data de Validação" value={fmtDate(intervention.validation_date)} />
               <DetailItem label="Validado Por" value={intervention.validated_by_tech?.name} />
               <DetailItem label="Serviços" value={intervention.services_status} />
+              <DetailItem label="Serviços da conta (Driving Behavior / sensor de porta)" value={intervention.account_services} />
               <DetailItem label="WOW" value={intervention.wow} />
             </CardContent>
           </Card>

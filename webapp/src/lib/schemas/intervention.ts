@@ -19,7 +19,8 @@ export const interventionSchema = z.object({
 
   // Quem / onde
   technician_id: requiredId('Selecione um técnico'),
-  client_id: requiredId('Selecione um cliente'),
+  // uuid do cliente, ou 'intranet:<id>' para uma conta da Intranet ainda sem cliente (criado ao gravar)
+  client_id: z.union([z.uuid(), z.string().regex(/^intranet:[\w-]+$/)], 'Selecione um cliente'),
   venda_aluguer: text,
   nos_vdf: text,
   report_projeto: text,
@@ -64,6 +65,7 @@ export const interventionSchema = z.object({
   observations: text,
   wow: text,
   services_status: text,
+  account_services: text, // Serviços da conta (driving behavior / sensor de porta)
 
   // Validação
   validated_by: optionalId,
