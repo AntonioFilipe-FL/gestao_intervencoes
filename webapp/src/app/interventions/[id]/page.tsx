@@ -153,7 +153,7 @@ export default async function InterventionDetailsPage({ params }: Props) {
             </CardHeader>
             <CardContent className="space-y-6">
               <DetailItem label="Faturar?" value={intervention.billing} />
-              <DetailItem label="Email de Faturação" value={intervention.billing_email} />
+              {intervention.billing_email && <DetailItem label="Email de faturação (histórico)" value={intervention.billing_email} />}
               <DetailItem label="Observações de Faturação" value={intervention.billing_observations} />
               <Separator />
               <BillingEmailStatus

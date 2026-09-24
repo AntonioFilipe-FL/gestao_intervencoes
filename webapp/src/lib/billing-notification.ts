@@ -1,9 +1,10 @@
 import 'server-only'
 import { sql } from '@/lib/db'
-import { sendAsUser } from '@/lib/gmail'
+import { sendFromSender } from '@/lib/gmail'
+import { senderEmail } from '@/lib/google'
 
 /** Destinatário(s) — por omissão a financeira; pode ser alterado na variável BILLING_EMAIL_TO (separados por vírgula) */
-const recipients = () =>
+export const billingRecipients = () =>
   (process.env.BILLING_EMAIL_TO || 'financeira@pt.frotcom.com').split(',').map(s => s.trim()).filter(Boolean)
 
 /** "Faturar = Sim" (ignora maiúsculas/acentos) */
@@ -89,7 +90,7 @@ export async function notifyBilling(interventionId: string, user: { email: strin
         <p style="margin:0 0 16px;color:#76808a;font-size:12px">Registada por ${esc(user.name ? `${user.name} (${user.email})` : user.email)}</p>
         ${table('Intervenção', rows.map(([k, v]) => [k, esc(v ?? '—') || '—']))}
         ${table('Material', material)}
-        ${table('Faturação', [['Observações', esc(i.billing_observations ?? '—')], ['Email faturação', esc(i.billing_email ?? '—')]])}
+        ${table('Faturação', [['Observações', esc(i.billing_observations ?? '—')]])}
         <p style="margin:20px 0 0"><a href="${esc(link)}" style="display:inline-block;background:#0081c9;color:#ffffff;text-decoration:none;text-transform:uppercase;font-size:11px;padding:6px 14px;border-radius:2px">Abrir registo</a></p>
       </div></body></html>`
 
@@ -104,7 +105,13 @@ export async function notifyBilling(interventionId: string, user: { email: strin
       `Registo: ${link}`,
     ].join('\n')
 
-    await sendAsUser({ from: user.email, fromName: user.name, to: recipients(), subject, html, text })
+    await sendFromSender({
+      from: senderEmail(),
+      fromName: process.env.BILLING_EMAIL_FROM_NAME || 'Frotcom Logística',
+      replyTo: user.email, // respostas da financeira vão para quem registou
+      to: billingRecipients(),
+      subject, html, text,
+    })
     await sql`update interventions set billing_notified_at = now(), billing_notified_by = ${user.email}, billing_notify_error = null
               where id = ${interventionId}`
     return { ok: true as const }

@@ -3,8 +3,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SettingsTable } from '@/components/settings/SettingsTable'
 import { isAdmin } from '@/actions/users'
 import { UserManagement } from '@/components/settings/UserManagement'
+import { EmailSettings } from '@/components/settings/EmailSettings'
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; sender_ok?: string; sender_error?: string }>
+}) {
+  const params = await searchParams
   const data = await getReferenceData(false)
   const userIsAdmin = await isAdmin()
 
@@ -15,7 +21,7 @@ export default async function SettingsPage() {
         <p className="fc-small text-fc-dark-60">Gerir tabelas de referência e listas de apoio.</p>
       </div>
 
-      <Tabs defaultValue="technicians" className="gap-0 border border-fc-dark-20 bg-white">
+      <Tabs defaultValue={params.tab === 'email' && userIsAdmin ? 'email' : 'technicians'} className="gap-0 border border-fc-dark-20 bg-white">
         <TabsList>
           <TabsTrigger value="technicians">Técnicos</TabsTrigger>
           <TabsTrigger value="clients">Clientes</TabsTrigger>
@@ -27,6 +33,9 @@ export default async function SettingsPage() {
           <TabsTrigger value="bundles">Bundles</TabsTrigger>
           {userIsAdmin && (
             <TabsTrigger value="users">Utilizadores</TabsTrigger>
+          )}
+          {userIsAdmin && (
+            <TabsTrigger value="email">Email</TabsTrigger>
           )}
         </TabsList>
 
@@ -79,6 +88,11 @@ export default async function SettingsPage() {
             {userIsAdmin && (
               <TabsContent value="users">
                 <UserManagement />
+              </TabsContent>
+            )}
+            {userIsAdmin && (
+              <TabsContent value="email">
+                <EmailSettings ok={params.sender_ok === '1'} error={params.sender_error} />
               </TabsContent>
             )}
           </div>

@@ -45,13 +45,15 @@ Se o ecrã de consentimento estiver em modo *Internal* (Google Workspace), só c
 
 ### Envio de email à financeira (Faturar = Sim)
 
-O email sai da conta Gmail de quem grava o registo (fica nos "Enviados" dessa pessoa).
+Os emails saem da conta **logistica@pt.frotcom.com** (Reply-To = quem gravou o registo).
 
 1. Google Cloud Console → **APIs & Services → Library → Gmail API → Enable**.
-2. **OAuth consent screen → Data access / Scopes → Add** `https://www.googleapis.com/auth/gmail.send`
-   (com o ecrã em modo **Internal** não é preciso verificação da Google).
-3. Opcional: variável `BILLING_EMAIL_TO` no Railway (por omissão `financeira@pt.frotcom.com`).
-4. Cada utilizador tem de **sair e voltar a entrar** uma vez para autorizar o envio.
+2. **Google Auth Platform → Acesso a dados → Adicionar escopos** `https://www.googleapis.com/auth/gmail.send`
+   (com **Público-alvo = Interno** não é preciso verificação da Google).
+3. Na app, um admin vai a **Configurações → Email → Ligar logistica@pt.frotcom.com** e, no Google,
+   entra com a conta logistica@ e aceita "Enviar email em seu nome". Faz-se uma única vez.
+4. Opcional (Railway → Variables): `BILLING_EMAIL_TO` (destinatários, por omissão financeira@pt.frotcom.com),
+   `BILLING_EMAIL_FROM` (conta de envio, por omissão logistica@pt.frotcom.com), `BILLING_EMAIL_FROM_NAME`.
 
 ## 4. Criar tabelas e migrar os dados (a partir do teu PC)
 

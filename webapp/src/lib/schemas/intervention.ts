@@ -52,7 +52,6 @@ export const interventionSchema = z.object({
   // Faturação
   billing: text,
   billing_observations: text,
-  billing_email: text,
 
   // Configuração
   bundle_id: optionalId,

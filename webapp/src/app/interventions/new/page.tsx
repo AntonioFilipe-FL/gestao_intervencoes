@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { getReferenceData } from '@/services/database'
 import { InterventionForm } from '@/components/interventions/InterventionForm'
 import { requireUser } from '@/lib/auth'
+import { billingRecipients } from '@/lib/billing-notification'
 
 export default async function NewInterventionPage() {
   const user = await requireUser()
@@ -10,7 +11,7 @@ export default async function NewInterventionPage() {
 
   return (
     <div>
-      <InterventionForm referenceData={referenceData} />
+      <InterventionForm referenceData={referenceData} billingRecipients={billingRecipients()} />
     </div>
   )
 }

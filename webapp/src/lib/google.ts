@@ -3,6 +3,11 @@ import crypto from 'crypto'
 
 export const OAUTH_STATE_COOKIE = 'gi_oauth_state'
 export const OAUTH_VERIFIER_COOKIE = 'gi_oauth_verifier'
+/** 'login' (entrada normal) ou 'sender' (ligar a conta de envio de emails) */
+export const OAUTH_PURPOSE_COOKIE = 'gi_oauth_purpose'
+
+/** Conta de onde saem os emails automáticos */
+export const senderEmail = () => (process.env.BILLING_EMAIL_FROM || 'logistica@pt.frotcom.com').toLowerCase()
 
 /** Permissão para enviar emails em nome do utilizador (não dá acesso à leitura da caixa de correio). */
 export const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send'
@@ -26,20 +31,28 @@ export function createPkce() {
   return { state, verifier, challenge }
 }
 
-export function authorizationUrl(request: Request, state: string, challenge: string) {
+/** URL de autorização Google. purpose 'login' = entrar na app; 'sender' = autorizar envio de emails pela conta de envio */
+export function authorizationUrl(request: Request, state: string, challenge: string, purpose: 'login' | 'sender' = 'login') {
   const url = new URL('https://accounts.google.com/o/oauth2/v2/auth')
-  url.search = new URLSearchParams({
+  const common = {
     client_id: process.env.AUTH_GOOGLE_ID!,
     redirect_uri: redirectUri(request),
     response_type: 'code',
-    scope: `openid email profile ${GMAIL_SEND_SCOPE}`,
-    access_type: 'offline',        // devolve refresh_token para enviar emails mais tarde
-    include_granted_scopes: 'true',
     state,
     code_challenge: challenge,
     code_challenge_method: 'S256',
-    prompt: 'consent select_account', // garante que o refresh_token é sempre devolvido
-  }).toString()
+  }
+  url.search = new URLSearchParams(
+    purpose === 'sender'
+      ? {
+          ...common,
+          scope: `openid email ${GMAIL_SEND_SCOPE}`,
+          access_type: 'offline', // refresh_token para enviar mais tarde
+          prompt: 'consent select_account',
+          login_hint: senderEmail(),
+        }
+      : { ...common, scope: 'openid email profile', prompt: 'select_account' }
+  ).toString()
   return url.toString()
 }
 

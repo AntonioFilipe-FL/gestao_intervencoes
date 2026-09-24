@@ -223,3 +223,11 @@ alter table interventions
   add column if not exists billing_notified_at timestamptz,    -- quando o email à financeira foi enviado
   add column if not exists billing_notified_by text,           -- conta que enviou
   add column if not exists billing_notify_error text;          -- último erro de envio (se houver)
+
+-- Definições da aplicação (ex.: conta de envio de emails ligada por um admin)
+create table if not exists app_settings (
+  key        text primary key,
+  value      text,
+  updated_at timestamptz not null default now(),
+  updated_by text
+);

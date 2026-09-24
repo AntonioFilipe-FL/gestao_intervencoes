@@ -8,27 +8,20 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { createIntervention } from '@/actions/interventions'
 import { AccessoryPicker } from '@/components/interventions/AccessoryPicker'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 interface Props {
   referenceData: ReferenceData
+  /** destinatários do email automático (variável BILLING_EMAIL_TO) */
+  billingRecipients: string[]
 }
 
-const toItems = (list: { id: string; name: string }[] | null) =>
-  (list ?? []).map((i) => ({ value: i.id, label: i.name }))
-
-export function InterventionForm({ referenceData }: Props) {
+export function InterventionForm({ referenceData, billingRecipients }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
 
@@ -120,18 +113,14 @@ export function InterventionForm({ referenceData }: Props) {
               name="technician_id"
               control={control}
               render={({ field }) => (
-                <Select items={toItems(referenceData.technicians)} value={field.value ?? ''} onValueChange={field.onChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecione o técnico" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {referenceData.technicians?.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  id="technician_id"
+                  invalid={!!errors.technician_id}
+                  options={(referenceData.technicians ?? []).map((t) => ({ value: t.id, label: t.name }))}
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  placeholder="Selecione o técnico"
+                />
               )}
             />
             {errors.technician_id && (
@@ -145,18 +134,14 @@ export function InterventionForm({ referenceData }: Props) {
               name="client_id"
               control={control}
               render={({ field }) => (
-                <Select items={toItems(referenceData.clients)} value={field.value ?? ''} onValueChange={(v) => handleClientChange(v ?? '', field.onChange)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecione o cliente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {referenceData.clients?.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  id="client_id"
+                  invalid={!!errors.client_id}
+                  options={(referenceData.clients ?? []).map((c) => ({ value: c.id, label: c.name }))}
+                  value={field.value ?? ''}
+                  onChange={(v) => handleClientChange(v, field.onChange)}
+                  placeholder="Selecione o cliente"
+                />
               )}
             />
             {errors.client_id && (
@@ -170,18 +155,14 @@ export function InterventionForm({ referenceData }: Props) {
               name="intervention_type_id"
               control={control}
               render={({ field }) => (
-                <Select items={toItems(referenceData.interventionTypes)} value={field.value ?? ''} onValueChange={field.onChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecione o tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {referenceData.interventionTypes?.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  id="intervention_type_id"
+                  invalid={!!errors.intervention_type_id}
+                  options={(referenceData.interventionTypes ?? []).map((t) => ({ value: t.id, label: t.name }))}
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  placeholder="Selecione o tipo"
+                />
               )}
             />
             {errors.intervention_type_id && (
@@ -232,18 +213,14 @@ export function InterventionForm({ referenceData }: Props) {
               name="equipment_id"
               control={control}
               render={({ field }) => (
-                <Select items={toItems(referenceData.equipmentList)} value={field.value ?? ''} onValueChange={field.onChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecione o equipamento" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {referenceData.equipmentList?.map((e) => (
-                      <SelectItem key={e.id} value={e.id}>
-                        {e.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  id="equipment_id"
+                  invalid={!!errors.equipment_id}
+                  options={(referenceData.equipmentList ?? []).map((e) => ({ value: e.id, label: e.name }))}
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  placeholder="Selecione o equipamento"
+                />
               )}
             />
           </div>
@@ -267,18 +244,14 @@ export function InterventionForm({ referenceData }: Props) {
                 name="motive_id"
                 control={control}
                 render={({ field }) => (
-                  <Select items={toItems(referenceData.motives)} value={field.value ?? ''} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Selecione o motivo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {referenceData.motives?.map((m) => (
-                        <SelectItem key={m.id} value={m.id}>
-                          {m.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                  id="motive_id"
+                  invalid={!!errors.motive_id}
+                  options={(referenceData.motives ?? []).map((m) => ({ value: m.id, label: m.name }))}
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  placeholder="Selecione o motivo"
+                />
                 )}
               />
               {errors.motive_id && (
@@ -310,19 +283,14 @@ export function InterventionForm({ referenceData }: Props) {
                 name="spent_equipment_id"
                 control={control}
                 render={({ field }) => (
-                  <Select items={toItems(referenceData.equipmentList)} value={field.value ?? ''} onValueChange={(v) => field.onChange(v ?? '')}>
-                    <SelectTrigger id="spent_equipment_id" className="w-full">
-                      <SelectValue placeholder="Selecione o equipamento" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Nenhum</SelectItem>
-                      {referenceData.equipmentList?.map((e) => (
-                        <SelectItem key={e.id} value={e.id}>
-                          {e.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                  id="spent_equipment_id"
+                  invalid={!!errors.spent_equipment_id}
+                  options={(referenceData.equipmentList ?? []).map((e) => ({ value: e.id, label: e.name }))}
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  placeholder="Selecione o equipamento"
+                />
                 )}
               />
             </div>
@@ -349,18 +317,14 @@ export function InterventionForm({ referenceData }: Props) {
               name="stock_exit_warehouse_id"
               control={control}
               render={({ field }) => (
-                <Select items={toItems(referenceData.warehouses)} value={field.value ?? ''} onValueChange={field.onChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecione o armazém" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {referenceData.warehouses?.filter(w => w.type !== 'entrada').map((w) => (
-                      <SelectItem key={w.id} value={w.id}>
-                        {w.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  id="stock_exit_warehouse_id"
+                  invalid={!!errors.stock_exit_warehouse_id}
+                  options={(referenceData.warehouses ?? []).filter((w) => w.type !== 'entrada').map((w) => ({ value: w.id, label: w.name }))}
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  placeholder="Selecione o armazém"
+                />
               )}
             />
           </div>
@@ -379,19 +343,14 @@ export function InterventionForm({ referenceData }: Props) {
                 name="return_equipment_id"
                 control={control}
                 render={({ field }) => (
-                  <Select items={toItems(referenceData.equipmentList)} value={field.value ?? ''} onValueChange={(v) => field.onChange(v ?? '')}>
-                    <SelectTrigger id="return_equipment_id" className="w-full">
-                      <SelectValue placeholder="Selecione o equipamento" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Nenhum</SelectItem>
-                      {referenceData.equipmentList?.map((e) => (
-                        <SelectItem key={e.id} value={e.id}>
-                          {e.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                  id="return_equipment_id"
+                  invalid={!!errors.return_equipment_id}
+                  options={(referenceData.equipmentList ?? []).map((e) => ({ value: e.id, label: e.name }))}
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  placeholder="Selecione o equipamento"
+                />
                 )}
               />
           </div>
@@ -413,18 +372,14 @@ export function InterventionForm({ referenceData }: Props) {
               name="stock_entry_warehouse_id"
               control={control}
               render={({ field }) => (
-                <Select items={toItems(referenceData.warehouses)} value={field.value ?? ''} onValueChange={field.onChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecione o armazém" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {referenceData.warehouses?.filter(w => w.type !== 'saida').map((w) => (
-                      <SelectItem key={w.id} value={w.id}>
-                        {w.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  id="stock_entry_warehouse_id"
+                  invalid={!!errors.stock_entry_warehouse_id}
+                  options={(referenceData.warehouses ?? []).filter((w) => w.type !== 'saida').map((w) => ({ value: w.id, label: w.name }))}
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  placeholder="Selecione o armazém"
+                />
               )}
             />
           </div>
@@ -444,27 +399,21 @@ export function InterventionForm({ referenceData }: Props) {
                 name="billing"
                 control={control}
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Sim / Não..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {referenceData.billingOptions?.map((o) => (
-                        <SelectItem key={o.id} value={o.name}>
-                          {o.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                  id="billing"
+                  invalid={!!errors.billing}
+                  options={(referenceData.billingOptions ?? []).map((o) => ({ value: o.name, label: o.name }))}
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  placeholder="Sim / Não..."
+                />
                 )}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="billing_email">Email Faturação</Label>
-              <Input id="billing_email" type="email" {...register('billing_email')} />
-              {errors.billing_email && (
-                <p className="fc-small text-fc-danger">{errors.billing_email.message}</p>
-              )}
+              <Label htmlFor="billing_recipients">Email à financeira</Label>
+              <Input id="billing_recipients" value={billingRecipients.join(', ')} readOnly tabIndex={-1} className="bg-fc-grey-100 text-fc-dark-60" />
+              <p className="fc-small text-fc-dark-60">Enviado automaticamente ao gravar com Faturar = Sim.</p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="billing_observations">Observações Faturação</Label>
@@ -484,18 +433,14 @@ export function InterventionForm({ referenceData }: Props) {
                 name="bundle_id"
                 control={control}
                 render={({ field }) => (
-                  <Select items={toItems(referenceData.bundles)} value={field.value ?? ''} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Selecione o bundle" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {referenceData.bundles?.map((b) => (
-                        <SelectItem key={b.id} value={b.id}>
-                          {b.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                  id="bundle_id"
+                  invalid={!!errors.bundle_id}
+                  options={(referenceData.bundles ?? []).map((b) => ({ value: b.id, label: b.name }))}
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  placeholder="Selecione o bundle"
+                />
                 )}
               />
             </div>
@@ -505,18 +450,14 @@ export function InterventionForm({ referenceData }: Props) {
                 name="platform_id"
                 control={control}
                 render={({ field }) => (
-                  <Select items={toItems(referenceData.platforms)} value={field.value ?? ''} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Selecione a plataforma" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {referenceData.platforms?.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                  id="platform_id"
+                  invalid={!!errors.platform_id}
+                  options={(referenceData.platforms ?? []).map((p) => ({ value: p.id, label: p.name }))}
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  placeholder="Selecione a plataforma"
+                />
                 )}
               />
             </div>
@@ -549,20 +490,14 @@ export function InterventionForm({ referenceData }: Props) {
                 name="validated_by"
                 control={control}
                 render={({ field }) => (
-                  <Select items={toItems(referenceData.technicians)} value={field.value ?? ''} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Selecione..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {referenceData.technicians
-                        ?.filter((t) => VALID_VALIDATORS.includes(t.name))
-                        .map((t) => (
-                          <SelectItem key={t.id} value={t.id}>
-                            {t.name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                  id="validated_by"
+                  invalid={!!errors.validated_by}
+                  options={(referenceData.technicians ?? []).filter((t) => VALID_VALIDATORS.includes(t.name)).map((t) => ({ value: t.id, label: t.name }))}
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  placeholder="Selecione..."
+                />
                 )}
               />
             </div>

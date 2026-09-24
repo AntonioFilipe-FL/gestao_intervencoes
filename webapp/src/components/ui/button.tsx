@@ -10,17 +10,17 @@ import { cn } from "@/lib/utils"
  * destructive = DANGER (red) · link = LINK · ghost = sem fundo (navegação)
  */
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-[2px] border border-transparent font-normal whitespace-nowrap uppercase tracking-[0.02em] transition-colors outline-none select-none focus-visible:ring-2 focus-visible:ring-fc-light-60/60 disabled:pointer-events-none disabled:border-transparent disabled:bg-fc-dark-20 disabled:text-white aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+  "group/button inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-[2px] border font-normal whitespace-nowrap uppercase tracking-[0.02em] transition-colors outline-none select-none focus-visible:ring-2 focus-visible:ring-fc-light-60/60 disabled:pointer-events-none disabled:border-transparent disabled:bg-fc-dark-20 disabled:text-white aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
   {
     variants: {
       variant: {
-        default: "bg-fc-light-100 text-white hover:bg-[#0090e0]",
-        secondary: "bg-fc-dark-100 text-white hover:bg-[#304457]",
+        default: "border-transparent bg-fc-light-100 text-white hover:bg-[#0090e0]",
+        secondary: "border-transparent bg-fc-dark-100 text-white hover:bg-[#304457]",
         outline: "border-fc-light-100 bg-white text-fc-light-100 hover:border-[#0090e0] hover:text-[#0090e0]",
         inverse: "border-fc-dark-100 bg-white text-fc-dark-100 hover:border-[#304457] hover:text-[#304457]",
-        destructive: "bg-fc-red text-white hover:bg-[#e70b31]",
-        ghost: "text-fc-dark-100 hover:bg-fc-grey-100",
-        link: "px-0 text-fc-light-100 hover:text-fc-light-60",
+        destructive: "border-transparent bg-fc-red text-white hover:bg-[#e70b31]",
+        ghost: "border-transparent text-fc-dark-100 hover:bg-fc-grey-100",
+        link: "border-transparent px-0 text-fc-light-100 hover:text-fc-light-60",
       },
       size: {
         default: "h-[26px] px-3 text-[11px]",
