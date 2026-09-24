@@ -137,3 +137,77 @@ language plpgsql as $$ begin new.updated_at := now(); return new; end $$;
 drop trigger if exists interventions_touch on interventions;
 create trigger interventions_touch before update on interventions
   for each row execute function gestao_interv.touch_updated_at();
+
+-- =============================================================================
+-- Material gasto / retomado ligado às listas de Equipamentos e Acessórios
+-- (v2 — substitui os campos de texto spent_equipment / accessory_spent_1..5 / ...)
+-- =============================================================================
+alter table interventions
+  add column if not exists spent_equipment_id  uuid references equipment_list(id),
+  add column if not exists return_equipment_id uuid references equipment_list(id),
+  add column if not exists material_migrated   boolean not null default false;
+
+create table if not exists intervention_accessories (
+  intervention_id uuid not null references interventions(id) on delete cascade,
+  accessory_id    uuid not null references accessories(id),
+  direction       text not null check (direction in ('gasto', 'retomado')),
+  quantity        int  not null default 1 check (quantity > 0),
+  primary key (intervention_id, accessory_id, direction)
+);
+create index if not exists intervention_accessories_acc_idx on intervention_accessories (accessory_id);
+
+/**
+ * Converte os campos de texto históricos (importados da Google Sheet) para as novas ligações.
+ * Só trata registos com material_migrated = false. Nomes que não existem nas listas são
+ * criados como INATIVOS (preservam o histórico sem aparecer nos dropdowns).
+ */
+create or replace function gestao_interv.backfill_material() returns int
+language plpgsql as $$
+declare n int;
+begin
+  -- equipamentos em falta
+  insert into gestao_interv.equipment_list (name, active)
+  select distinct on (lower(btrim(e))) btrim(e), false
+  from gestao_interv.interventions i, unnest(array[i.spent_equipment, i.equipment_return]) e
+  where not i.material_migrated and btrim(coalesce(e, '')) <> ''
+  on conflict do nothing;
+
+  -- acessórios em falta
+  insert into gestao_interv.accessories (name, active)
+  select distinct on (lower(btrim(a))) btrim(a), false
+  from gestao_interv.interventions i,
+       unnest(array[i.accessory_spent_1, i.accessory_spent_2, i.accessory_spent_3, i.accessory_spent_4, i.accessory_spent_5,
+                    i.accessory_return_1, i.accessory_return_2, i.accessory_return_3, i.accessory_return_4, i.accessory_return_5]) a
+  where not i.material_migrated and btrim(coalesce(a, '')) <> ''
+  on conflict do nothing;
+
+  -- equipamento gasto / retomado
+  update gestao_interv.interventions i set
+    spent_equipment_id  = (select q.id from gestao_interv.equipment_list q where lower(q.name) = lower(btrim(i.spent_equipment))),
+    return_equipment_id = (select q.id from gestao_interv.equipment_list q where lower(q.name) = lower(btrim(i.equipment_return)))
+  where not i.material_migrated;
+
+  -- acessórios (com quantidade = nº de vezes que aparecem no registo)
+  delete from gestao_interv.intervention_accessories ia
+  using gestao_interv.interventions i
+  where ia.intervention_id = i.id and not i.material_migrated;
+
+  insert into gestao_interv.intervention_accessories (intervention_id, accessory_id, direction, quantity)
+  select i.id, ac.id, x.dir, count(*)
+  from gestao_interv.interventions i
+  cross join lateral (values
+    ('gasto', i.accessory_spent_1), ('gasto', i.accessory_spent_2), ('gasto', i.accessory_spent_3),
+    ('gasto', i.accessory_spent_4), ('gasto', i.accessory_spent_5),
+    ('retomado', i.accessory_return_1), ('retomado', i.accessory_return_2), ('retomado', i.accessory_return_3),
+    ('retomado', i.accessory_return_4), ('retomado', i.accessory_return_5)
+  ) as x(dir, name)
+  join gestao_interv.accessories ac on lower(ac.name) = lower(btrim(x.name))
+  where not i.material_migrated
+  group by i.id, ac.id, x.dir;
+
+  update gestao_interv.interventions set material_migrated = true where not material_migrated;
+  get diagnostics n = row_count;
+  return n;
+end $$;
+
+select gestao_interv.backfill_material();

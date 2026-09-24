@@ -2,7 +2,7 @@
 
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { interventionSchema, type InterventionFormValues } from '@/lib/schemas/intervention'
+import { interventionSchema, type InterventionFormValues, type InterventionFormInput } from '@/lib/schemas/intervention'
 import { type ReferenceData } from '@/types/database'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { createIntervention } from '@/actions/interventions'
+import { AccessoryPicker } from '@/components/interventions/AccessoryPicker'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
@@ -37,7 +38,7 @@ export function InterventionForm({ referenceData }: Props) {
     setValue,
     control,
     formState: { errors },
-  } = useForm<InterventionFormValues>({
+  } = useForm<InterventionFormInput, unknown, InterventionFormValues>({
     resolver: zodResolver(interventionSchema),
     defaultValues: {
       intervention_date: new Date().toISOString().split('T')[0],
@@ -52,6 +53,10 @@ export function InterventionForm({ referenceData }: Props) {
       bundle_id: '',
       platform_id: '',
       validated_by: '',
+      spent_equipment_id: '',
+      return_equipment_id: '',
+      accessories_spent: [],
+      accessories_returned: [],
     },
   })
 
@@ -296,27 +301,45 @@ export function InterventionForm({ referenceData }: Props) {
         <CardHeader>
           <CardTitle>Material Gasto (Saída)</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="spent_equipment">Equipamento Gasto</Label>
-              <Input id="spent_equipment" {...register('spent_equipment')} />
+              <Label htmlFor="spent_equipment_id">Equipamento gasto</Label>
+              <Controller
+                name="spent_equipment_id"
+                control={control}
+                render={({ field }) => (
+                  <Select items={toItems(referenceData.equipmentList)} value={field.value ?? ''} onValueChange={(v) => field.onChange(v ?? '')}>
+                    <SelectTrigger id="spent_equipment_id" className="w-full">
+                      <SelectValue placeholder="Selecione o equipamento" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Nenhum</SelectItem>
+                      {referenceData.equipmentList?.map((e) => (
+                        <SelectItem key={e.id} value={e.id}>
+                          {e.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="spent_equipment_imei">IMEI Equipamento Gasto</Label>
+              <Label htmlFor="spent_equipment_imei">IMEI equipamento gasto</Label>
               <Input id="spent_equipment_imei" {...register('spent_equipment_imei')} />
             </div>
           </div>
-          
-          <div className="space-y-4">
-            <Label>Acessórios Gastos</Label>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
-              <Input {...register('accessory_spent_1')} placeholder="Acessório I" />
-              <Input {...register('accessory_spent_2')} placeholder="Acessório II" />
-              <Input {...register('accessory_spent_3')} placeholder="Acessório III" />
-              <Input {...register('accessory_spent_4')} placeholder="Acessório IV" />
-              <Input {...register('accessory_spent_5')} placeholder="Acessório V" />
-            </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="accessories_spent">Acessórios gastos</Label>
+            <Controller
+              name="accessories_spent"
+              control={control}
+              render={({ field }) => (
+                <AccessoryPicker id="accessories_spent" options={referenceData.accessories ?? []} value={field.value ?? []} onChange={field.onChange} />
+              )}
+            />
           </div>
 
           <div className="space-y-1.5">
@@ -348,21 +371,39 @@ export function InterventionForm({ referenceData }: Props) {
         <CardHeader>
           <CardTitle>Material Retomado (Entrada)</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="equipment_return">Equipamento a Dar Entrada</Label>
-            <Input id="equipment_return" {...register('equipment_return')} />
+            <Label htmlFor="return_equipment_id">Equipamento retomado</Label>
+            <Controller
+                name="return_equipment_id"
+                control={control}
+                render={({ field }) => (
+                  <Select items={toItems(referenceData.equipmentList)} value={field.value ?? ''} onValueChange={(v) => field.onChange(v ?? '')}>
+                    <SelectTrigger id="return_equipment_id" className="w-full">
+                      <SelectValue placeholder="Selecione o equipamento" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Nenhum</SelectItem>
+                      {referenceData.equipmentList?.map((e) => (
+                        <SelectItem key={e.id} value={e.id}>
+                          {e.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
           </div>
-          
-          <div className="space-y-4">
-            <Label>Acessórios a Dar Entrada</Label>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
-              <Input {...register('accessory_return_1')} placeholder="Acessório I" />
-              <Input {...register('accessory_return_2')} placeholder="Acessório II" />
-              <Input {...register('accessory_return_3')} placeholder="Acessório III" />
-              <Input {...register('accessory_return_4')} placeholder="Acessório IV" />
-              <Input {...register('accessory_return_5')} placeholder="Acessório V" />
-            </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="accessories_returned">Acessórios retomados</Label>
+            <Controller
+              name="accessories_returned"
+              control={control}
+              render={({ field }) => (
+                <AccessoryPicker id="accessories_returned" options={referenceData.accessories ?? []} value={field.value ?? []} onChange={field.onChange} />
+              )}
+            />
           </div>
 
           <div className="space-y-1.5">
@@ -495,7 +536,7 @@ export function InterventionForm({ referenceData }: Props) {
         <CardHeader>
           <CardTitle>Dados Finais e Validação</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="validation_date">Data de Validação</Label>

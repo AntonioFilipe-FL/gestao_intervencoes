@@ -20,6 +20,7 @@ export default async function SettingsPage() {
           <TabsTrigger value="technicians">Técnicos</TabsTrigger>
           <TabsTrigger value="clients">Clientes</TabsTrigger>
           <TabsTrigger value="equipment">Equipamentos</TabsTrigger>
+          <TabsTrigger value="accessories">Acessórios</TabsTrigger>
           <TabsTrigger value="intervention_types">Tipos Interv.</TabsTrigger>
           <TabsTrigger value="motives">Motivos</TabsTrigger>
           <TabsTrigger value="warehouses">Armazéns</TabsTrigger>
@@ -48,6 +49,10 @@ export default async function SettingsPage() {
 
             <TabsContent value="equipment">
               <SettingsTable title="Lista de Equipamentos" table="equipment_list" items={data.equipmentList} />
+            </TabsContent>
+
+            <TabsContent value="accessories">
+              <SettingsTable title="Lista de Acessórios" table="accessories" items={data.accessories} />
             </TabsContent>
 
             <TabsContent value="intervention_types">

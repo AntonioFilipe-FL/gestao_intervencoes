@@ -73,7 +73,15 @@ export async function getInterventionById(id: string) {
       json_build_object('name', p.name)   as platform,
       json_build_object('name', v.name)   as validated_by_tech,
       json_build_object('name', ws.name)  as stock_exit_warehouse,
-      json_build_object('name', we.name)  as stock_entry_warehouse
+      json_build_object('name', we.name)  as stock_entry_warehouse,
+      se.name as spent_equipment_name,
+      re.name as return_equipment_name,
+      coalesce((select json_agg(json_build_object('name', ac.name, 'quantity', ia.quantity) order by ac.name)
+                from intervention_accessories ia join accessories ac on ac.id = ia.accessory_id
+                where ia.intervention_id = i.id and ia.direction = 'gasto'), '[]') as accessories_spent,
+      coalesce((select json_agg(json_build_object('name', ac.name, 'quantity', ia.quantity) order by ac.name)
+                from intervention_accessories ia join accessories ac on ac.id = ia.accessory_id
+                where ia.intervention_id = i.id and ia.direction = 'retomado'), '[]') as accessories_returned
     from interventions i
     left join technicians t on t.id = i.technician_id
     left join clients c on c.id = i.client_id
@@ -85,6 +93,8 @@ export async function getInterventionById(id: string) {
     left join technicians v on v.id = i.validated_by
     left join warehouses ws on ws.id = i.stock_exit_warehouse_id
     left join warehouses we on we.id = i.stock_entry_warehouse_id
+    left join equipment_list se on se.id = i.spent_equipment_id
+    left join equipment_list re on re.id = i.return_equipment_id
     where i.id = ${id}
   `
   return row ?? null

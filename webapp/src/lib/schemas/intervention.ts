@@ -5,6 +5,13 @@ const requiredId = (msg: string) => z.uuid(msg)
 const optionalId = z.union([z.uuid(), z.literal('')]).optional()
 const text = z.string().trim().max(2000).optional()
 
+/** Uma linha de acessório: qual e quantos */
+export const accessoryLine = z.object({
+  accessory_id: z.uuid(),
+  quantity: z.number().int().min(1, 'Quantidade mínima 1').max(99),
+})
+export type AccessoryLine = z.infer<typeof accessoryLine>
+
 export const interventionSchema = z.object({
   // Datas
   intervention_date: z.iso.date('Data da intervenção é obrigatória'),
@@ -33,22 +40,14 @@ export const interventionSchema = z.object({
   action_description: text,
   assisted_material: text,
 
-  // Equipamento / acessórios gastos
-  spent_equipment: text,
+  // Material gasto (saída) — equipamento da lista de Equipamentos, acessórios da lista de Acessórios
+  spent_equipment_id: optionalId,
   spent_equipment_imei: text,
-  accessory_spent_1: text,
-  accessory_spent_2: text,
-  accessory_spent_3: text,
-  accessory_spent_4: text,
-  accessory_spent_5: text,
+  accessories_spent: z.array(accessoryLine).max(50).default([]),
 
-  // Entrada de material
-  equipment_return: text,
-  accessory_return_1: text,
-  accessory_return_2: text,
-  accessory_return_3: text,
-  accessory_return_4: text,
-  accessory_return_5: text,
+  // Material retomado (entrada)
+  return_equipment_id: optionalId,
+  accessories_returned: z.array(accessoryLine).max(50).default([]),
 
   // Faturação
   billing: text,
@@ -81,9 +80,13 @@ export const interventionSchema = z.object({
 
 export type InterventionFormValues = z.infer<typeof interventionSchema>
 
-/** Converte '' em null para gravar na BD */
+export type InterventionFormInput = z.input<typeof interventionSchema>
+
+/** Converte '' em null para gravar na BD (as listas de acessórios são gravadas à parte) */
 export function toDbValues(values: InterventionFormValues) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { accessories_spent, accessories_returned, ...rest } = values
   return Object.fromEntries(
-    Object.entries(values).map(([k, v]) => [k, typeof v === 'string' && v.trim() === '' ? null : v ?? null])
-  ) as Record<keyof InterventionFormValues, string | null>
+    Object.entries(rest).map(([k, v]) => [k, typeof v === 'string' && v.trim() === '' ? null : v ?? null])
+  ) as Record<keyof typeof rest, string | null>
 }

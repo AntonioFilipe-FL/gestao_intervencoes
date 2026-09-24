@@ -408,6 +408,7 @@ async function main() {
     return {
       legacy_key: m.legacy_key,
       legacy_layout: m.legacy_layout,
+      material_migrated: false, // re-converte material gasto/retomado para as listas
       intervention_date: m.intervention_date,
       validation_date: m.validation_date,
       technician_id: id('technicians', m.technician),
@@ -499,6 +500,10 @@ async function main() {
     criadosNasTabelasDeApoio: created,
     motivosSemCorrespondencia: { distintos: unmatchedMotives.size, linhas: [...unmatchedMotives.values()].reduce((a, b) => a + b, 0), top30: [...unmatchedMotives.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30) },
     amostra: { atual: records.find(r => r.legacy_layout === 'atual'), antigo: records.find(r => r.legacy_layout === '2022') },
+  }
+  if (!DRY_RUN && ok > 0) {
+    const [{ n }] = await sql`select gestao_interv.backfill_material() as n`
+    console.log(`Material gasto/retomado ligado às listas em ${n} registos`)
   }
   if (!DRY_RUN) await sql.end()
   fs.writeFileSync(path.join(__dirname, 'migration_report.json'), JSON.stringify(report, null, 2), 'utf8')

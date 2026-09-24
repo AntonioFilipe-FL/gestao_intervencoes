@@ -18,6 +18,30 @@ function DetailItem({ label, value }: { label: string; value: React.ReactNode })
   )
 }
 
+function AccessoryList({ label, items }: { label: string; items: { name: string; quantity: number }[] }) {
+  const total = items.reduce((n, i) => n + i.quantity, 0)
+  return (
+    <div className="space-y-1.5">
+      <p className="fc-label">
+        {label}
+        {items.length > 0 && <span className="normal-case"> · {total} un.</span>}
+      </p>
+      {items.length === 0 ? (
+        <p>—</p>
+      ) : (
+        <ul className="divide-y divide-fc-dark-10 border border-fc-dark-10">
+          {items.map((a) => (
+            <li key={a.name} className="flex items-center justify-between px-3 py-1.5 odd:bg-fc-grey-80">
+              <span>{a.name}</span>
+              <span className="tabular-nums text-fc-dark-60">× {a.quantity}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 interface Props {
   params: Promise<{ id: string }>
 }
@@ -83,19 +107,10 @@ export default async function InterventionDetailsPage({ params }: Props) {
                 <CardTitle>Material Gasto (Saída)</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <DetailItem label="Equipamento" value={intervention.spent_equipment} />
+                <DetailItem label="Equipamento" value={intervention.spent_equipment_name ?? intervention.spent_equipment} />
                 <DetailItem label="IMEI Equipamento" value={intervention.spent_equipment_imei} />
                 <Separator />
-                <div className="space-y-2">
-                  <p className="fc-label">Acessórios Gastos</p>
-                  <ul className="list-disc space-y-0.5 pl-5">
-                    {intervention.accessory_spent_1 && <li>{intervention.accessory_spent_1}</li>}
-                    {intervention.accessory_spent_2 && <li>{intervention.accessory_spent_2}</li>}
-                    {intervention.accessory_spent_3 && <li>{intervention.accessory_spent_3}</li>}
-                    {intervention.accessory_spent_4 && <li>{intervention.accessory_spent_4}</li>}
-                    {intervention.accessory_spent_5 && <li>{intervention.accessory_spent_5}</li>}
-                  </ul>
-                </div>
+                <AccessoryList label="Acessórios gastos" items={intervention.accessories_spent} />
                 <Separator />
                 <DetailItem label="Armazém de Saída" value={intervention.stock_exit_warehouse?.name} />
               </CardContent>
@@ -106,18 +121,9 @@ export default async function InterventionDetailsPage({ params }: Props) {
                 <CardTitle>Material Retomado (Entrada)</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <DetailItem label="Equipamento" value={intervention.equipment_return} />
+                <DetailItem label="Equipamento" value={intervention.return_equipment_name ?? intervention.equipment_return} />
                 <Separator />
-                <div className="space-y-2">
-                  <p className="fc-label">Acessórios Retomados</p>
-                  <ul className="list-disc space-y-0.5 pl-5">
-                    {intervention.accessory_return_1 && <li>{intervention.accessory_return_1}</li>}
-                    {intervention.accessory_return_2 && <li>{intervention.accessory_return_2}</li>}
-                    {intervention.accessory_return_3 && <li>{intervention.accessory_return_3}</li>}
-                    {intervention.accessory_return_4 && <li>{intervention.accessory_return_4}</li>}
-                    {intervention.accessory_return_5 && <li>{intervention.accessory_return_5}</li>}
-                  </ul>
-                </div>
+                <AccessoryList label="Acessórios retomados" items={intervention.accessories_returned} />
                 <Separator />
                 <DetailItem label="Armazém de Entrada" value={intervention.stock_entry_warehouse?.name} />
               </CardContent>
