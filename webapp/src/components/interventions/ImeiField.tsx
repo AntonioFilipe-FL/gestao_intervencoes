@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { getClientDevices, lookupImei, searchDevices, type DeviceOption, type ImeiLookup } from '@/actions/intranet'
 import { cn } from '@/lib/utils'
+import { revealBelow } from '@/lib/scroll-into-view'
 
 type Suggestion = DeviceOption & { client_name?: string | null }
 
@@ -116,7 +117,7 @@ export function ImeiField({
         autoComplete="off"
         placeholder={placeholder}
         onChange={(e) => { onChange(e.target.value); setOpen(true); setActive(0) }}
-        onFocus={() => setOpen(true)}
+        onFocus={(e) => { setOpen(true); revealBelow(e.currentTarget, 280) }}
         onKeyDown={onKeyDown}
         aria-invalid={msg?.tone === 'warn' || undefined}
         className="h-[26px] w-full rounded-[2px] border border-fc-dark-40 bg-fc-grey-80 px-2 text-[13px] text-fc-dark-100 outline-none placeholder:text-fc-dark-40 hover:border-fc-dark-60 focus:border-fc-light-60 aria-invalid:border-fc-warning"

@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import { revealBelow } from '@/lib/scroll-into-view'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
 import { ChevronDown, Minus, Plus, Search, X, Check } from 'lucide-react'
@@ -28,6 +29,8 @@ export function AccessoryPicker({
   placeholder?: string
 }) {
   const [query, setQuery] = useState('')
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const byId = useMemo(() => new Map(options.map((o) => [o.id, o.name])), [options])
   const selected = new Set(value.map((v) => v.accessory_id))
 
@@ -47,8 +50,9 @@ export function AccessoryPicker({
 
   return (
     <div className="space-y-2">
-      <Popover onOpenChange={(open) => !open && setQuery('')}>
+      <Popover onOpenChange={(open) => (open ? revealBelow(triggerRef.current, 380) : setQuery(''))}>
         <PopoverTrigger
+          ref={triggerRef}
           id={id}
           className="flex h-[26px] w-full cursor-pointer items-center justify-between gap-2 rounded-[2px] border border-fc-dark-40 bg-fc-grey-80 px-2 text-left text-[13px] transition-colors outline-none hover:border-fc-dark-60 focus-visible:border-fc-light-60 data-popup-open:border-fc-light-60"
         >
@@ -59,18 +63,22 @@ export function AccessoryPicker({
           </span>
           <ChevronDown className="size-3.5 shrink-0 text-fc-dark-100" />
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-(--anchor-width) min-w-72 gap-0 p-0">
+        <PopoverContent
+          align="start"
+          className="w-(--anchor-width) min-w-72 gap-0 p-0"
+          initialFocus={() => { inputRef.current?.focus({ preventScroll: true }); return false }}
+        >
           <div className="relative border-b border-fc-dark-10 p-2">
             <Search className="pointer-events-none absolute top-1/2 left-4 size-3.5 -translate-y-1/2 text-fc-dark-40" />
             <Input
-              autoFocus
+              ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Pesquisar…"
               className="pl-7"
             />
           </div>
-          <ul role="listbox" aria-multiselectable className="max-h-72 overflow-y-auto py-1">
+          <ul role="listbox" aria-multiselectable className="max-h-[min(18rem,calc(var(--available-height,18rem)-5.5rem))] overflow-y-auto py-1">
             {filtered.length === 0 && <li className="px-3 py-2 text-fc-dark-60">Sem resultados</li>}
             {filtered.map((o) => {
               const on = selected.has(o.id)

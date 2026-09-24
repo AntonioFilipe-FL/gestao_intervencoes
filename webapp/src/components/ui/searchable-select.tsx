@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, Search, X } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
+import { revealBelow } from '@/lib/scroll-into-view'
 
 export type SelectOption = { value: string; label: string }
 
@@ -35,6 +36,8 @@ export function SearchableSelect({
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const listRef = useRef<HTMLUListElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const selected = options.find((o) => o.value === value)
   const filtered = useMemo(() => {
@@ -64,12 +67,14 @@ export function SearchableSelect({
       onOpenChange={(o) => {
         setOpen(o)
         if (o) {
+          revealBelow(triggerRef.current)
           setQuery('')
           setActive(Math.max(0, options.findIndex((x) => x.value === value)))
         }
       }}
     >
       <PopoverTrigger
+        ref={triggerRef}
         id={id}
         aria-invalid={invalid || undefined}
         className={cn(
@@ -92,11 +97,16 @@ export function SearchableSelect({
           <ChevronDown className="size-3.5 text-fc-dark-100" />
         </span>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-(--anchor-width) min-w-56 gap-0 p-0">
+      <PopoverContent
+        align="start"
+        className="w-(--anchor-width) min-w-56 gap-0 p-0"
+        // focar a pesquisa sem deslocar a página (o autoFocus fazia saltar para o topo)
+        initialFocus={() => { inputRef.current?.focus({ preventScroll: true }); return false }}
+      >
         <div className="relative border-b border-fc-dark-10 p-2">
           <Search className="pointer-events-none absolute top-1/2 left-4 size-3.5 -translate-y-1/2 text-fc-dark-40" />
           <input
-            autoFocus
+            ref={inputRef}
             value={query}
             onChange={(e) => { setQuery(e.target.value); setActive(0) }}
             onKeyDown={onKeyDown}
@@ -105,7 +115,7 @@ export function SearchableSelect({
             className="h-[26px] w-full rounded-[2px] border border-fc-dark-40 bg-fc-grey-80 pr-2 pl-7 text-[13px] outline-none placeholder:text-fc-dark-40 focus:border-fc-light-60"
           />
         </div>
-        <ul ref={listRef} role="listbox" className="max-h-72 overflow-y-auto py-1">
+        <ul ref={listRef} role="listbox" className="max-h-[min(18rem,calc(var(--available-height,18rem)-3.5rem))] overflow-y-auto py-1">
           {filtered.length === 0 && <li className="px-3 py-2 text-fc-dark-60">Sem resultados</li>}
           {filtered.map((o, i) => {
             const isSel = o.value === value
