@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { sql } from '@/lib/db'
 import { requireAdmin, requireUser } from '@/lib/auth'
-import { syncFromIntranet, linkPending, createFromPending, setPendingStatus } from '@/lib/intranet'
+import { syncFromIntranet, linkPending, createFromPending, setPendingStatus, revertAutoCreatedClients } from '@/lib/intranet'
 
 /** Sincronizar clientes e IMEIs a partir da Intranet (só admins) */
 export async function runIntranetSync() {
@@ -71,6 +71,18 @@ export async function resolvePending(
     revalidatePath('/settings')
     revalidatePath('/interventions/new')
     return { ok: true as const }
+  } catch (e) {
+    return { ok: false as const, error: (e as Error).message }
+  }
+}
+
+/** Devolve à lista "Por associar" os clientes criados automaticamente (sem intervenções nem dados próprios) */
+export async function revertAutoCreated() {
+  try {
+    await requireAdmin()
+    const n = await revertAutoCreatedClients()
+    revalidatePath('/settings')
+    return { ok: true as const, n }
   } catch (e) {
     return { ok: false as const, error: (e as Error).message }
   }

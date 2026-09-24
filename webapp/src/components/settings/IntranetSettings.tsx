@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { runIntranetSync } from '@/actions/intranet'
+import { runIntranetSync, revertAutoCreated } from '@/actions/intranet'
 import type { SyncResult, PendingAccount } from '@/lib/intranet'
 import { PendingAccounts } from '@/components/settings/PendingAccounts'
 
@@ -27,11 +27,14 @@ export function IntranetSettings({
   last: initial,
   pending,
   candidates,
+  autoCreated,
 }: {
   configured: boolean
   last: Last
   pending: PendingAccount[]
   candidates: { id: string; name: string }[]
+  /** clientes criados automaticamente por versões anteriores que podem voltar a "Por associar" */
+  autoCreated: number
 }) {
   const [last, setLast] = useState<Last>(initial)
   const [syncing, start] = useTransition()
@@ -103,6 +106,29 @@ export function IntranetSettings({
                   <Row k="Sem cliente associado" v={last.devices.withoutClient.toLocaleString('pt-PT')} />
                 </>
               )}
+            </div>
+          )}
+
+          {autoCreated > 0 && (
+            <div className="space-y-2 border border-fc-warning bg-fc-warning/10 px-4 py-3">
+              <p>
+                <b>{autoCreated.toLocaleString('pt-PT')} cliente(s)</b> foram criados automaticamente por uma sincronização anterior
+                (não têm intervenções nem dados da folha). Pode passá-los para <b>Por associar</b> para os ligar a clientes já existentes.
+              </p>
+              <Button
+                variant="secondary"
+                disabled={syncing}
+                onClick={() => {
+                  if (!confirm(`Passar ${autoCreated} cliente(s) criados automaticamente para "Por associar"?`)) return
+                  start(async () => {
+                    const r = await revertAutoCreated()
+                    if (!r.ok) alert(r.error)
+                    router.refresh()
+                  })
+                }}
+              >
+                Rever clientes criados automaticamente
+              </Button>
             </div>
           )}
 

@@ -136,8 +136,13 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
 
     // ---------------- IMEIs ----------------
     try {
-      const raw = asList(await getJson('/api/devices', token))
+      const data = await getJson('/api/devices', token)
+      const raw = asList(data)
       result.devices.total = raw.length
+      if (raw.length === 0) {
+        const shape = Array.isArray(data) ? 'lista vazia' : data && typeof data === 'object' ? `objeto com os campos: ${Object.keys(data as Json).join(', ') || '(nenhum)'}` : String(data).slice(0, 100)
+        result.devices.error = `A Intranet não devolveu equipamentos em /api/devices (${shape}). Pode ser preciso indicar um parâmetro (ex.: conta ou parceiro).`
+      }
       const clientByAccount = new Map(
         (await sql<{ id: string; intranet_account_id: string }[]>`
           select id, intranet_account_id from clients where intranet_account_id is not null`).map(c => [c.intranet_account_id, c.id])
@@ -265,8 +270,8 @@ export async function createFromPending(intranetIds: string[]) {
   await sql.begin(async tx => {
     const rows = await tx`select intranet_account_id, name from intranet_pending where intranet_account_id = any(${intranetIds})`
     for (const p of rows) {
-      const [c] = await tx`insert into clients (name, active, intranet_account_id, intranet_short_name, intranet_synced_at)
-                           values (${p.name}, true, ${p.intranet_account_id}, ${p.name}, now())
+      const [c] = await tx`insert into clients (name, active, intranet_account_id, intranet_short_name, intranet_synced_at, created_via)
+                           values (${p.name}, true, ${p.intranet_account_id}, ${p.name}, now(), 'intranet_manual')
                            on conflict (lower(name)) do nothing returning id`
       if (!c) continue // já existe um cliente com este nome: tem de ser associado manualmente
       await attachDevices(tx as unknown as typeof sql, p.intranet_account_id, c.id)
@@ -279,4 +284,32 @@ export async function createFromPending(intranetIds: string[]) {
 
 export async function setPendingStatus(intranetIds: string[], status: 'pending' | 'ignored') {
   await sql`update intranet_pending set status = ${status} where intranet_account_id = any(${intranetIds})`
+}
+
+// ---------------------------------------------------------------------------
+// Rever clientes criados automaticamente por versões anteriores da sincronização
+// (ligados à Intranet, sem intervenções e sem dados próprios da folha) → voltam a "Por associar"
+// ---------------------------------------------------------------------------
+const autoCreatedWhere = (tx: typeof sql) => tx`
+  c.intranet_account_id is not null and c.created_via is distinct from 'intranet_manual'
+  and c.venda_aluguer is null and c.nos_vdf is null and c.report_projeto_contrato is null
+  and not exists (select 1 from interventions i where i.client_id = c.id)
+  and not exists (select 1 from clients o where o.id <> c.id and o.intranet_account_id is null and lower(o.name) = lower(c.name))`
+
+export async function countAutoCreatedClients() {
+  const [{ n }] = await sql`select count(*)::int as n from clients c where ${autoCreatedWhere(sql)}`
+  return n as number
+}
+
+export async function revertAutoCreatedClients() {
+  return sql.begin(async tx => {
+    const rows = await tx`select c.id, c.name, c.intranet_account_id from clients c where ${autoCreatedWhere(tx as unknown as typeof sql)}`
+    if (rows.length === 0) return 0
+    const ids = rows.map(r => r.id)
+    await tx`insert into intranet_pending ${tx(rows.map(r => ({ intranet_account_id: r.intranet_account_id, name: r.name, full_name: null })))}
+             on conflict (intranet_account_id) do update set status = 'pending'`
+    await tx`update devices set client_id = null where client_id = any(${ids})`
+    await tx`delete from clients where id = any(${ids})`
+    return rows.length
+  })
 }

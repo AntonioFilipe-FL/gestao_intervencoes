@@ -263,3 +263,6 @@ create table if not exists intranet_pending (
   first_seen_at       timestamptz not null default now(),
   last_seen_at        timestamptz not null default now()
 );
+
+-- origem do cliente ('intranet_manual' = criado com "Criar novo" em Configurações → Intranet)
+alter table clients add column if not exists created_via text;
