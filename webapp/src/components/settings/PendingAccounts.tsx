@@ -87,7 +87,7 @@ export function PendingAccounts({
         </div>
 
         <div className="border border-fc-dark-20">
-          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 bg-fc-dark-80 px-4 py-2.5 text-white">
+          <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,2fr)_auto] gap-3 bg-fc-dark-80 px-4 py-2.5 text-white">
             <span>Conta na Intranet</span>
             <span>Cliente na BD</span>
             <span className="w-[270px]">Ação</span>
@@ -98,7 +98,7 @@ export function PendingAccounts({
             return (
               <div
                 key={p.intranet_account_id}
-                className={cn('grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-3 border-t border-fc-dark-10 px-4 py-2', i % 2 === 0 && 'bg-fc-grey-80')}
+                className={cn('grid grid-cols-[minmax(0,2fr)_minmax(0,2fr)_auto] items-center gap-3 border-t border-fc-dark-10 px-4 py-2', i % 2 === 0 && 'bg-fc-grey-80')}
               >
                 <div className="min-w-0">
                   <p className="truncate">{p.name}</p>

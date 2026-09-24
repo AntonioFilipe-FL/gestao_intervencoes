@@ -48,10 +48,10 @@ export function IntranetSettings({
     })
 
   return (
-    <div className="max-w-3xl space-y-5">
+    <div className="space-y-5">
       <div className="space-y-1">
         <h2>Sincronização com a Intranet Frotcom</h2>
-        <p className="fc-small text-fc-dark-60">
+        <p className="fc-small max-w-4xl text-fc-dark-60">
           Importa os clientes (contas) e os IMEIs da Intranet. As contas com o mesmo nome de um cliente da BD são ligadas
           automaticamente; as restantes ficam em &ldquo;Por associar&rdquo; para escolher o cliente correspondente ou criar um novo.
           Clientes que deixaram de existir na Intranet ficam inativos (o histórico mantém-se).
@@ -78,12 +78,13 @@ export function IntranetSettings({
             </p>
           )}
 
+          <div className="grid gap-5 lg:grid-cols-2">
           {!last.error && (
             <div className="border border-fc-dark-20">
               <div className="border-b border-fc-dark-20 px-4 py-2.5 font-bold uppercase">Clientes</div>
               <Row k="Contas na Intranet" v={last.accounts.total.toLocaleString('pt-PT')} />
               <Row k="Ligadas a clientes existentes" v={last.accounts.linked} />
-              <Row k="Por associar (ver abaixo)" v={<b>{last.accounts.pending ?? 0}</b>} />
+              <Row k="Por associar (ver abaixo)" v={<b>{pending.filter((p) => p.status === 'pending').length}</b>} />
               <Row k="Nomes atualizados" v={last.accounts.renamed} />
               <Row k="Inativados (já não existem)" v={last.accounts.deactivated} />
             </div>
@@ -92,7 +93,7 @@ export function IntranetSettings({
           {!last.error && (
             <div className="border border-fc-dark-20">
               <div className="border-b border-fc-dark-20 px-4 py-2.5 font-bold uppercase">IMEIs</div>
-              {last.devices.error ? (
+              {last.devices.error && last.devices.upserted === 0 ? (
                 <div className="space-y-1 px-4 py-3 text-[#b31d25]">
                   <p>{last.devices.error}</p>
                   {last.devices.sampleKeys && (
@@ -101,13 +102,16 @@ export function IntranetSettings({
                 </div>
               ) : (
                 <>
-                  <Row k="Equipamentos na Intranet" v={last.devices.total.toLocaleString('pt-PT')} />
+                  <Row k="Equipamentos na Intranet" v={`${last.devices.total.toLocaleString('pt-PT')}${last.devices.mode ? ` (pedido ${last.devices.mode})` : ''}`} />
                   <Row k="IMEIs guardados" v={last.devices.upserted.toLocaleString('pt-PT')} />
                   <Row k="Sem cliente associado" v={last.devices.withoutClient.toLocaleString('pt-PT')} />
+                  {last.devices.error && <Row k="Aviso" v={<span className="text-[#c7830b]">{last.devices.error}</span>} />}
                 </>
               )}
             </div>
           )}
+
+          </div>
 
           {autoCreated > 0 && (
             <div className="space-y-2 border border-fc-warning bg-fc-warning/10 px-4 py-3">

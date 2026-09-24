@@ -14,6 +14,8 @@ export const intranetConfigured = () => !!(process.env.INTRANET_USER && process.
 
 type Json = Record<string, unknown>
 
+let loginPartnerId: string | null = null
+
 async function login(): Promise<string> {
   if (!intranetConfigured()) throw new Error('Faltam as variáveis INTRANET_USER / INTRANET_PASSWORD.')
   const res = await fetch(`${baseUrl()}/api/authorize`, {
@@ -26,6 +28,7 @@ async function login(): Promise<string> {
   const data = (await res.json()) as Json
   const token = (data.token ?? data.Token) as string | undefined
   if (!token) throw new Error('A Intranet não devolveu token de autenticação.')
+  loginPartnerId = pick(data, ['partnerId', 'PartnerId', 'companyId', 'CompanyId'])
   return token
 }
 
@@ -41,8 +44,13 @@ async function getJson(path: string, token: string): Promise<unknown> {
   return res.json()
 }
 
-const asList = (d: unknown): Json[] =>
-  Array.isArray(d) ? (d as Json[]) : ((d as Json)?.items ?? (d as Json)?.data ?? (d as Json)?.result ?? []) as Json[]
+const asList = (d: unknown): Json[] => {
+  if (Array.isArray(d)) return d as Json[]
+  const o = d as Json | null
+  // ex.: /api/devices devolve { defaultWarrantyDays, devices: [...], partner }
+  for (const k of ['devices', 'accounts', 'items', 'data', 'result']) if (Array.isArray(o?.[k])) return o![k] as Json[]
+  return []
+}
 
 /** Primeiro valor não vazio entre vários nomes de campo possíveis (inclui campos aninhados "a.b") */
 function pick(o: Json, keys: string[]): string | null {
@@ -60,7 +68,7 @@ export type SyncResult = {
   ok: boolean
   error?: string
   accounts: { total: number; linked: number; renamed: number; deactivated: number; pending: number }
-  devices: { total: number; upserted: number; withoutClient: number; error?: string; sampleKeys?: string[] }
+  devices: { total: number; upserted: number; withoutClient: number; error?: string; sampleKeys?: string[]; mode?: string }
   unmatchedLocal: string[] // clientes da BD sem correspondência na Intranet
 }
 
@@ -136,12 +144,36 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
 
     // ---------------- IMEIs ----------------
     try {
-      const data = await getJson('/api/devices', token)
-      const raw = asList(data)
-      result.devices.total = raw.length
+      // 1) pedido global (por parceiro); 2) se vier vazio, pedido por cada conta (accountId)
+      const partnerId = process.env.INTRANET_PARTNER_ID || loginPartnerId
+      const qs = new URLSearchParams({ searchAllFCPs: 'true', ...(partnerId ? { partnerId } : {}) })
+      let raw: (Json & { __accountId?: string })[] = asList(await getJson(`/api/devices?${qs}`, token))
+      let mode = 'global'
       if (raw.length === 0) {
-        const shape = Array.isArray(data) ? 'lista vazia' : data && typeof data === 'object' ? `objeto com os campos: ${Object.keys(data as Json).join(', ') || '(nenhum)'}` : String(data).slice(0, 100)
-        result.devices.error = `A Intranet não devolveu equipamentos em /api/devices (${shape}). Pode ser preciso indicar um parâmetro (ex.: conta ou parceiro).`
+        mode = 'por conta'
+        const out: (Json & { __accountId?: string })[] = []
+        let failures = 0
+        let firstError = ''
+        const queue = [...accounts]
+        const worker = async () => {
+          for (let a = queue.shift(); a; a = queue.shift()) {
+            try {
+              const list = asList(await getJson(`/api/devices?accountId=${encodeURIComponent(a.id)}`, token!))
+              for (const d of list) out.push({ ...d, __accountId: a.id })
+            } catch (e) {
+              failures++
+              firstError ||= (e as Error).message
+            }
+          }
+        }
+        await Promise.all(Array.from({ length: 10 }, worker))
+        raw = out
+        if (failures) result.devices.error = `${failures} conta(s) falharam ao obter equipamentos (ex.: ${firstError.slice(0, 150)}).`
+      }
+      result.devices.total = raw.length
+      result.devices.mode = mode
+      if (raw.length === 0 && !result.devices.error) {
+        result.devices.error = 'A Intranet não devolveu equipamentos em /api/devices (nem globalmente nem por conta).'
       }
       const clientByAccount = new Map(
         (await sql<{ id: string; intranet_account_id: string }[]>`
@@ -149,7 +181,7 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
       )
       const rows = raw
         .map(d => {
-          const acc = pick(d, ['accountId', 'companyId', 'account.id', 'company.id', 'clientId', 'AccountId'])
+          const acc = pick(d, ['accountId', 'companyId', 'account.id', 'company.id', 'clientId', 'AccountId']) ?? (d as { __accountId?: string }).__accountId ?? null
           return {
             imei: pick(d, ['imei', 'IMEI', 'Imei', 'deviceImei', 'serialNumber', 'serial']),
             intranet_device_id: pick(d, ['id', 'deviceId', 'Id']),
@@ -163,7 +195,7 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
 
       if (raw.length > 0 && rows.length === 0) {
         result.devices.error = 'Formato de resposta de /api/devices não reconhecido (não encontrei o campo do IMEI).'
-        result.devices.sampleKeys = Object.keys(raw[0] ?? {})
+        result.devices.sampleKeys = Object.keys(raw[0] ?? {}).filter(k => k !== '__accountId')
       } else if (rows.length > 0) {
         const seen = new Map(rows.map(r => [r.imei, r])) // IMEIs repetidos: fica o último
         const unique = [...seen.values()]
