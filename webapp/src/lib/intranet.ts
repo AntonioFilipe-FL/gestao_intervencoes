@@ -222,6 +222,19 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
                        model = excluded.model, license_plate = excluded.license_plate, active = true, synced_at = now()`
           }
           await tx`update devices set active = false where not (imei = any(${unique.map(u => u.imei)}))`
+
+          // histórico matrícula → IMEI: fecha o registo anterior quando o IMEI de uma matrícula muda
+          await tx`update device_plate_history h set seen_to = now()
+                   where h.seen_to is null and exists (
+                     select 1 from devices d where d.active and gestao_interv.plate_norm(d.license_plate) = h.plate_norm and d.imei <> h.imei)
+                     and not exists (
+                     select 1 from devices d where d.active and gestao_interv.plate_norm(d.license_plate) = h.plate_norm and d.imei = h.imei)`
+          await tx`insert into device_plate_history (plate_norm, license_plate, imei, client_id, model)
+                   select gestao_interv.plate_norm(d.license_plate), d.license_plate, d.imei, d.client_id, d.model
+                   from devices d
+                   where d.active and gestao_interv.plate_norm(d.license_plate) is not null
+                     and not exists (select 1 from device_plate_history h
+                                     where h.seen_to is null and h.plate_norm = gestao_interv.plate_norm(d.license_plate) and h.imei = d.imei)`
         })
         result.devices.upserted = unique.length
         result.devices.withoutClient = unique.filter(u => !u.client_id).length
@@ -358,4 +371,36 @@ export async function revertAutoCreatedClients() {
     await tx`delete from clients where id = any(${ids})`
     return rows.length
   })
+}
+
+// ---------------------------------------------------------------------------
+// Sincronização automática (no login)
+// ---------------------------------------------------------------------------
+
+/** Intervalo mínimo entre sincronizações automáticas (evita repetir quando várias pessoas entram seguidas) */
+const AUTO_SYNC_MIN_AGE_MS = 30 * 60 * 1000
+let autoSyncRunning: Promise<unknown> | null = null
+
+/**
+ * Lança a sincronização em segundo plano se a última tiver mais de 30 min.
+ * Não bloqueia quem está a entrar; se já houver uma a correr, não lança outra.
+ */
+export async function syncInBackgroundIfStale(by: string) {
+  if (!intranetConfigured() || autoSyncRunning) return
+  try {
+    const last = await getLastSync()
+    if (last?.at && Date.now() - new Date(last.at).getTime() < AUTO_SYNC_MIN_AGE_MS) return
+    autoSyncRunning = syncFromIntranet(`${by} (automático no login)`)
+      .then((r) => { if (!r.ok) console.error('Sincronização automática Intranet falhou:', r.error) })
+      .catch((e) => console.error('Sincronização automática Intranet falhou:', e))
+      .finally(() => { autoSyncRunning = null })
+  } catch (e) {
+    console.error('Erro a verificar a última sincronização:', e)
+  }
+}
+
+/** Se houver uma sincronização automática a correr, espera que termine (evita duas em simultâneo) */
+export async function waitForAutoSync() {
+  if (autoSyncRunning) await autoSyncRunning
+  return autoSyncRunning === null
 }

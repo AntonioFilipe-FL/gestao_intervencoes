@@ -71,7 +71,7 @@ export async function notifyBilling(interventionId: string, user: { email: strin
       ['Equipamento gasto', esc(i.spent_equipment_name ?? '—') + (i.spent_equipment_imei ? ` (IMEI ${esc(i.spent_equipment_imei)})` : '')],
       ['Acessórios gastos', accList(i.acc_spent)],
       ['Armazém de saída', esc(i.exit_wh ?? '—')],
-      ['Equipamento retomado', esc(i.return_equipment_name ?? '—')],
+      ['Equipamento retomado', esc(i.return_equipment_name ?? '—') + (i.return_equipment_imei ? ` (IMEI ${esc(i.return_equipment_imei)})` : '')],
       ['Acessórios retomados', accList(i.acc_returned)],
       ['Armazém de entrada', esc(i.entry_wh ?? '—')],
     ]

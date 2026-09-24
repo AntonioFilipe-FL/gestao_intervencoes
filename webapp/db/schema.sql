@@ -266,3 +266,24 @@ create table if not exists intranet_pending (
 
 -- origem do cliente ('intranet_manual' = criado com "Criar novo" em Configurações → Intranet)
 alter table clients add column if not exists created_via text;
+
+-- =============================================================================
+-- IMEI do equipamento retomado + histórico matrícula → IMEI (construído a cada sincronização)
+-- =============================================================================
+alter table interventions add column if not exists return_equipment_imei text;
+
+create or replace function gestao_interv.plate_norm(p text) returns text
+language sql immutable as $$ select nullif(upper(regexp_replace(coalesce(p, ''), '[^A-Za-z0-9]', '', 'g')), '') $$;
+
+create table if not exists device_plate_history (
+  id            bigserial primary key,
+  plate_norm    text not null,
+  license_plate text,
+  imei          text not null,
+  client_id     uuid references clients(id),
+  model         text,
+  seen_from     timestamptz not null default now(),
+  seen_to       timestamptz          -- null = é o IMEI atual dessa matrícula
+);
+create index if not exists device_plate_history_plate_idx on device_plate_history (plate_norm, seen_to);
+create index if not exists interventions_plate_norm_idx on interventions (gestao_interv.plate_norm(license_plate));

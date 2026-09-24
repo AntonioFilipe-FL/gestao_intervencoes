@@ -13,10 +13,11 @@ import { createIntervention } from '@/actions/interventions'
 import { AccessoryPicker } from '@/components/interventions/AccessoryPicker'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 import { ImeiField } from '@/components/interventions/ImeiField'
+import { getPlateImeis, type PlateImeis } from '@/actions/intranet'
 
 const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '')
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 interface Props {
   referenceData: ReferenceData
@@ -53,12 +54,31 @@ export function InterventionForm({ referenceData, billingRecipients }: Props) {
       validated_by: '',
       spent_equipment_id: '',
       return_equipment_id: '',
+      return_equipment_imei: '',
       accessories_spent: [],
       accessories_returned: [],
     },
   })
 
   const selectedClientId = watch('client_id')
+  const plate = watch('license_plate')
+  const [plateImeis, setPlateImeis] = useState<PlateImeis | null>(null)
+
+  // Matrícula → IMEI atual (Intranet) para o material gasto e IMEI anterior para o material retomado.
+  // Só preenche campos vazios, para não apagar o que o utilizador escreveu.
+  useEffect(() => {
+    const p = (plate ?? '').replace(/[^A-Za-z0-9]/g, '')
+    if (p.length < 6) { setPlateImeis(null); return }
+    let cancel = false
+    const t = setTimeout(async () => {
+      const r = await getPlateImeis(p)
+      if (cancel) return
+      setPlateImeis(r)
+      if (r.current && !getValues('spent_equipment_imei')) setValue('spent_equipment_imei', r.current.imei)
+      if (r.previous && !getValues('return_equipment_imei')) setValue('return_equipment_imei', r.previous.imei)
+    }, 400)
+    return () => { cancel = true; clearTimeout(t) }
+  }, [plate, getValues, setValue])
 
   // List of valid names for validators
   const VALID_VALIDATORS = ['TC', 'SP', 'MA', 'HV', 'MS', 'AF']
@@ -336,6 +356,12 @@ export function InterventionForm({ referenceData, billingRecipients }: Props) {
                   />
                 )}
               />
+              {plateImeis?.current && (
+                <p className="fc-small text-fc-dark-60">
+                  IMEI atual na Intranet para {plate}: <span className="font-mono">{plateImeis.current.imei}</span>
+                  {plateImeis.current.model ? ` · ${plateImeis.current.model}` : ''}
+                </p>
+              )}
             </div>
           </div>
 
@@ -392,6 +418,37 @@ export function InterventionForm({ referenceData, billingRecipients }: Props) {
                 />
                 )}
               />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="return_equipment_imei">IMEI equipamento retomado</Label>
+            <Controller
+              name="return_equipment_imei"
+              control={control}
+              render={({ field }) => (
+                <ImeiField
+                  id="return_equipment_imei"
+                  scope="global"
+                  retired
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  onPick={(d) => {
+                    const eq = d.model && referenceData.equipmentList?.find((e) => fold(e.name) === fold(d.model!))
+                    if (eq && !getValues('return_equipment_id')) setValue('return_equipment_id', eq.id)
+                  }}
+                />
+              )}
+            />
+            {plateImeis?.previous ? (
+              <p className="fc-small text-fc-dark-60">
+                IMEI anterior da matrícula {plate}: <span className="font-mono">{plateImeis.previous.imei}</span> ·{' '}
+                {plateImeis.previous.source === 'intranet'
+                  ? `substituído na Intranet em ${plateImeis.previous.date?.split('-').reverse().join('/')}`
+                  : `registado numa intervenção de ${plateImeis.previous.date?.split('-').reverse().join('/')}`}
+              </p>
+            ) : plateImeis ? (
+              <p className="fc-small text-fc-dark-60">Sem IMEI anterior conhecido para esta matrícula.</p>
+            ) : null}
           </div>
 
           <div className="space-y-1.5">

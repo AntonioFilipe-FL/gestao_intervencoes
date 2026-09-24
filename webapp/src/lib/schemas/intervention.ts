@@ -47,6 +47,7 @@ export const interventionSchema = z.object({
 
   // Material retomado (entrada)
   return_equipment_id: optionalId,
+  return_equipment_imei: text,
   accessories_returned: z.array(accessoryLine).max(50).default([]),
 
   // Faturação

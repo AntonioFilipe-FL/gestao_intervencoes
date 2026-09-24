@@ -124,6 +124,7 @@ export default async function InterventionDetailsPage({ params }: Props) {
               </CardHeader>
               <CardContent className="space-y-4">
                 <DetailItem label="Equipamento" value={intervention.return_equipment_name ?? intervention.equipment_return} />
+                <DetailItem label="IMEI Equipamento" value={intervention.return_equipment_imei} />
                 <Separator />
                 <AccessoryList label="Acessórios retomados" items={intervention.accessories_returned} />
                 <Separator />

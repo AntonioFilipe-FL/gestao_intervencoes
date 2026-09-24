@@ -22,6 +22,7 @@ export function ImeiField({
   clientId,
   clientName,
   scope = 'client',
+  retired = false,
 }: {
   id: string
   value: string
@@ -30,6 +31,8 @@ export function ImeiField({
   clientId?: string
   clientName?: string
   scope?: 'client' | 'global'
+  /** equipamento retirado da viatura: IMEI inativo/inexistente na Intranet é normal (sem aviso) */
+  retired?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [clientDevices, setClientDevices] = useState<Suggestion[]>([])
@@ -94,8 +97,8 @@ export function ImeiField({
   // mensagem de validação
   let msg: { tone: 'ok' | 'warn'; text: string } | null = null
   if (status) {
-    if (!status.found) msg = { tone: 'warn', text: 'IMEI não encontrado na Intranet — confirme se está correto.' }
-    else if (!status.active) msg = { tone: 'warn', text: 'IMEI inativo na Intranet.' }
+    if (!status.found) msg = retired ? null : { tone: 'warn', text: 'IMEI não encontrado na Intranet — confirme se está correto.' }
+    else if (!status.active) msg = retired ? null : { tone: 'warn', text: 'IMEI inativo na Intranet.' }
     else if (scope === 'client' && clientId && status.clientId && status.clientId !== clientId)
       msg = { tone: 'warn', text: `Este IMEI pertence a outro cliente: ${status.clientName ?? '—'}.` }
     else msg = { tone: 'ok', text: [status.model, status.license_plate, scope === 'global' ? status.clientName : null].filter(Boolean).join(' · ') || 'IMEI válido na Intranet' }

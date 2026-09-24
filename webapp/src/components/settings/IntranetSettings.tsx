@@ -56,6 +56,10 @@ export function IntranetSettings({
           automaticamente; as restantes ficam em &ldquo;Por associar&rdquo; para escolher o cliente correspondente ou criar um novo.
           Clientes que deixaram de existir na Intranet ficam inativos (o histórico mantém-se).
         </p>
+        <p className="fc-small max-w-4xl text-fc-dark-60">
+          A sincronização corre <b>automaticamente em segundo plano sempre que alguém entra</b> na aplicação
+          (no máximo uma vez a cada 30 minutos). O botão abaixo serve para forçar uma sincronização imediata.
+        </p>
       </div>
 
       {!configured && (

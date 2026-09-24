@@ -5,6 +5,7 @@ import { createSession } from '@/lib/session'
 import { encryptSecret } from '@/lib/crypto'
 import { appUrl, exchangeCode, senderEmail, OAUTH_PURPOSE_COOKIE, OAUTH_STATE_COOKIE, OAUTH_VERIFIER_COOKIE } from '@/lib/google'
 import { getCurrentUser } from '@/lib/auth'
+import { syncInBackgroundIfStale } from '@/lib/intranet'
 
 /** Emails em ADMIN_EMAILS (separados por vírgula) são autorizados como admin no primeiro login. */
 const bootstrapAdmins = () =>
@@ -42,6 +43,8 @@ export async function GET(request: Request) {
     if (!profile) return NextResponse.redirect(`${base}/unauthorized`)
 
     await createSession({ email, name: user.name, picture: user.picture })
+    // clientes e IMEIs da Intranet: atualiza em segundo plano, sem atrasar a entrada
+    void syncInBackgroundIfStale(email)
     return NextResponse.redirect(`${base}/interventions`)
   } catch (e) {
     console.error('Erro no login Google:', e)

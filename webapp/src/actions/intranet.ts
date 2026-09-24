@@ -3,11 +3,12 @@
 import { revalidatePath } from 'next/cache'
 import { sql } from '@/lib/db'
 import { requireAdmin, requireUser } from '@/lib/auth'
-import { syncFromIntranet, linkPending, createFromPending, setPendingStatus, revertAutoCreatedClients } from '@/lib/intranet'
+import { syncFromIntranet, waitForAutoSync, linkPending, createFromPending, setPendingStatus, revertAutoCreatedClients } from '@/lib/intranet'
 
 /** Sincronizar clientes e IMEIs a partir da Intranet (só admins) */
 export async function runIntranetSync() {
   const user = await requireAdmin()
+  await waitForAutoSync()
   const r = await syncFromIntranet(user.email)
   revalidatePath('/settings')
   revalidatePath('/interventions/new')
@@ -86,4 +87,39 @@ export async function revertAutoCreated() {
   } catch (e) {
     return { ok: false as const, error: (e as Error).message }
   }
+}
+
+export type PlateImeis = {
+  current: { imei: string; model: string | null; client_name: string | null } | null
+  previous: { imei: string; source: 'intranet' | 'registo'; date: string | null } | null
+}
+
+/**
+ * Para uma matrícula: IMEI atual (Intranet) e IMEI anterior.
+ * IMEI anterior = último do histórico de sincronizações diferente do atual; se não houver,
+ * o último IMEI registado numa intervenção dessa matrícula que seja diferente do atual.
+ */
+export async function getPlateImeis(plate: string): Promise<PlateImeis> {
+  await requireUser()
+  const p = plate.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+  if (p.length < 4) return { current: null, previous: null }
+
+  const [cur] = await sql`select d.imei, d.model, c.name as client_name from devices d left join clients c on c.id = d.client_id
+                          where d.active and gestao_interv.plate_norm(d.license_plate) = ${p}
+                          order by d.synced_at desc limit 1`
+  const currentImei: string | null = cur?.imei ?? null
+
+  const [hist] = await sql`select imei, seen_to from device_plate_history
+                           where plate_norm = ${p} and seen_to is not null and imei is distinct from ${currentImei}
+                           order by seen_to desc limit 1`
+  let previous: PlateImeis['previous'] = hist ? { imei: hist.imei, source: 'intranet', date: new Date(hist.seen_to).toISOString().slice(0, 10) } : null
+
+  if (!previous) {
+    const [reg] = await sql`select imei, intervention_date from interventions
+                            where gestao_interv.plate_norm(license_plate) = ${p} and imei ~ '^[0-9]{15}$'
+                              and imei is distinct from ${currentImei}
+                            order by intervention_date desc, created_at desc limit 1`
+    if (reg) previous = { imei: reg.imei, source: 'registo', date: reg.intervention_date }
+  }
+  return { current: cur ? { imei: cur.imei, model: cur.model, client_name: cur.client_name } : null, previous }
 }
