@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { runIntranetSync, revertAutoCreated } from '@/actions/intranet'
-import type { SyncResult, PendingAccount } from '@/lib/intranet'
+import type { SyncResult, PendingAccount, LinkedAccount } from '@/lib/intranet'
+import { LinkedAccounts } from '@/components/settings/LinkedAccounts'
 import { PendingAccounts } from '@/components/settings/PendingAccounts'
 
 type Last = (SyncResult & { at: string; by: string | null }) | null
@@ -28,6 +29,7 @@ export function IntranetSettings({
   pending,
   candidates,
   autoCreated,
+  linked,
 }: {
   configured: boolean
   last: Last
@@ -35,6 +37,8 @@ export function IntranetSettings({
   candidates: { id: string; name: string }[]
   /** clientes criados automaticamente por versões anteriores que podem voltar a "Por associar" */
   autoCreated: number
+  /** contas ligadas e os seus clientes */
+  linked: LinkedAccount[]
 }) {
   const [last, setLast] = useState<Last>(initial)
   const [syncing, start] = useTransition()
@@ -141,6 +145,8 @@ export function IntranetSettings({
           )}
 
           <PendingAccounts pending={pending} candidates={candidates} />
+
+          <LinkedAccounts accounts={linked} candidates={candidates} />
 
           {!last.error && last.unmatchedLocal.length > 0 && (
             <details className="border border-fc-dark-20">

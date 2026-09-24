@@ -99,7 +99,7 @@ export function ImeiField({
   if (status) {
     if (!status.found) msg = retired ? null : { tone: 'warn', text: 'IMEI não encontrado na Intranet — confirme se está correto.' }
     else if (!status.active) msg = retired ? null : { tone: 'warn', text: 'IMEI inativo na Intranet.' }
-    else if (scope === 'client' && clientId && status.clientId && status.clientId !== clientId)
+    else if (scope === 'client' && clientId && status.accountClientIds.length > 0 && !status.accountClientIds.includes(clientId))
       msg = { tone: 'warn', text: `Este IMEI pertence a outro cliente: ${status.clientName ?? '—'}.` }
     else msg = { tone: 'ok', text: [status.model, status.license_plate, scope === 'global' ? status.clientName : null].filter(Boolean).join(' · ') || 'IMEI válido na Intranet' }
   }

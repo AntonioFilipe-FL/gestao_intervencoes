@@ -97,20 +97,28 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
 
     const local = await sql<{ id: string; name: string; intranet_account_id: string | null }[]>`
       select id, name, intranet_account_id from clients`
-    const byIntranet = new Map(local.filter(c => c.intranet_account_id).map(c => [c.intranet_account_id!, c]))
+    // uma conta da Intranet pode estar ligada a vários clientes da BD (ex.: venda e aluguer)
+    const byIntranet = new Map<string, (typeof local)[number][]>()
+    for (const c of local) if (c.intranet_account_id) byIntranet.set(c.intranet_account_id, [...(byIntranet.get(c.intranet_account_id) ?? []), c])
     const byName = new Map<string, (typeof local)[number]>()
     for (const c of local) if (!c.intranet_account_id) byName.set(norm(c.name), c)
 
     await sql.begin(async tx => {
       for (const a of accounts) {
-        const linked = byIntranet.get(a.id)
-        if (linked) {
-          if (linked.name !== a.name) {
+        const linkedList = byIntranet.get(a.id)
+        if (linkedList?.length) {
+          // só renomeia quando a conta tem um único cliente (com vários, cada um mantém o seu nome, ex.: "X Aluguer")
+          const linked = linkedList[0]
+          if (linkedList.length === 1 && linked.name !== a.name) {
             // evitar colisão com outro cliente que já tenha esse nome
             const [clash] = await tx`select id from clients where lower(name) = lower(${a.name}) and id <> ${linked.id}`
-            if (!clash) { await tx`update clients set name = ${a.name} where id = ${linked.id}`; result.accounts.renamed++ }
+            if (!clash) {
+              await tx`update clients set name = ${a.name}, sheet_names = array_append(coalesce(sheet_names, '{}'), ${linked.name}::text) where id = ${linked.id}`
+              result.accounts.renamed++
+            }
           }
-          await tx`update clients set active = true, intranet_short_name = ${a.name}, intranet_synced_at = now() where id = ${linked.id}`
+          await tx`update clients set active = true, intranet_short_name = ${a.name}, intranet_synced_at = now()
+                   where intranet_account_id = ${a.id}`
           continue
         }
         const match = byName.get(norm(a.name)) ?? (a.fullName ? byName.get(norm(a.fullName)) : undefined)
@@ -189,10 +197,13 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
       if (raw.length === 0 && !result.devices.error) {
         result.devices.error = `A Intranet não devolveu equipamentos em /api/devices (nem globalmente nem por conta).${attemptErrors.length ? ' Tentativas: ' + attemptErrors.join(' | ') : ''}`
       }
-      const clientByAccount = new Map(
-        (await sql<{ id: string; intranet_account_id: string }[]>`
-          select id, intranet_account_id from clients where intranet_account_id is not null`).map(c => [c.intranet_account_id, c.id])
-      )
+      // com vários clientes na mesma conta, o IMEI fica no cliente "principal" (o primeiro ligado);
+      // as pesquisas por cliente usam a conta, por isso todos os clientes da conta veem os IMEIs
+      const clientByAccount = new Map<string, string>()
+      for (const c of await sql<{ id: string; intranet_account_id: string }[]>`
+          select id, intranet_account_id from clients where intranet_account_id is not null
+          order by intranet_account_id, intranet_synced_at nulls last, created_at`)
+        if (!clientByAccount.has(c.intranet_account_id)) clientByAccount.set(c.intranet_account_id, c.id)
       const rows = raw
         .map(d => {
           const acc = pick(d, ['accountId', 'companyId', 'account.id', 'company.id', 'clientId', 'AccountId']) ?? (d as { __accountId?: string }).__accountId ?? null
@@ -324,6 +335,54 @@ export async function linkPending(intranetId: string, clientId: string) {
   })
 }
 
+/** Liga mais um cliente da BD a uma conta da Intranet já ligada (ex.: o cliente de aluguer da mesma empresa) */
+export async function linkAdditionalClient(intranetId: string, clientId: string) {
+  await sql.begin(async tx => {
+    const [c] = await tx`select id, name, intranet_account_id from clients where id = ${clientId}`
+    if (!c) throw new Error('Cliente não encontrado.')
+    if (c.intranet_account_id === intranetId) throw new Error(`"${c.name}" já está ligado a esta conta.`)
+    if (c.intranet_account_id) throw new Error(`O cliente "${c.name}" já está ligado a outra conta da Intranet — desligue-o primeiro.`)
+    const [main] = await tx`select intranet_short_name from clients where intranet_account_id = ${intranetId} limit 1`
+    const [p] = await tx`select name from intranet_pending where intranet_account_id = ${intranetId}`
+    if (!main && !p) throw new Error('Conta da Intranet não encontrada (sincronize de novo).')
+    // mantém o nome do cliente (não é renomeado para o nome da Intranet)
+    await tx`update clients set intranet_account_id = ${intranetId}, intranet_short_name = ${main?.intranet_short_name ?? p.name},
+             active = true, intranet_synced_at = now() where id = ${clientId}`
+    // se a conta ainda estava por associar, os IMEIs ficam neste cliente
+    if (p) {
+      await attachDevices(tx as unknown as typeof sql, intranetId, clientId)
+      await tx`delete from intranet_pending where intranet_account_id = ${intranetId}`
+    }
+  })
+}
+
+/** Desliga um cliente da conta da Intranet. Se era o único, a conta volta a "Por associar". */
+export async function unlinkClient(clientId: string) {
+  await sql.begin(async tx => {
+    const [c] = await tx`select id, name, intranet_account_id, intranet_short_name from clients where id = ${clientId}`
+    if (!c?.intranet_account_id) throw new Error('Este cliente não está ligado à Intranet.')
+    await tx`update clients set intranet_account_id = null, intranet_synced_at = null where id = ${clientId}`
+    const [other] = await tx`select id from clients where intranet_account_id = ${c.intranet_account_id}
+                             order by intranet_synced_at nulls last, created_at limit 1`
+    await tx`update devices set client_id = ${other?.id ?? null} where intranet_account_id = ${c.intranet_account_id}`
+    if (!other)
+      await tx`insert into intranet_pending (intranet_account_id, name, full_name)
+               values (${c.intranet_account_id}, ${c.intranet_short_name ?? c.name}, null)
+               on conflict (intranet_account_id) do update set status = 'pending'`
+  })
+}
+
+export type LinkedAccount = { intranet_account_id: string; name: string; clients: { id: string; name: string; venda_aluguer: string | null }[] }
+
+/** Contas da Intranet ligadas e os respetivos clientes da BD */
+export async function getLinkedAccounts(): Promise<LinkedAccount[]> {
+  return sql<LinkedAccount[]>`
+    select intranet_account_id, min(coalesce(intranet_short_name, name)) as name,
+           json_agg(json_build_object('id', id, 'name', name, 'venda_aluguer', venda_aluguer) order by lower(name)) as clients
+    from clients where intranet_account_id is not null
+    group by intranet_account_id order by lower(min(coalesce(intranet_short_name, name)))`
+}
+
 export async function createFromPending(intranetIds: string[]) {
   let created = 0
   await sql.begin(async tx => {
@@ -421,8 +480,9 @@ export const PENDING_PREFIX = 'intranet:'
  * Sem nenhuma sincronização feita, mostra todos os clientes como antes.
  */
 export async function getClientOptions(currentClientId?: string | null): Promise<ClientOption[]> {
-  const linked = await sql<{ id: string; name: string }[]>`
-    select id, name from clients where intranet_account_id is not null and active order by lower(name)`
+  const linked = await sql<{ id: string; name: string; venda_aluguer: string | null; n: number }[]>`
+    select id, name, venda_aluguer, count(*) over (partition by intranet_account_id)::int as n
+    from clients where intranet_account_id is not null and active order by lower(name)`
   if (linked.length === 0) {
     const all = await sql<{ id: string; name: string }[]>`select id, name from clients where active or id = ${currentClientId ?? null} order by lower(name)`
     return all.map(c => ({ value: c.id, label: c.name }))
@@ -434,7 +494,8 @@ export async function getClientOptions(currentClientId?: string | null): Promise
       : Promise.resolve([] as { id: string; name: string }[]),
   ])
   const opts: ClientOption[] = [
-    ...linked.map(c => ({ value: c.id, label: c.name })),
+    // conta com vários clientes (ex.: venda e aluguer): mostra a modalidade para distinguir
+    ...linked.map(c => ({ value: c.id, label: c.n > 1 && c.venda_aluguer ? `${c.name} · ${c.venda_aluguer}` : c.name })),
     ...pending.map(p => ({
       value: PENDING_PREFIX + p.intranet_account_id,
       label: p.name,
@@ -452,7 +513,7 @@ export async function resolveClientId(value: string): Promise<string> {
   if (!value.startsWith(PENDING_PREFIX)) return value
   const intranetId = value.slice(PENDING_PREFIX.length)
   const find = async () => {
-    const [c] = await sql<{ id: string }[]>`select id from clients where intranet_account_id = ${intranetId}`
+    const [c] = await sql<{ id: string }[]>`select id from clients where intranet_account_id = ${intranetId} order by created_at limit 1`
     return c?.id
   }
   let id = await find()

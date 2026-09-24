@@ -239,7 +239,7 @@ alter table clients
   add column if not exists intranet_account_id text,
   add column if not exists intranet_short_name text,
   add column if not exists intranet_synced_at  timestamptz;
-create unique index if not exists clients_intranet_uq on clients (intranet_account_id) where intranet_account_id is not null;
+-- (antes era único; agora uma conta pode ter vários clientes — ver fim do ficheiro)
 
 create table if not exists devices (
   imei                text primary key,
@@ -296,3 +296,7 @@ alter table clients add column if not exists sheet_names text[];
 
 -- Coluna nova da Sheet: "Serviços da conta - driving Behavior / sensor de porta"
 alter table interventions add column if not exists account_services text;
+
+-- Uma conta da Intranet pode estar ligada a vários clientes da BD (ex.: venda e aluguer da mesma empresa)
+drop index if exists gestao_interv.clients_intranet_uq;
+create index if not exists clients_intranet_idx on clients (intranet_account_id) where intranet_account_id is not null;

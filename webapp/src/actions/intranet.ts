@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { sql } from '@/lib/db'
 import { requireAdmin, requireUser } from '@/lib/auth'
-import { syncFromIntranet, waitForAutoSync, linkPending, createFromPending, setPendingStatus, revertAutoCreatedClients } from '@/lib/intranet'
+import { syncFromIntranet, waitForAutoSync, linkAdditionalClient, unlinkClient, linkPending, createFromPending, setPendingStatus, revertAutoCreatedClients } from '@/lib/intranet'
 
 /** Sincronizar clientes e IMEIs a partir da Intranet (só admins) */
 export async function runIntranetSync() {
@@ -26,21 +26,28 @@ export async function getClientDevices(clientId: string): Promise<DeviceOption[]
     return sql<DeviceOption[]>`select imei, model, license_plate from devices
                                where intranet_account_id = ${pending[1]} and active order by license_plate nulls last, imei`
   if (!/^[0-9a-f-]{36}$/i.test(clientId)) return []
+  // todos os IMEIs da conta da Intranet do cliente (a conta pode ter vários clientes: venda/aluguer)
   return sql<DeviceOption[]>`select imei, model, license_plate from devices
-                             where client_id = ${clientId} and active order by license_plate nulls last, imei`
+                             where active and (client_id = ${clientId}
+                               or intranet_account_id = (select intranet_account_id from clients where id = ${clientId}))
+                             order by license_plate nulls last, imei`
 }
 
-export type ImeiLookup = { found: false } | { found: true; clientId: string | null; clientName: string | null; model: string | null; license_plate: string | null; active: boolean }
+export type ImeiLookup =
+  | { found: false }
+  | { found: true; clientId: string | null; clientName: string | null; accountId: string | null; accountClientIds: string[]; model: string | null; license_plate: string | null; active: boolean }
 
 /** Verifica um IMEI na lista sincronizada da Intranet */
 export async function lookupImei(imei: string): Promise<ImeiLookup> {
   await requireUser()
   const v = imei.replace(/\s/g, '')
   if (!/^\d{8,20}$/.test(v)) return { found: false }
-  const [d] = await sql`select d.client_id, c.name as client_name, d.model, d.license_plate, d.active
+  const [d] = await sql`select d.client_id, c.name as client_name, d.intranet_account_id, d.model, d.license_plate, d.active,
+                          coalesce((select array_agg(o.id) from clients o where o.intranet_account_id = d.intranet_account_id), '{}') as account_client_ids
                         from devices d left join clients c on c.id = d.client_id where d.imei = ${v}`
   return d
-    ? { found: true, clientId: d.client_id, clientName: d.client_name, model: d.model, license_plate: d.license_plate, active: d.active }
+    ? { found: true, clientId: d.client_id, clientName: d.client_name, accountId: d.intranet_account_id, accountClientIds: d.account_client_ids,
+        model: d.model, license_plate: d.license_plate, active: d.active }
     : { found: false }
 }
 
@@ -74,6 +81,32 @@ export async function resolvePending(
     } else {
       await setPendingStatus(intranetIds, action.type === 'ignore' ? 'ignored' : 'pending')
     }
+    revalidatePath('/settings')
+    revalidatePath('/interventions/new')
+    return { ok: true as const }
+  } catch (e) {
+    return { ok: false as const, error: (e as Error).message }
+  }
+}
+
+/** Liga mais um cliente da BD a uma conta da Intranet (ex.: venda + aluguer) */
+export async function linkAnotherClient(intranetId: string, clientId: string) {
+  try {
+    await requireAdmin()
+    await linkAdditionalClient(intranetId, clientId)
+    revalidatePath('/settings')
+    revalidatePath('/interventions/new')
+    return { ok: true as const }
+  } catch (e) {
+    return { ok: false as const, error: (e as Error).message }
+  }
+}
+
+/** Desliga um cliente da conta da Intranet */
+export async function unlinkIntranetClient(clientId: string) {
+  try {
+    await requireAdmin()
+    await unlinkClient(clientId)
     revalidatePath('/settings')
     revalidatePath('/interventions/new')
     return { ok: true as const }
