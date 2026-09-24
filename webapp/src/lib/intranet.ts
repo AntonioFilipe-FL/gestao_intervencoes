@@ -59,7 +59,7 @@ const norm = (s: string | null | undefined) =>
 export type SyncResult = {
   ok: boolean
   error?: string
-  accounts: { total: number; created: number; linked: number; renamed: number; deactivated: number }
+  accounts: { total: number; linked: number; renamed: number; deactivated: number; pending: number }
   devices: { total: number; upserted: number; withoutClient: number; error?: string; sampleKeys?: string[] }
   unmatchedLocal: string[] // clientes da BD sem correspondência na Intranet
 }
@@ -68,7 +68,7 @@ export type SyncResult = {
 export async function syncFromIntranet(by: string): Promise<SyncResult> {
   const result: SyncResult = {
     ok: false,
-    accounts: { total: 0, created: 0, linked: 0, renamed: 0, deactivated: 0 },
+    accounts: { total: 0, linked: 0, renamed: 0, deactivated: 0, pending: 0 },
     devices: { total: 0, upserted: 0, withoutClient: 0 },
     unmatchedLocal: [],
   }
@@ -112,13 +112,19 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
           byName.delete(norm(match.name))
           result.accounts.linked++
         } else {
-          await tx`insert into clients (name, active, intranet_account_id, intranet_short_name, intranet_synced_at)
-                   values (${a.name}, true, ${a.id}, ${a.name}, now())
-                   on conflict (lower(name)) do update set intranet_account_id = excluded.intranet_account_id,
-                     intranet_short_name = excluded.intranet_short_name, intranet_synced_at = now(), active = true`
-          result.accounts.created++
+          // sem correspondência: fica à espera de decisão do utilizador (associar / criar / ignorar)
+          await tx`insert into intranet_pending (intranet_account_id, name, full_name)
+                   values (${a.id}, ${a.name}, ${a.fullName})
+                   on conflict (intranet_account_id) do update set name = excluded.name, full_name = excluded.full_name,
+                     last_seen_at = now()`
         }
       }
+      // limpar pendentes que já foram ligados ou que desapareceram da Intranet
+      await tx`delete from intranet_pending p
+               where exists (select 1 from clients c where c.intranet_account_id = p.intranet_account_id)
+                  or not (p.intranet_account_id = any(${accounts.map(a => a.id)}))`
+      const [{ n }] = await tx`select count(*)::int as n from intranet_pending where status = 'pending'`
+      result.accounts.pending = n
       // ligados à Intranet mas que já não existem lá → inativos (o histórico mantém-se)
       const ids = accounts.map(a => a.id)
       const off = await tx`update clients set active = false
@@ -188,4 +194,89 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
 export async function getLastSync(): Promise<(SyncResult & { at: string; by: string | null }) | null> {
   const [r] = await sql<{ value: string; updated_by: string | null }[]>`select value, updated_by from app_settings where key = 'intranet_last_sync'`
   return r ? { ...JSON.parse(r.value), by: r.updated_by } : null
+}
+
+// ---------------------------------------------------------------------------
+// Associação manual de contas pendentes
+// ---------------------------------------------------------------------------
+
+/** Semelhança entre dois nomes (Dice sobre bigramas, 0..1) */
+function similarity(a: string, b: string) {
+  const x = norm(a), y = norm(b)
+  if (!x || !y) return 0
+  if (x === y) return 1
+  if (x.includes(y) || y.includes(x)) return 0.9
+  const grams = (s: string) => { const m = new Map<string, number>(); for (let i = 0; i < s.length - 1; i++) { const g = s.slice(i, i + 2); m.set(g, (m.get(g) ?? 0) + 1) } return m }
+  const gx = grams(x), gy = grams(y)
+  let inter = 0
+  for (const [g, n] of gx) inter += Math.min(n, gy.get(g) ?? 0)
+  return (2 * inter) / (x.length - 1 + (y.length - 1))
+}
+
+export type PendingAccount = {
+  intranet_account_id: string
+  name: string
+  full_name: string | null
+  status: 'pending' | 'ignored'
+  suggestion: { id: string; name: string; score: number } | null
+}
+
+/** Contas pendentes + clientes da BD ainda sem ligação (para escolher) */
+export async function getPendingAccounts() {
+  const [pending, candidates] = await Promise.all([
+    sql<Omit<PendingAccount, 'suggestion'>[]>`
+      select intranet_account_id, name, full_name, status from intranet_pending order by status, lower(name)`,
+    sql<{ id: string; name: string }[]>`select id, name from clients where intranet_account_id is null order by lower(name)`,
+  ])
+  const withSuggestion: PendingAccount[] = pending.map(p => {
+    let best: PendingAccount['suggestion'] = null
+    for (const c of candidates) {
+      const score = Math.max(similarity(p.name, c.name), p.full_name ? similarity(p.full_name, c.name) : 0)
+      if (score > (best?.score ?? 0)) best = { id: c.id, name: c.name, score }
+    }
+    return { ...p, suggestion: best && best.score >= 0.6 ? best : null }
+  })
+  return { pending: withSuggestion, candidates }
+}
+
+/** Liga os IMEIs de uma conta ao cliente */
+async function attachDevices(tx: typeof sql, intranetId: string, clientId: string) {
+  await tx`update devices set client_id = ${clientId} where intranet_account_id = ${intranetId}`
+}
+
+export async function linkPending(intranetId: string, clientId: string) {
+  await sql.begin(async tx => {
+    const [p] = await tx`select name from intranet_pending where intranet_account_id = ${intranetId}`
+    if (!p) throw new Error('Conta pendente não encontrada (sincronize de novo).')
+    const [c] = await tx`select id, name, intranet_account_id from clients where id = ${clientId}`
+    if (!c) throw new Error('Cliente não encontrado.')
+    if (c.intranet_account_id) throw new Error(`O cliente "${c.name}" já está ligado a outra conta da Intranet.`)
+    // passa a usar o nome da Intranet, salvo se outro cliente já tiver esse nome
+    const [clash] = await tx`select id from clients where lower(name) = lower(${p.name}) and id <> ${clientId}`
+    await tx`update clients set intranet_account_id = ${intranetId}, intranet_short_name = ${p.name}, active = true,
+             intranet_synced_at = now() ${clash ? tx`` : tx`, name = ${p.name}`} where id = ${clientId}`
+    await attachDevices(tx as unknown as typeof sql, intranetId, clientId)
+    await tx`delete from intranet_pending where intranet_account_id = ${intranetId}`
+  })
+}
+
+export async function createFromPending(intranetIds: string[]) {
+  let created = 0
+  await sql.begin(async tx => {
+    const rows = await tx`select intranet_account_id, name from intranet_pending where intranet_account_id = any(${intranetIds})`
+    for (const p of rows) {
+      const [c] = await tx`insert into clients (name, active, intranet_account_id, intranet_short_name, intranet_synced_at)
+                           values (${p.name}, true, ${p.intranet_account_id}, ${p.name}, now())
+                           on conflict (lower(name)) do nothing returning id`
+      if (!c) continue // já existe um cliente com este nome: tem de ser associado manualmente
+      await attachDevices(tx as unknown as typeof sql, p.intranet_account_id, c.id)
+      await tx`delete from intranet_pending where intranet_account_id = ${p.intranet_account_id}`
+      created++
+    }
+  })
+  return created
+}
+
+export async function setPendingStatus(intranetIds: string[], status: 'pending' | 'ignored') {
+  await sql`update intranet_pending set status = ${status} where intranet_account_id = any(${intranetIds})`
 }

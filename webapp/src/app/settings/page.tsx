@@ -5,7 +5,7 @@ import { isAdmin } from '@/actions/users'
 import { UserManagement } from '@/components/settings/UserManagement'
 import { EmailSettings } from '@/components/settings/EmailSettings'
 import { IntranetSettings } from '@/components/settings/IntranetSettings'
-import { getLastSync, intranetConfigured } from '@/lib/intranet'
+import { getLastSync, getPendingAccounts, intranetConfigured } from '@/lib/intranet'
 
 export default async function SettingsPage({
   searchParams,
@@ -103,7 +103,7 @@ export default async function SettingsPage({
             )}
             {userIsAdmin && (
               <TabsContent value="intranet">
-                <IntranetSettings configured={intranetConfigured()} last={await getLastSync()} />
+                <IntranetSettings configured={intranetConfigured()} last={await getLastSync()} {...(await getPendingAccounts())} />
               </TabsContent>
             )}
           </div>

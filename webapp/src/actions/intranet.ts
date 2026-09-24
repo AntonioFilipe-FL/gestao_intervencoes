@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { sql } from '@/lib/db'
 import { requireAdmin, requireUser } from '@/lib/auth'
-import { syncFromIntranet } from '@/lib/intranet'
+import { syncFromIntranet, linkPending, createFromPending, setPendingStatus } from '@/lib/intranet'
 
 /** Sincronizar clientes e IMEIs a partir da Intranet (só admins) */
 export async function runIntranetSync() {
@@ -47,4 +47,31 @@ export async function searchDevices(q: string): Promise<(DeviceOption & { client
              left join clients c on c.id = d.client_id
              where d.active and (d.imei like ${'%' + v + '%'} or upper(d.license_plate) like ${'%' + v.toUpperCase() + '%'})
              order by d.imei limit 20`
+}
+
+/** Resolver uma conta da Intranet sem correspondência */
+export async function resolvePending(
+  intranetIds: string[],
+  action: { type: 'link'; clientId: string } | { type: 'create' } | { type: 'ignore' } | { type: 'restore' }
+) {
+  try {
+    await requireAdmin()
+    if (action.type === 'link') {
+      if (intranetIds.length !== 1) throw new Error('Associe uma conta de cada vez.')
+      await linkPending(intranetIds[0], action.clientId)
+    } else if (action.type === 'create') {
+      const n = await createFromPending(intranetIds)
+      if (n < intranetIds.length) {
+        revalidatePath('/settings')
+        return { ok: true as const, warning: `${intranetIds.length - n} não foram criadas porque já existe um cliente com o mesmo nome — associe-as manualmente.` }
+      }
+    } else {
+      await setPendingStatus(intranetIds, action.type === 'ignore' ? 'ignored' : 'pending')
+    }
+    revalidatePath('/settings')
+    revalidatePath('/interventions/new')
+    return { ok: true as const }
+  } catch (e) {
+    return { ok: false as const, error: (e as Error).message }
+  }
 }

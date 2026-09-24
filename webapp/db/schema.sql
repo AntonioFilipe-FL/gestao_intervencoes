@@ -253,3 +253,13 @@ create table if not exists devices (
 );
 create index if not exists devices_client_idx on devices (client_id);
 create index if not exists devices_account_idx on devices (intranet_account_id);
+
+-- Contas da Intranet sem correspondência automática, à espera de decisão (associar / criar / ignorar)
+create table if not exists intranet_pending (
+  intranet_account_id text primary key,
+  name                text not null,
+  full_name           text,
+  status              text not null default 'pending' check (status in ('pending', 'ignored')),
+  first_seen_at       timestamptz not null default now(),
+  last_seen_at        timestamptz not null default now()
+);

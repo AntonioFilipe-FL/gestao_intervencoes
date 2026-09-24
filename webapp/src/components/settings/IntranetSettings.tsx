@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { runIntranetSync } from '@/actions/intranet'
-import type { SyncResult } from '@/lib/intranet'
+import type { SyncResult, PendingAccount } from '@/lib/intranet'
+import { PendingAccounts } from '@/components/settings/PendingAccounts'
 
 type Last = (SyncResult & { at: string; by: string | null }) | null
 
@@ -20,14 +22,26 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
 }
 
 /** Configurações → Intranet: sincronizar clientes e IMEIs a partir da Intranet Frotcom */
-export function IntranetSettings({ configured, last: initial }: { configured: boolean; last: Last }) {
+export function IntranetSettings({
+  configured,
+  last: initial,
+  pending,
+  candidates,
+}: {
+  configured: boolean
+  last: Last
+  pending: PendingAccount[]
+  candidates: { id: string; name: string }[]
+}) {
   const [last, setLast] = useState<Last>(initial)
-  const [pending, start] = useTransition()
+  const [syncing, start] = useTransition()
+  const router = useRouter()
 
   const sync = () =>
     start(async () => {
       const r = await runIntranetSync()
       setLast({ ...r, at: new Date().toISOString(), by: null })
+      router.refresh() // recarrega a lista de contas por associar
     })
 
   return (
@@ -35,8 +49,9 @@ export function IntranetSettings({ configured, last: initial }: { configured: bo
       <div className="space-y-1">
         <h2>Sincronização com a Intranet Frotcom</h2>
         <p className="fc-small text-fc-dark-60">
-          Importa os clientes (contas) e os IMEIs da Intranet. Os clientes que já existem são ligados pelo nome;
-          os novos são criados; os que deixaram de existir na Intranet ficam inativos (o histórico mantém-se).
+          Importa os clientes (contas) e os IMEIs da Intranet. As contas com o mesmo nome de um cliente da BD são ligadas
+          automaticamente; as restantes ficam em &ldquo;Por associar&rdquo; para escolher o cliente correspondente ou criar um novo.
+          Clientes que deixaram de existir na Intranet ficam inativos (o histórico mantém-se).
         </p>
       </div>
 
@@ -46,8 +61,8 @@ export function IntranetSettings({ configured, last: initial }: { configured: bo
         </p>
       )}
 
-      <Button size="lg" onClick={sync} disabled={pending || !configured}>
-        <RefreshCw className={pending ? 'animate-spin' : ''} /> {pending ? 'A sincronizar…' : 'Sincronizar agora'}
+      <Button size="lg" onClick={sync} disabled={syncing || !configured}>
+        <RefreshCw className={syncing ? 'animate-spin' : ''} /> {syncing ? 'A sincronizar…' : 'Sincronizar agora'}
       </Button>
 
       {last && (
@@ -65,7 +80,7 @@ export function IntranetSettings({ configured, last: initial }: { configured: bo
               <div className="border-b border-fc-dark-20 px-4 py-2.5 font-bold uppercase">Clientes</div>
               <Row k="Contas na Intranet" v={last.accounts.total.toLocaleString('pt-PT')} />
               <Row k="Ligadas a clientes existentes" v={last.accounts.linked} />
-              <Row k="Novos clientes criados" v={last.accounts.created} />
+              <Row k="Por associar (ver abaixo)" v={<b>{last.accounts.pending ?? 0}</b>} />
               <Row k="Nomes atualizados" v={last.accounts.renamed} />
               <Row k="Inativados (já não existem)" v={last.accounts.deactivated} />
             </div>
@@ -91,18 +106,20 @@ export function IntranetSettings({ configured, last: initial }: { configured: bo
             </div>
           )}
 
+          <PendingAccounts pending={pending} candidates={candidates} />
+
           {!last.error && last.unmatchedLocal.length > 0 && (
-            <div className="border border-fc-dark-20">
-              <div className="border-b border-fc-dark-20 px-4 py-2.5 font-bold uppercase">
-                Clientes da BD sem correspondência na Intranet ({last.unmatchedLocal.length})
-              </div>
+            <details className="border border-fc-dark-20">
+              <summary className="cursor-pointer px-4 py-2.5 font-bold uppercase">
+                Clientes da BD ainda sem ligação à Intranet ({candidates.length})
+              </summary>
               <p className="fc-small px-4 pt-2 text-fc-dark-60">
-                Corrija o nome em Configurações → Clientes para ficar igual ao da Intranet e sincronize de novo.
+                Ficam disponíveis para escolher na lista acima. Os que não corresponderem a nenhuma conta são clientes antigos e mantêm-se para o histórico.
               </p>
               <ul className="max-h-72 columns-2 gap-6 overflow-y-auto px-4 py-2 md:columns-3">
-                {last.unmatchedLocal.map(n => <li key={n} className="break-inside-avoid py-0.5">{n}</li>)}
+                {candidates.map(c => <li key={c.id} className="break-inside-avoid py-0.5">{c.name}</li>)}
               </ul>
-            </div>
+            </details>
           )}
         </div>
       )}
