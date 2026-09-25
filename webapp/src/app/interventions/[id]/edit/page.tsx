@@ -26,6 +26,16 @@ export default async function EditInterventionPage({ params }: Props) {
       select accessory_id, quantity, direction from intervention_accessories where intervention_id = ${id}`,
   ])
 
+  // itens "só histórico" usados neste registo continuam visíveis ao editar
+  const eqIds = [row.equipment_id, row.spent_equipment_id, row.return_equipment_id].filter(Boolean) as string[]
+  const accIds = lines.map((l) => l.accessory_id)
+  const [oldEq, oldAcc] = await Promise.all([
+    sql<{ id: string; name: string; active: boolean }[]>`select id, name, active from equipment_list where id = any(${eqIds}) and not active`,
+    sql<{ id: string; name: string; active: boolean }[]>`select id, name, active from accessories where id = any(${accIds}) and not active`,
+  ])
+  referenceData.equipmentList = [...(referenceData.equipmentList ?? []), ...oldEq.map((e) => ({ ...e, name: `${e.name} (histórico)` }))]
+  referenceData.accessories = [...(referenceData.accessories ?? []), ...oldAcc.map((a) => ({ ...a, name: `${a.name} (histórico)` }))]
+
   // valores atuais → campos do formulário (null → '')
   const values = Object.fromEntries(
     Object.keys(interventionSchema.shape).map((k) => [k, row[k] == null ? '' : String(row[k])])

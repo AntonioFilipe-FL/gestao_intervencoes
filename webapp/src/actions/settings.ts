@@ -60,3 +60,41 @@ export async function deleteReferenceItem(table: string, id: string) {
     return { success: false as const, error: (e as Error).message }
   }
 }
+
+/** Define os acessórios que acompanham um equipamento (kit) */
+export async function setEquipmentKit(equipmentId: string, lines: { accessory_id: string; quantity: number }[]) {
+  try {
+    await requireAdmin()
+    const uuid = /^[0-9a-f-]{36}$/i
+    if (!uuid.test(equipmentId)) throw new Error('Equipamento inválido.')
+    const clean = new Map<string, number>()
+    for (const l of lines) {
+      if (!uuid.test(l.accessory_id)) continue
+      clean.set(l.accessory_id, Math.max(1, Math.min(99, Math.round(Number(l.quantity) || 1))))
+    }
+    await sql.begin(async tx => {
+      await tx`delete from equipment_kit_items where equipment_id = ${equipmentId}`
+      const rows = [...clean].map(([accessory_id, quantity]) => ({ equipment_id: equipmentId, accessory_id, quantity }))
+      if (rows.length) await tx`insert into equipment_kit_items ${tx(rows)}`
+    })
+    revalidatePath('/settings')
+    revalidatePath('/interventions/new')
+    return { success: true as const }
+  } catch (e) {
+    return { success: false as const, error: (e as Error).message }
+  }
+}
+
+/** Liga/desliga rapidamente um item (em Equipamentos/Acessórios: disponível em novos registos ou só histórico) */
+export async function toggleReferenceItem(table: string, id: string, active: boolean) {
+  try {
+    await requireAdmin()
+    if (!EDITABLE[table]) throw new Error(`Tabela não permitida: ${table}`)
+    await sql`update ${sql(table)} set active = ${active} where id = ${id}`
+    revalidatePath('/settings')
+    revalidatePath('/interventions/new')
+    return { success: true as const }
+  } catch (e) {
+    return { success: false as const, error: (e as Error).message }
+  }
+}

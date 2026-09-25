@@ -300,3 +300,11 @@ alter table interventions add column if not exists account_services text;
 -- Uma conta da Intranet pode estar ligada a vários clientes da BD (ex.: venda e aluguer da mesma empresa)
 drop index if exists gestao_interv.clients_intranet_uq;
 create index if not exists clients_intranet_idx on clients (intranet_account_id) where intranet_account_id is not null;
+
+-- Kits: acessórios que acompanham cada equipamento (sugeridos automaticamente no formulário)
+create table if not exists equipment_kit_items (
+  equipment_id uuid not null references equipment_list(id) on delete cascade,
+  accessory_id uuid not null references accessories(id) on delete cascade,
+  quantity     int  not null default 1 check (quantity between 1 and 99),
+  primary key (equipment_id, accessory_id)
+);

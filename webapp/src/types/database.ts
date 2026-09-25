@@ -28,4 +28,12 @@ export interface ReferenceData {
   warrantyOptions: ReferenceItem[] | null
   platforms: ReferenceItem[] | null
   clients: ClientItem[] | null
+  /** acessórios de cada equipamento (kit) */
+  equipmentKits: KitLine[]
+}
+
+export interface KitLine {
+  equipment_id: string
+  accessory_id: string
+  quantity: number
 }

@@ -63,11 +63,17 @@ export default async function SettingsPage({
             </TabsContent>
 
             <TabsContent value="equipment">
-              <SettingsTable title="Lista de Equipamentos" table="equipment_list" items={data.equipmentList} />
+              <SettingsTable
+                title="Lista de Equipamentos"
+                table="equipment_list"
+                items={data.equipmentList}
+                catalog
+                kit={{ accessories: (data.accessories ?? []).filter((a) => a.active), kits: data.equipmentKits }}
+              />
             </TabsContent>
 
             <TabsContent value="accessories">
-              <SettingsTable title="Lista de Acessórios" table="accessories" items={data.accessories} />
+              <SettingsTable title="Lista de Acessórios" table="accessories" items={data.accessories} catalog />
             </TabsContent>
 
             <TabsContent value="intervention_types">

@@ -93,6 +93,29 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
 
   const clientHint = clientOptions.find((c) => c.value === selectedClientId)?.hint
 
+  // Kits: ao escolher um equipamento gasto/retomado, acrescenta os acessórios que o acompanham.
+  // Ao trocar de equipamento, retira as linhas do kit anterior que não foram alteradas.
+  const [kitNote, setKitNote] = useState<{ spent?: string; returned?: string }>({})
+  const activeAccessories = new Set((referenceData.accessories ?? []).map((a) => a.id))
+  const kitOf = (equipmentId: string) =>
+    (referenceData.equipmentKits ?? []).filter((k) => k.equipment_id === equipmentId && activeAccessories.has(k.accessory_id))
+  const applyKit = (field: 'accessories_spent' | 'accessories_returned', prevEquipment: string, nextEquipment: string) => {
+    const prevKit = prevEquipment ? kitOf(prevEquipment) : []
+    const nextKit = nextEquipment ? kitOf(nextEquipment) : []
+    let lines = (getValues(field) ?? []).filter(
+      (l) => !prevKit.some((k) => k.accessory_id === l.accessory_id && k.quantity === l.quantity)
+    )
+    const added: string[] = []
+    for (const k of nextKit) {
+      if (lines.some((l) => l.accessory_id === k.accessory_id)) continue
+      lines = [...lines, { accessory_id: k.accessory_id, quantity: k.quantity }]
+      added.push(referenceData.accessories?.find((a) => a.id === k.accessory_id)?.name ?? '')
+    }
+    setValue(field, lines, { shouldDirty: true })
+    const eqName = referenceData.equipmentList?.find((e) => e.id === nextEquipment)?.name
+    setKitNote((n) => ({ ...n, [field === 'accessories_spent' ? 'spent' : 'returned']: added.length ? `Kit ${eqName}: acrescentado ${added.join(', ')} (pode retirar).` : undefined }))
+  }
+
   // List of valid names for validators
   const VALID_VALIDATORS = ['TC', 'SP', 'MA', 'HV', 'MS', 'AF']
 
@@ -362,7 +385,7 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
                   invalid={!!errors.spent_equipment_id}
                   options={(referenceData.equipmentList ?? []).map((e) => ({ value: e.id, label: e.name }))}
                   value={field.value ?? ''}
-                  onChange={field.onChange}
+                  onChange={(v) => { applyKit('accessories_spent', field.value ?? '', v); field.onChange(v) }}
                   placeholder="Selecione o equipamento"
                 />
                 )}
@@ -404,6 +427,7 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
                 <AccessoryPicker id="accessories_spent" options={referenceData.accessories ?? []} value={field.value ?? []} onChange={field.onChange} />
               )}
             />
+            {kitNote.spent && <p className="fc-small text-fc-dark-60">{kitNote.spent}</p>}
           </div>
 
           <div className="space-y-1.5">
@@ -443,7 +467,7 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
                   invalid={!!errors.return_equipment_id}
                   options={(referenceData.equipmentList ?? []).map((e) => ({ value: e.id, label: e.name }))}
                   value={field.value ?? ''}
-                  onChange={field.onChange}
+                  onChange={(v) => { applyKit('accessories_returned', field.value ?? '', v); field.onChange(v) }}
                   placeholder="Selecione o equipamento"
                 />
                 )}
@@ -490,6 +514,7 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
                 <AccessoryPicker id="accessories_returned" options={referenceData.accessories ?? []} value={field.value ?? []} onChange={field.onChange} />
               )}
             />
+            {kitNote.returned && <p className="fc-small text-fc-dark-60">{kitNote.returned}</p>}
           </div>
 
           <div className="space-y-1.5">
