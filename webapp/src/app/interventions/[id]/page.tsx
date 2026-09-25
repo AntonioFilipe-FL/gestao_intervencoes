@@ -91,7 +91,7 @@ export default async function InterventionDetailsPage({ params }: Props) {
               <DetailItem label="Data da Intervenção" value={fmtDate(intervention.intervention_date)} />
               <DetailItem label="Tipo de Intervenção" value={intervention.intervention_type?.name} />
               <DetailItem label="Matrícula" value={intervention.license_plate} />
-              <DetailItem label="IMEI" value={intervention.imei} />
+              <DetailItem label="IMEI Atual" value={intervention.imei} />
             </CardContent>
           </Card>
 
