@@ -129,7 +129,7 @@ export async function revertAutoCreated() {
 
 export type PlateImeis = {
   current: { imei: string; model: string | null; client_name: string | null } | null
-  previous: { imei: string; source: 'intranet' | 'registo'; date: string | null } | null
+  previous: { imei: string; source: 'intranet' | 'registo'; date: string | null; model: string | null } | null
 }
 
 /**
@@ -147,17 +147,50 @@ export async function getPlateImeis(plate: string): Promise<PlateImeis> {
                           order by d.synced_at desc limit 1`
   const currentImei: string | null = cur?.imei ?? null
 
-  const [hist] = await sql`select imei, seen_to from device_plate_history
+  const [hist] = await sql`select imei, seen_to, model from device_plate_history
                            where plate_norm = ${p} and seen_to is not null and imei is distinct from ${currentImei}
                            order by seen_to desc limit 1`
-  let previous: PlateImeis['previous'] = hist ? { imei: hist.imei, source: 'intranet', date: new Date(hist.seen_to).toISOString().slice(0, 10) } : null
+  let previous: PlateImeis['previous'] = hist ? { imei: hist.imei, source: 'intranet', date: new Date(hist.seen_to).toISOString().slice(0, 10), model: hist.model } : null
 
   if (!previous) {
     const [reg] = await sql`select imei, intervention_date from interventions
                             where gestao_interv.plate_norm(license_plate) = ${p} and imei ~ '^[0-9]{15}$'
                               and imei is distinct from ${currentImei}
                             order by intervention_date desc, created_at desc limit 1`
-    if (reg) previous = { imei: reg.imei, source: 'registo', date: reg.intervention_date }
+    if (reg) {
+      const [dev] = await sql`select model from devices where imei = ${reg.imei}`
+      previous = { imei: reg.imei, source: 'registo', date: reg.intervention_date, model: dev?.model ?? null }
+    }
   }
   return { current: cur ? { imei: cur.imei, model: cur.model, client_name: cur.client_name } : null, previous }
+}
+
+export type HardwareRow = { hardware: string; devices: number; equipment_id: string | null }
+
+/** Hardware distinto que veio da Intranet, com nº de equipamentos e a correspondência manual (se houver) */
+export async function getHardwareList(): Promise<HardwareRow[]> {
+  await requireAdmin()
+  return sql<HardwareRow[]>`
+    select d.model as hardware, count(*)::int as devices, m.equipment_id
+    from devices d left join hardware_map m on m.hardware = d.model
+    where d.active and d.model is not null
+    group by d.model, m.equipment_id order by count(*) desc, d.model`
+}
+
+/** Define (ou retira, com null) a correspondência manual de um hardware */
+export async function setHardwareMapping(hardware: string, equipmentId: string | null) {
+  try {
+    const user = await requireAdmin()
+    if (!hardware.trim()) throw new Error('Hardware inválido.')
+    if (equipmentId && !/^[0-9a-f-]{36}$/i.test(equipmentId)) throw new Error('Equipamento inválido.')
+    if (equipmentId)
+      await sql`insert into hardware_map (hardware, equipment_id, updated_by) values (${hardware}, ${equipmentId}, ${user.email})
+                on conflict (hardware) do update set equipment_id = excluded.equipment_id, updated_at = now(), updated_by = excluded.updated_by`
+    else await sql`delete from hardware_map where hardware = ${hardware}`
+    revalidatePath('/settings')
+    revalidatePath('/interventions/new')
+    return { ok: true as const }
+  } catch (e) {
+    return { ok: false as const, error: (e as Error).message }
+  }
 }

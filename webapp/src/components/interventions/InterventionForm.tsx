@@ -16,8 +16,8 @@ import { ImeiField } from '@/components/interventions/ImeiField'
 import { PlateField } from '@/components/interventions/PlateField'
 import type { ClientOption } from '@/lib/intranet'
 import { getPlateImeis, type PlateImeis } from '@/actions/intranet'
+import { matchEquipment } from '@/lib/hardware'
 
-const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '')
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 
@@ -67,32 +67,6 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
     },
   })
 
-  const selectedClientId = watch('client_id')
-  const plate = watch('license_plate')
-  const [plateImeis, setPlateImeis] = useState<PlateImeis | null>(null)
-  // ao editar, a matrícula já gravada não volta a preencher os IMEIs (só se for alterada)
-  const initialPlate = useRef(initial ? (initial.values.license_plate ?? '') : null)
-
-  // Matrícula → IMEI atual (Intranet) para o material gasto e IMEI anterior para o material retomado.
-  // Só preenche campos vazios, para não apagar o que o utilizador escreveu.
-  useEffect(() => {
-    const p = (plate ?? '').replace(/[^A-Za-z0-9]/g, '')
-    if (p.length < 6) { setPlateImeis(null); return }
-    let cancel = false
-    const t = setTimeout(async () => {
-      const r = await getPlateImeis(p)
-      if (cancel) return
-      setPlateImeis(r)
-      if (initialPlate.current !== null && initialPlate.current === plate) return
-      initialPlate.current = null
-      if (r.current && !getValues('spent_equipment_imei')) setValue('spent_equipment_imei', r.current.imei)
-      if (r.previous && !getValues('return_equipment_imei')) setValue('return_equipment_imei', r.previous.imei)
-    }, 400)
-    return () => { cancel = true; clearTimeout(t) }
-  }, [plate, getValues, setValue])
-
-  const clientHint = clientOptions.find((c) => c.value === selectedClientId)?.hint
-
   // Kits: ao escolher um equipamento gasto/retomado, acrescenta os acessórios que o acompanham.
   // Ao trocar de equipamento, retira as linhas do kit anterior que não foram alteradas.
   const [kitNote, setKitNote] = useState<{ spent?: string; returned?: string }>({})
@@ -115,6 +89,53 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
     const eqName = referenceData.equipmentList?.find((e) => e.id === nextEquipment)?.name
     setKitNote((n) => ({ ...n, [field === 'accessories_spent' ? 'spent' : 'returned']: added.length ? `Kit ${eqName}: acrescentado ${added.join(', ')} (pode retirar).` : undefined }))
   }
+
+  // Hardware da Intranet → equipamento da lista (manual em Configurações, ou automático pelo nome)
+  const matchEq = (hardware: string | null | undefined) =>
+    matchEquipment(hardware, referenceData.equipmentList ?? [], referenceData.hardwareMap ?? [])?.item
+  /** Preenche o equipamento gasto/retomado (se vazio) e acrescenta o kit */
+  const [hwNote, setHwNote] = useState<Record<string, string | undefined>>({})
+  const fillMaterialEquipment = (field: 'spent_equipment_id' | 'return_equipment_id', hardware: string | null | undefined) => {
+    if (getValues(field)) return
+    const eq = matchEq(hardware)
+    setHwNote((n) => ({ ...n, [field]: hardware ? (eq ? `Hardware na Intranet: ${hardware} → ${eq.name}` : `Hardware na Intranet: ${hardware} (sem correspondência na lista — escolha o equipamento; pode definir a correspondência em Configurações › Equipamentos)`) : undefined }))
+    if (!eq) return
+    applyKit(field === 'spent_equipment_id' ? 'accessories_spent' : 'accessories_returned', '', eq.id)
+    setValue(field, eq.id, { shouldDirty: true })
+  }
+
+  const selectedClientId = watch('client_id')
+  const plate = watch('license_plate')
+  const [plateImeis, setPlateImeis] = useState<PlateImeis | null>(null)
+  // ao editar, a matrícula já gravada não volta a preencher os IMEIs (só se for alterada)
+  const initialPlate = useRef(initial ? (initial.values.license_plate ?? '') : null)
+
+  // Matrícula → IMEI atual (Intranet) para o material gasto e IMEI anterior para o material retomado.
+  // Só preenche campos vazios, para não apagar o que o utilizador escreveu.
+  useEffect(() => {
+    const p = (plate ?? '').replace(/[^A-Za-z0-9]/g, '')
+    if (p.length < 6) { setPlateImeis(null); return }
+    let cancel = false
+    const t = setTimeout(async () => {
+      const r = await getPlateImeis(p)
+      if (cancel) return
+      setPlateImeis(r)
+      if (initialPlate.current !== null && initialPlate.current === plate) return
+      initialPlate.current = null
+      if (r.current && !getValues('spent_equipment_imei')) {
+        setValue('spent_equipment_imei', r.current.imei)
+        fillMaterialEquipment('spent_equipment_id', r.current.model)
+      }
+      if (r.previous && !getValues('return_equipment_imei')) {
+        setValue('return_equipment_imei', r.previous.imei)
+        fillMaterialEquipment('return_equipment_id', r.previous.model)
+      }
+    }, 400)
+    return () => { cancel = true; clearTimeout(t) }
+  }, [plate, getValues, setValue])
+
+  const clientHint = clientOptions.find((c) => c.value === selectedClientId)?.hint
+
 
   // List of valid names for validators
   const VALID_VALIDATORS = ['TC', 'SP', 'MA', 'HV', 'MS', 'AF']
@@ -276,7 +297,7 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
                   clientId={selectedClientId || undefined}
                   onPick={(d) => {
                     if (!getValues('imei')) setValue('imei', d.imei)
-                    const eq = d.model && referenceData.equipmentList?.find((e) => fold(e.name) === fold(d.model!))
+                    const eq = matchEq(d.model)
                     if (eq && !getValues('equipment_id')) setValue('equipment_id', eq.id)
                   }}
                 />
@@ -284,7 +305,7 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="imei">IMEI Atual</Label>
+            <Label htmlFor="imei">IMEI</Label>
             <Controller
               name="imei"
               control={control}
@@ -297,7 +318,7 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
                   clientName={clientOptions.find((c) => c.value === selectedClientId)?.label}
                   onPick={(d) => {
                     if (d.license_plate && !getValues('license_plate')) setValue('license_plate', d.license_plate)
-                    const eq = d.model && referenceData.equipmentList?.find((e) => fold(e.name) === fold(d.model!))
+                    const eq = matchEq(d.model)
                     if (eq && !getValues('equipment_id')) setValue('equipment_id', eq.id)
                   }}
                 />
@@ -390,6 +411,7 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
                 />
                 )}
               />
+              {hwNote.spent_equipment_id && <p className="fc-small text-fc-dark-60">{hwNote.spent_equipment_id}</p>}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="spent_equipment_imei">IMEI equipamento gasto</Label>
@@ -403,8 +425,7 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
                     value={field.value ?? ''}
                     onChange={field.onChange}
                     onPick={(d) => {
-                      const eq = d.model && referenceData.equipmentList?.find((e) => fold(e.name) === fold(d.model!))
-                      if (eq && !getValues('spent_equipment_id')) setValue('spent_equipment_id', eq.id)
+                      fillMaterialEquipment('spent_equipment_id', d.model)
                     }}
                   />
                 )}
@@ -472,6 +493,7 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
                 />
                 )}
               />
+              {hwNote.return_equipment_id && <p className="fc-small text-fc-dark-60">{hwNote.return_equipment_id}</p>}
           </div>
 
           <div className="space-y-1.5">
@@ -487,8 +509,7 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
                   value={field.value ?? ''}
                   onChange={field.onChange}
                   onPick={(d) => {
-                    const eq = d.model && referenceData.equipmentList?.find((e) => fold(e.name) === fold(d.model!))
-                    if (eq && !getValues('return_equipment_id')) setValue('return_equipment_id', eq.id)
+                    fillMaterialEquipment('return_equipment_id', d.model)
                   }}
                 />
               )}

@@ -212,7 +212,7 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
             intranet_device_id: pick(d, ['id', 'deviceId', 'Id']),
             intranet_account_id: acc,
             client_id: acc ? clientByAccount.get(acc) ?? null : null,
-            model: pick(d, ['deviceTypeName', 'deviceType.name', 'model', 'deviceModel', 'type', 'deviceType']),
+            model: pick(d, ['hardware', 'hardwareName', 'deviceTypeName', 'deviceType.name', 'model', 'deviceModel', 'type', 'deviceType']),
             license_plate: pick(d, ['licensePlate', 'vehicleLicensePlate', 'vehicle.licensePlate', 'plate', 'vehiclePlate']),
           }
         })

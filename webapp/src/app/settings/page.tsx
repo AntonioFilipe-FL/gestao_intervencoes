@@ -5,6 +5,8 @@ import { isAdmin } from '@/actions/users'
 import { UserManagement } from '@/components/settings/UserManagement'
 import { EmailSettings } from '@/components/settings/EmailSettings'
 import { IntranetSettings } from '@/components/settings/IntranetSettings'
+import { HardwareMapping } from '@/components/settings/HardwareMapping'
+import { getHardwareList } from '@/actions/intranet'
 import { countAutoCreatedClients, getLastSync, getLinkedAccounts, getPendingAccounts, intranetConfigured } from '@/lib/intranet'
 
 export default async function SettingsPage({
@@ -70,6 +72,11 @@ export default async function SettingsPage({
                 catalog
                 kit={{ accessories: (data.accessories ?? []).filter((a) => a.active), kits: data.equipmentKits }}
               />
+              {userIsAdmin && (
+                <div className="mt-6">
+                  <HardwareMapping rows={await getHardwareList()} equipment={(data.equipmentList ?? []).filter((e) => e.active)} />
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="accessories">

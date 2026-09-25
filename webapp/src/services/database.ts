@@ -118,7 +118,7 @@ export async function getReferenceData(activeOnly = true): Promise<ReferenceData
   await requireUser()
   const [
     technicians, interventionTypes, motives, actionsPerformed, equipmentList, bundles, accessories,
-    billingOptions, warehouses, intranetAccounts, warrantyOptions, platforms, clients, equipmentKits,
+    billingOptions, warehouses, intranetAccounts, warrantyOptions, platforms, clients, equipmentKits, hardwareMap,
   ] = await Promise.all([
     list('technicians', activeOnly), list('intervention_types', activeOnly), list('motives', activeOnly),
     list('actions_performed', activeOnly), list('equipment_list', activeOnly), list('bundles', activeOnly),
@@ -126,10 +126,11 @@ export async function getReferenceData(activeOnly = true): Promise<ReferenceData
     list('intranet_accounts', activeOnly), list('warranty_options', activeOnly), list('platforms', activeOnly),
     list('clients', activeOnly),
     sql`select equipment_id, accessory_id, quantity from equipment_kit_items`,
+    sql`select hardware, equipment_id from hardware_map`,
   ])
   return {
     technicians, interventionTypes, motives, actionsPerformed, equipmentList, bundles, accessories,
-    billingOptions, warehouses, intranetAccounts, warrantyOptions, platforms, clients, equipmentKits,
+    billingOptions, warehouses, intranetAccounts, warrantyOptions, platforms, clients, equipmentKits, hardwareMap,
   } as unknown as ReferenceData
 }
 

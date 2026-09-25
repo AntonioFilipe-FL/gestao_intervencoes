@@ -308,3 +308,11 @@ create table if not exists equipment_kit_items (
   quantity     int  not null default 1 check (quantity between 1 and 99),
   primary key (equipment_id, accessory_id)
 );
+
+-- Correspondência manual "hardware" da Intranet → equipamento da lista (quando a automática não chega)
+create table if not exists hardware_map (
+  hardware     text primary key,
+  equipment_id uuid not null references equipment_list(id) on delete cascade,
+  updated_at   timestamptz not null default now(),
+  updated_by   text
+);

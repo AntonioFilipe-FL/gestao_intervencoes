@@ -30,6 +30,8 @@ export interface ReferenceData {
   clients: ClientItem[] | null
   /** acessórios de cada equipamento (kit) */
   equipmentKits: KitLine[]
+  /** correspondências manuais hardware da Intranet → equipamento */
+  hardwareMap: { hardware: string; equipment_id: string }[]
 }
 
 export interface KitLine {

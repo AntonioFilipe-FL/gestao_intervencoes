@@ -1,0 +1,435 @@
+{
+  "info": {
+    "name": "Frotcom Intranet – validação Gestão Intervenções",
+    "description": "Os mesmos pedidos que a app faz na sincronização (src/lib/intranet.ts).\n\n1. Em Variables, preencha **username** e **password** (ficam só no seu Postman).\n2. Corra **1. Authorize** — guarda o token.\n3. Corra os restantes. Veja a **Console** do Postman (View › Show Postman Console) e o separador **Test Results**: indica em que campo vem o IMEI, o hardware/modelo, a matrícula e a conta.\n4. No fim corra **9. Logout**.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://intranetapi.frotcom.com"
+    },
+    {
+      "key": "username",
+      "value": ""
+    },
+    {
+      "key": "password",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "partnerId",
+      "value": "951"
+    },
+    {
+      "key": "accountId",
+      "value": ""
+    },
+    {
+      "key": "imei",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Authorize (login)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/authorize",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "authorize"
+          ],
+          "query": []
+        },
+        "description": "Login. Guarda o token em {{token}} e, se vier, o partnerId.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Login OK (HTTP 200)', () => pm.response.to.have.status(200));",
+              "const d = pm.response.json();",
+              "const token = d.token || d.Token;",
+              "pm.test('Devolveu token', () => pm.expect(token).to.be.a('string'));",
+              "pm.collectionVariables.set('token', token);",
+              "const partner = d.partnerId || d.PartnerId || d.companyId || d.CompanyId;",
+              "if (partner && !pm.collectionVariables.get('partnerId')) pm.collectionVariables.set('partnerId', String(partner));",
+              "console.log('Campos da resposta do login:', Object.keys(d));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Contas (accounts)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/accounts?api_key={{token}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "accounts"
+          ],
+          "query": [
+            {
+              "key": "api_key",
+              "value": "{{token}}"
+            }
+          ]
+        },
+        "description": "Clientes da Intranet. Guarda o id da primeira conta em {{accountId}} (pode trocar)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const d = pm.response.json();",
+              "const list = Array.isArray(d) ? d : (d.accounts || d.items || d.data || d.result || []);",
+              "console.log('Nº de contas:', list.length);",
+              "if (list.length) {",
+              "  console.log('Campos de uma conta:', Object.keys(list[0]));",
+              "  console.log('Exemplo:', JSON.stringify(list[0]));",
+              "  const id = list[0].id || list[0].accountId || list[0].Id;",
+              "  if (id && !pm.collectionVariables.get('accountId')) pm.collectionVariables.set('accountId', String(id));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Equipamentos – global",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/devices?api_key={{token}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "devices"
+          ],
+          "query": [
+            {
+              "key": "api_key",
+              "value": "{{token}}"
+            }
+          ]
+        },
+        "description": "1.ª tentativa da app: sem parâmetros."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "let d; try { d = pm.response.json(); } catch (e) { d = []; }",
+              "const list = Array.isArray(d) ? d : (d.devices || d.items || d.data || d.result || []);",
+              "console.log('Nº de equipamentos:', list.length);",
+              "// mesmos nomes de campo que a app procura (src/lib/intranet.ts)",
+              "const get = (o, k) => k.split('.').reduce((a, p) => (a == null ? undefined : a[p]), o);",
+              "const pick = (o, keys) => { for (const k of keys) { const v = get(o, k); if (v != null && String(v).trim() !== '') return { campo: k, valor: v }; } return null; };",
+              "const MAP = {",
+              "  IMEI: ['imei', 'IMEI', 'Imei', 'deviceImei', 'serialNumber', 'serial'],",
+              "  'Hardware / modelo': ['hardware', 'hardwareName', 'deviceTypeName', 'deviceType.name', 'model', 'deviceModel', 'type', 'deviceType'],",
+              "  'Matrícula': ['licensePlate', 'vehicleLicensePlate', 'vehicle.licensePlate', 'plate', 'vehiclePlate'],",
+              "  Conta: ['accountId', 'companyId', 'account.id', 'company.id', 'clientId', 'AccountId'],",
+              "};",
+              "if (list.length) {",
+              "  console.log('Campos de um equipamento:', Object.keys(list[0]));",
+              "  console.log('Exemplo completo:', JSON.stringify(list[0], null, 2));",
+              "  for (const [nome, keys] of Object.entries(MAP)) {",
+              "    const r = pick(list[0], keys);",
+              "    console.log(`${nome}:`, r ? `${JSON.stringify(r.valor)}  (campo \"${r.campo}\")` : 'NÃO ENCONTRADO');",
+              "    pm.test(`${nome} encontrado`, () => pm.expect(r, `nenhum dos campos ${keys.join(', ')}`).to.not.equal(null));",
+              "  }",
+              "  const modelos = {};",
+              "  for (const x of list) { const r = pick(x, MAP['Hardware / modelo']); const m = r ? String(r.valor) : '(sem modelo)'; modelos[m] = (modelos[m] || 0) + 1; }",
+              "  console.log('Modelos encontrados (nº de equipamentos):', JSON.stringify(modelos, null, 2));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Equipamentos – por parceiro",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/devices?partnerId={{partnerId}}&api_key={{token}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "devices"
+          ],
+          "query": [
+            {
+              "key": "partnerId",
+              "value": "{{partnerId}}"
+            },
+            {
+              "key": "api_key",
+              "value": "{{token}}"
+            }
+          ]
+        },
+        "description": "2.ª tentativa da app."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "let d; try { d = pm.response.json(); } catch (e) { d = []; }",
+              "const list = Array.isArray(d) ? d : (d.devices || d.items || d.data || d.result || []);",
+              "console.log('Nº de equipamentos:', list.length);",
+              "// mesmos nomes de campo que a app procura (src/lib/intranet.ts)",
+              "const get = (o, k) => k.split('.').reduce((a, p) => (a == null ? undefined : a[p]), o);",
+              "const pick = (o, keys) => { for (const k of keys) { const v = get(o, k); if (v != null && String(v).trim() !== '') return { campo: k, valor: v }; } return null; };",
+              "const MAP = {",
+              "  IMEI: ['imei', 'IMEI', 'Imei', 'deviceImei', 'serialNumber', 'serial'],",
+              "  'Hardware / modelo': ['hardware', 'hardwareName', 'deviceTypeName', 'deviceType.name', 'model', 'deviceModel', 'type', 'deviceType'],",
+              "  'Matrícula': ['licensePlate', 'vehicleLicensePlate', 'vehicle.licensePlate', 'plate', 'vehiclePlate'],",
+              "  Conta: ['accountId', 'companyId', 'account.id', 'company.id', 'clientId', 'AccountId'],",
+              "};",
+              "if (list.length) {",
+              "  console.log('Campos de um equipamento:', Object.keys(list[0]));",
+              "  console.log('Exemplo completo:', JSON.stringify(list[0], null, 2));",
+              "  for (const [nome, keys] of Object.entries(MAP)) {",
+              "    const r = pick(list[0], keys);",
+              "    console.log(`${nome}:`, r ? `${JSON.stringify(r.valor)}  (campo \"${r.campo}\")` : 'NÃO ENCONTRADO');",
+              "    pm.test(`${nome} encontrado`, () => pm.expect(r, `nenhum dos campos ${keys.join(', ')}`).to.not.equal(null));",
+              "  }",
+              "  const modelos = {};",
+              "  for (const x of list) { const r = pick(x, MAP['Hardware / modelo']); const m = r ? String(r.valor) : '(sem modelo)'; modelos[m] = (modelos[m] || 0) + 1; }",
+              "  console.log('Modelos encontrados (nº de equipamentos):', JSON.stringify(modelos, null, 2));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Equipamentos – parceiro + todos os FCP",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/devices?partnerId={{partnerId}}&searchAllFCPs=true&api_key={{token}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "devices"
+          ],
+          "query": [
+            {
+              "key": "partnerId",
+              "value": "{{partnerId}}"
+            },
+            {
+              "key": "searchAllFCPs",
+              "value": "true"
+            },
+            {
+              "key": "api_key",
+              "value": "{{token}}"
+            }
+          ]
+        },
+        "description": "3.ª tentativa da app (antes dava 403)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "let d; try { d = pm.response.json(); } catch (e) { d = []; }",
+              "const list = Array.isArray(d) ? d : (d.devices || d.items || d.data || d.result || []);",
+              "console.log('Nº de equipamentos:', list.length);",
+              "// mesmos nomes de campo que a app procura (src/lib/intranet.ts)",
+              "const get = (o, k) => k.split('.').reduce((a, p) => (a == null ? undefined : a[p]), o);",
+              "const pick = (o, keys) => { for (const k of keys) { const v = get(o, k); if (v != null && String(v).trim() !== '') return { campo: k, valor: v }; } return null; };",
+              "const MAP = {",
+              "  IMEI: ['imei', 'IMEI', 'Imei', 'deviceImei', 'serialNumber', 'serial'],",
+              "  'Hardware / modelo': ['hardware', 'hardwareName', 'deviceTypeName', 'deviceType.name', 'model', 'deviceModel', 'type', 'deviceType'],",
+              "  'Matrícula': ['licensePlate', 'vehicleLicensePlate', 'vehicle.licensePlate', 'plate', 'vehiclePlate'],",
+              "  Conta: ['accountId', 'companyId', 'account.id', 'company.id', 'clientId', 'AccountId'],",
+              "};",
+              "if (list.length) {",
+              "  console.log('Campos de um equipamento:', Object.keys(list[0]));",
+              "  console.log('Exemplo completo:', JSON.stringify(list[0], null, 2));",
+              "  for (const [nome, keys] of Object.entries(MAP)) {",
+              "    const r = pick(list[0], keys);",
+              "    console.log(`${nome}:`, r ? `${JSON.stringify(r.valor)}  (campo \"${r.campo}\")` : 'NÃO ENCONTRADO');",
+              "    pm.test(`${nome} encontrado`, () => pm.expect(r, `nenhum dos campos ${keys.join(', ')}`).to.not.equal(null));",
+              "  }",
+              "  const modelos = {};",
+              "  for (const x of list) { const r = pick(x, MAP['Hardware / modelo']); const m = r ? String(r.valor) : '(sem modelo)'; modelos[m] = (modelos[m] || 0) + 1; }",
+              "  console.log('Modelos encontrados (nº de equipamentos):', JSON.stringify(modelos, null, 2));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Equipamentos – de uma conta",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/devices?accountId={{accountId}}&api_key={{token}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "devices"
+          ],
+          "query": [
+            {
+              "key": "accountId",
+              "value": "{{accountId}}"
+            },
+            {
+              "key": "api_key",
+              "value": "{{token}}"
+            }
+          ]
+        },
+        "description": "Última tentativa da app: conta a conta. Troque {{accountId}} por uma conta com viaturas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "let d; try { d = pm.response.json(); } catch (e) { d = []; }",
+              "const list = Array.isArray(d) ? d : (d.devices || d.items || d.data || d.result || []);",
+              "console.log('Nº de equipamentos:', list.length);",
+              "// mesmos nomes de campo que a app procura (src/lib/intranet.ts)",
+              "const get = (o, k) => k.split('.').reduce((a, p) => (a == null ? undefined : a[p]), o);",
+              "const pick = (o, keys) => { for (const k of keys) { const v = get(o, k); if (v != null && String(v).trim() !== '') return { campo: k, valor: v }; } return null; };",
+              "const MAP = {",
+              "  IMEI: ['imei', 'IMEI', 'Imei', 'deviceImei', 'serialNumber', 'serial'],",
+              "  'Hardware / modelo': ['hardware', 'hardwareName', 'deviceTypeName', 'deviceType.name', 'model', 'deviceModel', 'type', 'deviceType'],",
+              "  'Matrícula': ['licensePlate', 'vehicleLicensePlate', 'vehicle.licensePlate', 'plate', 'vehiclePlate'],",
+              "  Conta: ['accountId', 'companyId', 'account.id', 'company.id', 'clientId', 'AccountId'],",
+              "};",
+              "if (list.length) {",
+              "  console.log('Campos de um equipamento:', Object.keys(list[0]));",
+              "  console.log('Exemplo completo:', JSON.stringify(list[0], null, 2));",
+              "  for (const [nome, keys] of Object.entries(MAP)) {",
+              "    const r = pick(list[0], keys);",
+              "    console.log(`${nome}:`, r ? `${JSON.stringify(r.valor)}  (campo \"${r.campo}\")` : 'NÃO ENCONTRADO');",
+              "    pm.test(`${nome} encontrado`, () => pm.expect(r, `nenhum dos campos ${keys.join(', ')}`).to.not.equal(null));",
+              "  }",
+              "  const modelos = {};",
+              "  for (const x of list) { const r = pick(x, MAP['Hardware / modelo']); const m = r ? String(r.valor) : '(sem modelo)'; modelos[m] = (modelos[m] || 0) + 1; }",
+              "  console.log('Modelos encontrados (nº de equipamentos):', JSON.stringify(modelos, null, 2));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Logout",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/authorize?api_key={{token}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "authorize"
+          ],
+          "query": [
+            {
+              "key": "api_key",
+              "value": "{{token}}"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
