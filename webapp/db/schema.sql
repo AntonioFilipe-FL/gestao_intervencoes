@@ -420,3 +420,7 @@ begin
   get diagnostics n = row_count;
   return n;
 end $$;
+
+-- Email do técnico/validador (para atribuir automaticamente o "Validado por" pelo email de login)
+alter table technicians add column if not exists email text;
+create unique index if not exists technicians_email_uq on technicians (lower(email)) where email is not null;

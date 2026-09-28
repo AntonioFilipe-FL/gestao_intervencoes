@@ -6,7 +6,7 @@ import { requireAdmin } from '@/lib/auth'
 
 /** Tabelas editáveis em Configurações e campos extra permitidos em cada uma */
 const EDITABLE: Record<string, string[]> = {
-  technicians: [],
+  technicians: ['email'],
   clients: ['venda_aluguer', 'nos_vdf', 'report_projeto_contrato'],
   equipment_list: [],
   intervention_types: [],

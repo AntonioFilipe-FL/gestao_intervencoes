@@ -50,7 +50,7 @@ export default async function SettingsPage({
 
         <div className="p-5">
             <TabsContent value="technicians">
-              <SettingsTable title="Lista de Técnicos" table="technicians" items={data.technicians} />
+              <SettingsTable title="Lista de Técnicos" table="technicians" items={data.technicians} extraColumns={[{ label: 'Email (login)', key: 'email' }]} />
             </TabsContent>
 
             <TabsContent value="clients">

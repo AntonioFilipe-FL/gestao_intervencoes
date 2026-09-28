@@ -29,7 +29,13 @@ export async function createIntervention(input: unknown) {
       return { success: false as const, error: parsed.error.issues.map(i => i.message).join('; ') }
     }
     const client_id = await resolveClientId(parsed.data.client_id)
-    const values = { ...toDbValues(parsed.data), client_id, created_by: user.email, material_migrated: true }
+    // validação = criação do registo: data de hoje e validador = técnico com o email de quem está autenticado
+    const [validator] = await sql<{ id: string }[]>`select id from technicians where lower(email) = lower(${user.email}) limit 1`
+    const values = {
+      ...toDbValues(parsed.data), client_id, created_by: user.email, material_migrated: true,
+      validation_date: new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Lisbon' }),
+      validated_by: validator?.id ?? (parsed.data.validated_by || null),
+    }
     const spent = merge(parsed.data.accessories_spent)
     const returned = merge(parsed.data.accessories_returned)
 
@@ -71,7 +77,9 @@ export async function updateIntervention(id: string, input: unknown) {
       return { success: false as const, error: parsed.error.issues.map(i => i.message).join('; ') }
     }
     const client_id = await resolveClientId(parsed.data.client_id)
-    const values = { ...toDbValues(parsed.data), client_id, updated_by: user.email, material_migrated: true }
+    // a data de validação é a da criação do registo: não muda ao editar
+    const { validation_date: _vd, ...rest } = toDbValues(parsed.data) // eslint-disable-line @typescript-eslint/no-unused-vars
+    const values = { ...rest, client_id, updated_by: user.email, material_migrated: true }
     const spent = merge(parsed.data.accessories_spent)
     const returned = merge(parsed.data.accessories_returned)
 

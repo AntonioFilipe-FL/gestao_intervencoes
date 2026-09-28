@@ -30,9 +30,11 @@ interface Props {
   clientOptions: ClientOption[]
   /** ao editar: id do registo e valores atuais */
   initial?: { id: string; values: InterventionFormInput; billingNotified: boolean }
+  /** técnico/validador associado ao email de quem está autenticado */
+  validator?: { id: string; name: string } | null
 }
 
-export function InterventionForm({ referenceData, billingRecipients, clientOptions, initial }: Props) {
+export function InterventionForm({ referenceData, billingRecipients, clientOptions, initial, validator }: Props) {
   const editing = !!initial
   const router = useRouter()
   const [loading, setLoading] = useState(false)
@@ -59,7 +61,8 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
       billing: '',
       bundle_id: '',
       platform_id: '',
-      validated_by: '',
+      validated_by: validator?.id ?? '',
+      validation_date: new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Lisbon' }),
       spent_equipment_id: '',
       return_equipment_id: '',
       return_equipment_imei: '',
@@ -693,24 +696,32 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
           <div className="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="validation_date">Data de Validação</Label>
-              <Input id="validation_date" type="date" {...register('validation_date')} />
+              <Input id="validation_date" type="date" {...register('validation_date')} readOnly tabIndex={-1} className="bg-fc-grey-100 text-fc-dark-60" />
+              <p className="fc-small text-fc-dark-60">É sempre a data de criação do registo.</p>
             </div>
             <div className="space-y-1.5">
               <Label>Validado Por</Label>
               <Controller
                 name="validated_by"
                 control={control}
-                render={({ field }) => (
+                render={({ field }) => !initial && validator ? (
+                  <Input id="validated_by" value={validator.name} readOnly tabIndex={-1} className="bg-fc-grey-100 text-fc-dark-60" />
+                ) : (
                   <SearchableSelect
                   id="validated_by"
                   invalid={!!errors.validated_by}
-                  options={(referenceData.technicians ?? []).filter((t) => VALID_VALIDATORS.includes(t.name)).map((t) => ({ value: t.id, label: t.name }))}
+                  options={(referenceData.technicians ?? []).filter((t) => VALID_VALIDATORS.includes(t.name) || t.id === validator?.id || t.id === initial?.values.validated_by).map((t) => ({ value: t.id, label: t.name }))}
                   value={field.value ?? ''}
                   onChange={field.onChange}
                   placeholder="Selecione..."
                 />
                 )}
               />
+              {!initial && (
+                <p className="fc-small text-fc-dark-60">
+                  {validator ? 'Atribuído pelo seu email de login.' : 'O seu email não está associado a nenhum técnico (Configurações › Técnicos).'}
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="wow">WOW</Label>
