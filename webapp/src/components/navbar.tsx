@@ -6,9 +6,9 @@ export function Navbar({ user }: { user: CurrentUser }) {
   const links = [
     { href: '/interventions', label: 'Intervenções', exact: true },
     ...(user.role === 'admin' ? [{ href: '/interventions/new', label: 'Novo registo' }] : []),
-    { href: '/reports', label: 'Relatórios' },
-    { href: '/settings', label: 'Configurações' },
     { href: '/stock', label: 'Stock Material' },
+    { href: '/reports', label: 'Relatórios' },
+    ...(user.role === 'admin' ? [{ href: '/settings', label: 'Configurações' }] : []),
   ]
 
   return (

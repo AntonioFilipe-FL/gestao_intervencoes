@@ -34,8 +34,8 @@ export default async function StockPage({ searchParams }: Props) {
   const isAdmin = user.role === 'admin'
   const [{ byWarehouse, byModel }, items, movements, warehouses, equipment, conflicts] = await Promise.all([
     getStockTotals(),
-    getStockItems({ warehouseId: p.wh, modality: p.mod, q: p.q, installed: p.inst === '1' }),
-    getMovements(p.imei),
+    isAdmin ? getStockItems({ warehouseId: p.wh, modality: p.mod, q: p.q, installed: p.inst === '1' }) : Promise.resolve([]),
+    isAdmin ? getMovements(p.imei) : Promise.resolve([]),
     sql<{ id: string; name: string }[]>`select id, name from warehouses where active order by name`,
     sql<{ id: string; name: string }[]>`select id, name from equipment_list where active order by name`,
     getInstalledConflicts(),
@@ -61,7 +61,7 @@ export default async function StockPage({ searchParams }: Props) {
     <div className="mx-auto max-w-7xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
         title="Stock material"
-        subtitle="Equipamentos em stock por IMEI. Receções e transferências registam-se aqui; as intervenções descontam (IMEI gasto) e acrescentam (IMEI retomado) automaticamente."
+        subtitle={isAdmin ? 'Equipamentos em stock por IMEI. Receções e transferências registam-se aqui; as intervenções descontam (IMEI gasto) e acrescentam (IMEI retomado) automaticamente.' : 'Equipamentos em stock por armazém.'}
         actions={isAdmin && <StockActions warehouses={warehouses} equipment={equipment} />}
       />
 
@@ -93,6 +93,8 @@ export default async function StockPage({ searchParams }: Props) {
           </Link>
         ))}
       </div>
+      {/* detalhe (lista de IMEIs, movimentos, avisos) só para admin */}
+      {isAdmin && (<>
       {conflictOf(p.wh) > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 border border-fc-warning bg-fc-warning/10 px-4 py-3">
           <p className="flex items-center gap-2">
@@ -237,6 +239,7 @@ export default async function StockPage({ searchParams }: Props) {
           </Table>
         )}
       </Card>
+      </>)}
     </div>
   )
 }

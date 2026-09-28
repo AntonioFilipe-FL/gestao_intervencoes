@@ -1,5 +1,6 @@
 import { getStats } from '@/services/database'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { StackedByType } from '@/components/reports/StackedByType'
 import {
   Users,
   Wrench,
@@ -30,7 +31,7 @@ function StatsCard({ title, value, icon: Icon, description }: StatsCardProps) {
 }
 
 export default async function ReportsPage() {
-  const { totals, byMonth, byTech } = await getStats()
+  const { totals, byMonth, byTech, byEquipment, byClient } = await getStats()
   const maxMonth = Math.max(1, ...byMonth.map(r => r.count))
   const maxTech = Math.max(1, ...byTech.map(r => r.count))
 
@@ -39,7 +40,7 @@ export default async function ReportsPage() {
     <div className="mx-auto max-w-7xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">
       <div>
         <h1>Relatórios e estatísticas</h1>
-        <p className="fc-small text-fc-dark-60">Visão geral da operação e métricas de desempenho.</p>
+        <p className="fc-small text-fc-dark-60">Visão geral da operação e métricas de desempenho. Contam só intervenções técnicas: Assistência, Desinstalação, Instalação (incl. Try and Buy), Reinstalação, Troca de Viatura e Upgrade.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -108,6 +109,17 @@ export default async function ReportsPage() {
               {byTech.length === 0 && <p className="text-fc-dark-60">Sem dados.</p>}
             </div>
           </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle>Intervenções por equipamento (top 15, últimos 12 meses)</CardTitle></CardHeader>
+          <CardContent><StackedByType rows={byEquipment} /></CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>Intervenções por cliente (top 15, últimos 12 meses)</CardTitle></CardHeader>
+          <CardContent><StackedByType rows={byClient} /></CardContent>
         </Card>
       </div>
     </div>

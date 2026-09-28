@@ -45,7 +45,7 @@ export async function getStockTotals() {
 
 /** IMEIs em stock (com filtros) */
 export async function getStockItems(f: { warehouseId?: string; modality?: string; q?: string; installed?: boolean }) {
-  await requireUser()
+  await requireAdmin()
   const q = (f.q ?? '').replace(/\s/g, '')
   return sql<StockItem[]>`
     select c.imei, c.warehouse_id, w.name as warehouse, e.name as equipment, c.modality, c.moved_at::text, c.kind, d.model as hardware,
@@ -67,7 +67,7 @@ export async function getStockItems(f: { warehouseId?: string; modality?: string
 
 /** Últimos movimentos (opcionalmente de um IMEI) */
 export async function getMovements(imei?: string) {
-  await requireUser()
+  await requireAdmin()
   const v = (imei ?? '').replace(/\s/g, '')
   return sql<Movement[]>`
     select m.id, m.imei, m.kind, m.moved_at::text, wf.name as from_wh, wt.name as to_wh, e.name as equipment,

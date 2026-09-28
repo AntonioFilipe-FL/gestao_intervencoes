@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { getReferenceData } from '@/services/database'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SettingsTable } from '@/components/settings/SettingsTable'
@@ -17,6 +18,7 @@ export default async function SettingsPage({
   const params = await searchParams
   const data = await getReferenceData(false)
   const userIsAdmin = await isAdmin()
+  if (!userIsAdmin) redirect('/interventions')
 
   return (
     <div className="mx-auto max-w-7xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">

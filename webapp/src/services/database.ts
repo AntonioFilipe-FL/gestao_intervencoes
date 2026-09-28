@@ -134,28 +134,46 @@ export async function getReferenceData(activeOnly = true): Promise<ReferenceData
   } as unknown as ReferenceData
 }
 
+/** Tipos de intervenção contados nos relatórios (trabalho técnico; exclui logística como entradas/envios de material) */
+export const REPORT_TYPES = [
+  'Assistência', 'Desinstalação', 'Desinstalação Try and Buy', 'Instalação', 'Instalação - Try and Buy',
+  'Reinstalação', 'Troca De Viatura', 'Upgrade',
+]
+
 export async function getStats() {
   await requireUser()
+  const inTypes = sql`i.intervention_type_id in (select id from intervention_types where lower(btrim(name)) = any(${REPORT_TYPES.map(t => t.toLowerCase())}))`
   const [[totals], byMonth, byTech] = await Promise.all([
     sql<{ interventions: number; technicians: number; clients: number; months: number }[]>`
       select
-        (select count(*)::int from interventions) as interventions,
+        (select count(*)::int from interventions i where ${inTypes}) as interventions,
         (select count(*)::int from technicians where active) as technicians,
         (select count(*)::int from clients where active) as clients,
-        (select count(distinct date_trunc('month', intervention_date))::int from interventions) as months
+        (select count(distinct date_trunc('month', intervention_date))::int from interventions i where ${inTypes}) as months
     `,
     sql<{ month: string; count: number }[]>`
       select to_char(date_trunc('month', intervention_date), 'YYYY-MM') as month, count(*)::int as count
-      from interventions
-      where intervention_date >= date_trunc('month', current_date) - interval '11 months'
+      from interventions i
+      where ${inTypes} and intervention_date >= date_trunc('month', current_date) - interval '11 months'
       group by 1 order by 1
     `,
     sql<{ name: string; count: number }[]>`
       select coalesce(t.name, '(sem técnico)') as name, count(*)::int as count
       from interventions i left join technicians t on t.id = i.technician_id
-      where i.intervention_date >= current_date - interval '90 days'
+      where ${inTypes} and i.intervention_date >= current_date - interval '90 days'
       group by 1 order by 2 desc limit 10
     `,
   ])
-  return { totals, byMonth, byTech }
+  // Por equipamento (Equipamento Principal) e por cliente, últimos 12 meses, repartido por tipo
+  const byTypeOf = (dim: 'equipment' | 'client') => sql<{ name: string; type: string; count: number }[]>`
+    with base as (
+      select ${dim === 'equipment' ? sql`coalesce(e.name, '(sem equipamento)')` : sql`coalesce(c.name, '(sem cliente)')`} as name, t.name as type
+      from interventions i
+      join intervention_types t on t.id = i.intervention_type_id
+      ${dim === 'equipment' ? sql`left join equipment_list e on e.id = i.equipment_id` : sql`left join clients c on c.id = i.client_id`}
+      where ${inTypes} and i.intervention_date >= date_trunc('month', current_date) - interval '11 months'
+    ), top as (select name from base group by name order by count(*) desc limit 15)
+    select b.name, b.type, count(*)::int as count from base b join top using (name) group by b.name, b.type`
+  const [byEquipment, byClient] = await Promise.all([byTypeOf('equipment'), byTypeOf('client')])
+  return { totals, byMonth, byTech, byEquipment, byClient }
 }
