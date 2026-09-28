@@ -49,6 +49,8 @@ export const interventionSchema = z.object({
   // Material retomado (entrada)
   return_equipment_id: optionalId,
   return_equipment_imei: text,
+  /** o equipamento retomado entra em stock como Venda ou Aluguer */
+  return_modality: z.union([z.literal('Venda'), z.literal('Aluguer'), z.literal('')]).optional(),
   accessories_returned: z.array(accessoryLine).max(50).default([]),
 
   // Faturação

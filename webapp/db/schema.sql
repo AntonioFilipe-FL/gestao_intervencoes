@@ -316,3 +316,87 @@ create table if not exists hardware_map (
   updated_at   timestamptz not null default now(),
   updated_by   text
 );
+
+-- =============================================================================
+-- Stock de equipamentos (por IMEI)
+-- Cada movimento leva um IMEI de um armazém (from) para outro (to).
+-- from nulo = entra no stock (receção, retoma); to nulo = sai do stock (instalado numa intervenção).
+-- A posição atual de cada IMEI é o último movimento (view stock_current).
+-- =============================================================================
+create table if not exists stock_movements (
+  id                uuid primary key default gen_random_uuid(),
+  imei              text not null,
+  equipment_id      uuid references equipment_list(id),
+  kind              text not null check (kind in ('rececao', 'transferencia', 'intervencao_saida', 'intervencao_entrada', 'ajuste')),
+  from_warehouse_id uuid references warehouses(id),
+  to_warehouse_id   uuid references warehouses(id),
+  modality          text check (modality in ('Venda', 'Aluguer')),
+  intervention_id   uuid references interventions(id) on delete cascade,
+  moved_at          date not null default current_date,
+  notes             text,
+  created_by        text,
+  created_at        timestamptz not null default now(),
+  seq               bigserial
+);
+create index if not exists stock_movements_imei_idx on stock_movements (imei, moved_at desc, seq desc);
+create index if not exists stock_movements_interv_idx on stock_movements (intervention_id);
+
+alter table interventions add column if not exists return_modality text;
+
+create or replace view stock_current as
+select distinct on (m.imei)
+       m.imei, m.to_warehouse_id as warehouse_id, m.moved_at, m.kind, m.intervention_id,
+       coalesce(m.equipment_id, (select m2.equipment_id from stock_movements m2 where m2.imei = m.imei and m2.equipment_id is not null
+                                 order by m2.moved_at desc, m2.seq desc limit 1)) as equipment_id,
+       coalesce(m.modality, (select m3.modality from stock_movements m3 where m3.imei = m.imei and m3.modality is not null
+                             order by m3.moved_at desc, m3.seq desc limit 1)) as modality
+from stock_movements m
+order by m.imei, m.moved_at desc, m.seq desc;
+
+/** Normaliza texto de venda/aluguer */
+create or replace function gestao_interv.modality_of(v text) returns text language sql immutable as $$
+  select case when v ilike '%alug%' then 'Aluguer' when v ilike '%vend%' then 'Venda' else null end
+$$;
+
+/**
+ * Recria os movimentos de stock de uma intervenção:
+ *  - IMEI equipamento gasto + armazém de saída  → sai do armazém
+ *  - IMEI equipamento retomado + armazém de entrada → entra no armazém
+ */
+create or replace function gestao_interv.sync_intervention_stock(p_id uuid) returns void language plpgsql as $$
+declare i record;
+begin
+  delete from gestao_interv.stock_movements where intervention_id = p_id;
+  select * into i from gestao_interv.interventions where id = p_id;
+  if not found then return; end if;
+  if i.spent_equipment_imei ~ '^\s*[0-9]{8,20}\s*$' and i.stock_exit_warehouse_id is not null then
+    insert into gestao_interv.stock_movements (imei, equipment_id, kind, from_warehouse_id, to_warehouse_id, modality, intervention_id, moved_at, created_by)
+    values (btrim(i.spent_equipment_imei), i.spent_equipment_id, 'intervencao_saida', i.stock_exit_warehouse_id, null,
+            gestao_interv.modality_of(i.venda_aluguer), p_id, i.intervention_date, coalesce(i.updated_by, i.created_by));
+  end if;
+  if i.return_equipment_imei ~ '^\s*[0-9]{8,20}\s*$' and i.stock_entry_warehouse_id is not null then
+    insert into gestao_interv.stock_movements (imei, equipment_id, kind, from_warehouse_id, to_warehouse_id, modality, intervention_id, moved_at, created_by)
+    values (btrim(i.return_equipment_imei), i.return_equipment_id, 'intervencao_entrada', null, i.stock_entry_warehouse_id,
+            coalesce(i.return_modality, gestao_interv.modality_of(i.venda_aluguer)), p_id, i.intervention_date, coalesce(i.updated_by, i.created_by));
+  end if;
+end $$;
+
+/** Recalcula os movimentos de todas as intervenções (histórico). Devolve o nº de movimentos. */
+create or replace function gestao_interv.rebuild_intervention_stock() returns int language plpgsql as $$
+declare n int;
+begin
+  delete from gestao_interv.stock_movements where intervention_id is not null;
+  insert into gestao_interv.stock_movements (imei, equipment_id, kind, from_warehouse_id, to_warehouse_id, modality, intervention_id, moved_at, created_by, created_at)
+  select btrim(spent_equipment_imei), spent_equipment_id, 'intervencao_saida', stock_exit_warehouse_id, null,
+         gestao_interv.modality_of(venda_aluguer), id, intervention_date, coalesce(updated_by, created_by), created_at
+  from gestao_interv.interventions
+  where spent_equipment_imei ~ '^\s*[0-9]{8,20}\s*$' and stock_exit_warehouse_id is not null
+  union all
+  select btrim(return_equipment_imei), return_equipment_id, 'intervencao_entrada', null, stock_entry_warehouse_id,
+         coalesce(return_modality, gestao_interv.modality_of(venda_aluguer)), id, intervention_date, coalesce(updated_by, created_by), created_at
+  from gestao_interv.interventions
+  where return_equipment_imei ~ '^\s*[0-9]{8,20}\s*$' and stock_entry_warehouse_id is not null
+  order by 8, 10;
+  get diagnostics n = row_count;
+  return n;
+end $$;

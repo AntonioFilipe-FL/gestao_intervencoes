@@ -63,6 +63,7 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
       spent_equipment_id: '',
       return_equipment_id: '',
       return_equipment_imei: '',
+      return_modality: '',
       accessories_spent: [],
       accessories_returned: [],
     },
@@ -156,6 +157,8 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
     const client = referenceData.clients?.find((c) => c.id === clientId)
     if (client) {
       setValue('venda_aluguer', client.venda_aluguer || '')
+      const mod = /alug/i.test(client.venda_aluguer ?? '') ? 'Aluguer' : /vend/i.test(client.venda_aluguer ?? '') ? 'Venda' : ''
+      if (mod && !getValues('return_modality')) setValue('return_modality', mod)
       setValue('nos_vdf', client.nos_vdf || '')
       setValue('report_projeto', client.report_projeto_contrato || '')
     }
@@ -547,6 +550,27 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
               )}
             />
             {kitNote.returned && <p className="fc-small text-fc-dark-60">{kitNote.returned}</p>}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Entra em stock como</Label>
+            <Controller
+              name="return_modality"
+              control={control}
+              render={({ field }) => (
+                <SearchableSelect
+                  id="return_modality"
+                  options={[{ value: 'Venda', label: 'Venda' }, { value: 'Aluguer', label: 'Aluguer' }]}
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  placeholder="Venda / Aluguer"
+                />
+              )}
+            />
+            <p className="fc-small text-fc-dark-60">
+              Com IMEI e armazém de entrada preenchidos, o equipamento retomado entra no stock desse armazém.
+              O IMEI gasto sai do stock do armazém de saída.
+            </p>
           </div>
 
           <div className="space-y-1.5">

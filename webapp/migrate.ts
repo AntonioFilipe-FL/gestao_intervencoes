@@ -624,6 +624,8 @@ async function main() {
   if (!DRY_RUN && ok > 0) {
     const [{ n }] = await sql`select gestao_interv.backfill_material() as n`
     console.log(`Material gasto/retomado ligado às listas em ${n} registos`)
+    const [{ m }] = await sql`select gestao_interv.rebuild_intervention_stock() as m`
+    console.log(`Movimentos de stock recalculados a partir das intervenções: ${m}`)
   }
   if (db) await db.end()
   fs.writeFileSync(path.join(__dirname, 'migration_report.json'), JSON.stringify(report, null, 2), 'utf8')

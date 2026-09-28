@@ -40,6 +40,7 @@ export async function createIntervention(input: unknown) {
         ...returned.map(l => ({ intervention_id: row.id, direction: 'retomado', ...l })),
       ]
       if (lines.length) await tx`insert into intervention_accessories ${tx(lines)}`
+      await tx`select gestao_interv.sync_intervention_stock(${row.id})`
       return row.id as string
     })
 
@@ -52,6 +53,7 @@ export async function createIntervention(input: unknown) {
 
     revalidatePath('/interventions')
     revalidatePath('/reports')
+    revalidatePath('/stock')
     return { success: true as const, id, emailWarning }
   } catch (e) {
     console.error('Erro ao criar intervenção:', e)
@@ -83,6 +85,7 @@ export async function updateIntervention(id: string, input: unknown) {
         ...returned.map(l => ({ intervention_id: id, direction: 'retomado', ...l })),
       ]
       if (lines.length) await tx`insert into intervention_accessories ${tx(lines)}`
+      await tx`select gestao_interv.sync_intervention_stock(${id})`
       return prev as { billing: string | null; billing_notified_at: string | null }
     })
 
@@ -97,6 +100,7 @@ export async function updateIntervention(id: string, input: unknown) {
     revalidatePath('/interventions')
     revalidatePath(`/interventions/${id}`)
     revalidatePath('/reports')
+    revalidatePath('/stock')
     return { success: true as const, id, emailWarning }
   } catch (e) {
     console.error('Erro ao editar intervenção:', e)
