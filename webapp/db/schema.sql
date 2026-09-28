@@ -374,6 +374,11 @@ with b as (
   from gestao_interv.interventions i
 ), c as (
   select b.*,
+         -- tipos de logística: o IMEI da intervenção é o próprio material movimentado (entra/sai tal como está)
+         exists (select 1 from gestao_interv.intervention_types t where t.id = b.intervention_type_id
+                 and lower(btrim(t.name)) = any(array['envio de material', 'envio rma', 'entrada de material', 'entrada de rma',
+                   'entrega de material', 'entrega de material try and buy', 'recolha de material',
+                   'desinstalação try and buy', 'desinstalação', 'acerto de stock'])) as is_logistic,
          (stock_exit_warehouse_id is not null and stock_entry_warehouse_id is not null and rt is null
           and (sp is null or im is null or sp = im)) as is_transfer
   from b
@@ -387,10 +392,13 @@ select id, coalesce(sp, im), coalesce(spent_equipment_id, equipment_id), 'interv
        gestao_interv.modality_of(venda_aluguer), intervention_date, coalesce(updated_by, created_by), created_at, 1
 from c where not is_transfer and stock_exit_warehouse_id is not null and coalesce(sp, im) ~ '^[0-9]{8,20}$'
 union all
-select id, coalesce(rt, case when im is distinct from sp then im end), coalesce(return_equipment_id, equipment_id), 'intervencao_entrada', null, stock_entry_warehouse_id,
+select id, coalesce(rt, case when is_logistic then coalesce(sp, im) when im is distinct from sp then im end),
+       coalesce(return_equipment_id, case when is_logistic then spent_equipment_id end, equipment_id), 'intervencao_entrada', null, stock_entry_warehouse_id,
        coalesce(return_modality, gestao_interv.modality_of(venda_aluguer)), intervention_date, coalesce(updated_by, created_by), created_at, 2
 from c where not is_transfer and stock_entry_warehouse_id is not null
-  and coalesce(rt, case when im is distinct from sp then im end) ~ '^[0-9]{8,20}$';
+  -- numa intervenção de logística só com armazém de entrada, o material entra (não há saída)
+  and not (is_logistic and stock_exit_warehouse_id is not null)
+  and coalesce(rt, case when is_logistic then coalesce(sp, im) when im is distinct from sp then im end) ~ '^[0-9]{8,20}$';
 
 create or replace function gestao_interv.sync_intervention_stock(p_id uuid) returns void language plpgsql as $$
 begin
