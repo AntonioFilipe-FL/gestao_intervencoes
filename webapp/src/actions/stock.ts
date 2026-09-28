@@ -49,8 +49,8 @@ export async function getStockItems(f: { warehouseId?: string; modality?: string
   const q = (f.q ?? '').replace(/\s/g, '')
   return sql<StockItem[]>`
     select c.imei, c.warehouse_id, w.name as warehouse, e.name as equipment, c.modality, c.moved_at::text, c.kind, d.model as hardware,
-           case when d.active and nullif(btrim(d.license_plate), '') is not null then d.license_plate end as installed_plate,
-           case when d.active and nullif(btrim(d.license_plate), '') is not null then dc.name end as installed_client
+           case when d.active and nullif(btrim(d.license_plate), '') is not null and not gestao_interv.is_internal_account(d.intranet_account_id) then d.license_plate end as installed_plate,
+           case when d.active and nullif(btrim(d.license_plate), '') is not null and not gestao_interv.is_internal_account(d.intranet_account_id) then dc.name end as installed_client
     from stock_current c
     join warehouses w on w.id = c.warehouse_id
     left join equipment_list e on e.id = c.equipment_id
@@ -59,7 +59,7 @@ export async function getStockItems(f: { warehouseId?: string; modality?: string
     where true
       ${f.warehouseId ? sql`and c.warehouse_id = ${f.warehouseId}` : sql``}
       ${f.modality === 'Venda' || f.modality === 'Aluguer' ? sql`and c.modality = ${f.modality}` : f.modality === 'sem' ? sql`and c.modality is null` : sql``}
-      ${f.installed ? sql`and d.active and nullif(btrim(d.license_plate), '') is not null` : sql``}
+      ${f.installed ? sql`and d.active and nullif(btrim(d.license_plate), '') is not null and not gestao_interv.is_internal_account(d.intranet_account_id)` : sql``}
       ${q ? sql`and (c.imei like ${'%' + q + '%'} or e.name ilike ${'%' + q + '%'})` : sql``}
     order by w.name, e.name nulls last, c.imei
     limit 500`
@@ -172,6 +172,6 @@ export async function getInstalledConflicts() {
   return sql<{ warehouse_id: string; n: number }[]>`
     select c.warehouse_id, count(*)::int as n
     from stock_current c join devices d on d.imei = c.imei
-    where c.warehouse_id is not null and d.active and nullif(btrim(d.license_plate), '') is not null
+    where c.warehouse_id is not null and d.active and nullif(btrim(d.license_plate), '') is not null and not gestao_interv.is_internal_account(d.intranet_account_id)
     group by c.warehouse_id`
 }
