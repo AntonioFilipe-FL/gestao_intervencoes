@@ -212,7 +212,9 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
             intranet_device_id: pick(d, ['id', 'deviceId', 'Id']),
             intranet_account_id: acc,
             client_id: acc ? clientByAccount.get(acc) ?? null : null,
-            model: pick(d, ['hardware', 'hardwareName', 'deviceTypeName', 'deviceType.name', 'model', 'deviceModel', 'type', 'deviceType']),
+            // só o campo "hardware" da Intranet (ex.: "Teltonika FMC150-EU (QJIB0)"); outros campos genéricos
+            // (type, deviceType…) traziam valores que não são hardware. Valores só numéricos são ignorados.
+            model: ((h) => (h && !/^\d+$/.test(h) ? h : null))(pick(d, ['hardware', 'hardwareName'])),
             license_plate: pick(d, ['licensePlate', 'vehicleLicensePlate', 'vehicle.licensePlate', 'plate', 'vehiclePlate']),
           }
         })
