@@ -31,7 +31,7 @@ function StatsCard({ title, value, icon: Icon, description }: StatsCardProps) {
 }
 
 export default async function ReportsPage() {
-  const { totals, byMonth, byTech, byEquipment, byClient } = await getStats()
+  const { totals, byMonth, byTech, byEquipment, byClient, byMonthType } = await getStats()
   const maxMonth = Math.max(1, ...byMonth.map(r => r.count))
   const maxTech = Math.max(1, ...byTech.map(r => r.count))
 
@@ -111,6 +111,11 @@ export default async function ReportsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader><CardTitle>Intervenções por tipo e mês (últimos 12 meses)</CardTitle></CardHeader>
+        <CardContent><StackedByType rows={byMonthType} keepOrder label={monthLabel} table /></CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Card>

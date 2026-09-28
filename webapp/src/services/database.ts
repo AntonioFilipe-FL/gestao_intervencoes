@@ -174,6 +174,14 @@ export async function getStats() {
       where ${inTypes} and i.intervention_date >= date_trunc('month', current_date) - interval '11 months'
     ), top as (select name from base group by name order by count(*) desc limit 15)
     select b.name, b.type, count(*)::int as count from base b join top using (name) group by b.name, b.type`
-  const [byEquipment, byClient] = await Promise.all([byTypeOf('equipment'), byTypeOf('client')])
-  return { totals, byMonth, byTech, byEquipment, byClient }
+  const [byEquipment, byClient, byMonthType] = await Promise.all([
+    byTypeOf('equipment'),
+    byTypeOf('client'),
+    sql<{ name: string; type: string; count: number }[]>`
+      select to_char(date_trunc('month', i.intervention_date), 'YYYY-MM') as name, t.name as type, count(*)::int as count
+      from interventions i join intervention_types t on t.id = i.intervention_type_id
+      where ${inTypes} and i.intervention_date >= date_trunc('month', current_date) - interval '11 months'
+      group by 1, 2 order by 1`,
+  ])
+  return { totals, byMonth, byTech, byEquipment, byClient, byMonthType }
 }
