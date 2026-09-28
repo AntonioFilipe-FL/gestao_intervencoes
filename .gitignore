@@ -28,3 +28,7 @@ Thumbs.db
 # Project specific
 webapp/next-env.d.ts
 *.tsbuildinfo
+
+# ficheiros exportados da Google Sheet (dados de clientes)
+*.csv
+*.xlsx
