@@ -140,7 +140,7 @@ export const REPORT_TYPES = [
   'Reinstalação', 'Troca De Viatura', 'Upgrade',
 ]
 
-export async function getStats() {
+export async function getStats(f: { equipmentType?: string; clientType?: string } = {}) {
   await requireUser()
   const inTypes = sql`i.intervention_type_id in (select id from intervention_types where lower(btrim(name)) = any(${REPORT_TYPES.map(t => t.toLowerCase())}))`
   const [[totals], byMonth, byTech] = await Promise.all([
@@ -165,18 +165,19 @@ export async function getStats() {
     `,
   ])
   // Por equipamento (Equipamento Principal) e por cliente, últimos 12 meses, repartido por tipo
-  const byTypeOf = (dim: 'equipment' | 'client') => sql<{ name: string; type: string; count: number }[]>`
+  const byTypeOf = (dim: 'equipment' | 'client', onlyType?: string) => sql<{ name: string; type: string; count: number }[]>`
     with base as (
       select ${dim === 'equipment' ? sql`coalesce(e.name, '(sem equipamento)')` : sql`coalesce(c.name, '(sem cliente)')`} as name, t.name as type
       from interventions i
       join intervention_types t on t.id = i.intervention_type_id
       ${dim === 'equipment' ? sql`left join equipment_list e on e.id = i.equipment_id` : sql`left join clients c on c.id = i.client_id`}
       where ${inTypes} and i.intervention_date >= date_trunc('month', current_date) - interval '11 months'
+        ${onlyType ? sql`and lower(t.name) = lower(${onlyType})` : sql``}
     ), top as (select name from base group by name order by count(*) desc limit 15)
     select b.name, b.type, count(*)::int as count from base b join top using (name) group by b.name, b.type`
   const [byEquipment, byClient, byMonthType] = await Promise.all([
-    byTypeOf('equipment'),
-    byTypeOf('client'),
+    byTypeOf('equipment', f.equipmentType),
+    byTypeOf('client', f.clientType),
     sql<{ name: string; type: string; count: number }[]>`
       select to_char(date_trunc('month', i.intervention_date), 'YYYY-MM') as name, t.name as type, count(*)::int as count
       from interventions i join intervention_types t on t.id = i.intervention_type_id

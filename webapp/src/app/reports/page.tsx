@@ -1,4 +1,6 @@
-import { getStats } from '@/services/database'
+import Link from 'next/link'
+import { getStats, REPORT_TYPES } from '@/services/database'
+import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StackedByType } from '@/components/reports/StackedByType'
 import {
@@ -30,8 +32,38 @@ function StatsCard({ title, value, icon: Icon, description }: StatsCardProps) {
   )
 }
 
-export default async function ReportsPage() {
-  const { totals, byMonth, byTech, byEquipment, byClient, byMonthType } = await getStats()
+interface Props {
+  searchParams: Promise<{ etipo?: string; ctipo?: string }>
+}
+
+export default async function ReportsPage({ searchParams }: Props) {
+  const p = await searchParams
+  const valid = (t?: string) => (t && REPORT_TYPES.some((r) => r.toLowerCase() === t.toLowerCase()) ? t : undefined)
+  const etipo = valid(p.etipo), ctipo = valid(p.ctipo)
+  const { totals, byMonth, byTech, byEquipment, byClient, byMonthType } = await getStats({ equipmentType: etipo, clientType: ctipo })
+  const href = (q: { etipo?: string; ctipo?: string }) => {
+    const s = new URLSearchParams(Object.entries({ etipo, ctipo, ...q }).filter(([, v]) => v) as [string, string][])
+    return `/reports${s.size ? `?${s}` : ''}#${'etipo' in q ? 'por-equipamento' : 'por-cliente'}`
+  }
+  const TypeFilter = ({ k, current }: { k: 'etipo' | 'ctipo'; current?: string }) => (
+    <div className="flex flex-wrap gap-1.5">
+      {[undefined, ...REPORT_TYPES].map((t) => (
+        <Link
+          key={t ?? 'todos'}
+          href={href({ [k]: t })}
+          scroll={false}
+          className={cn(
+            'rounded-[2px] border px-2 py-0.5 text-[11px] uppercase',
+            (current ?? '').toLowerCase() === (t ?? '').toLowerCase()
+              ? 'border-fc-dark-100 bg-fc-dark-100 text-white'
+              : 'border-fc-dark-20 text-fc-dark-60 hover:border-fc-dark-60'
+          )}
+        >
+          {t ?? 'Todos os tipos'}
+        </Link>
+      ))}
+    </div>
+  )
   const maxMonth = Math.max(1, ...byMonth.map(r => r.count))
   const maxTech = Math.max(1, ...byTech.map(r => r.count))
 
@@ -118,13 +150,13 @@ export default async function ReportsPage() {
       </Card>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <Card>
-          <CardHeader><CardTitle>Intervenções por equipamento (top 15, últimos 12 meses)</CardTitle></CardHeader>
-          <CardContent><StackedByType rows={byEquipment} /></CardContent>
+        <Card id="por-equipamento">
+          <CardHeader><CardTitle>Intervenções por equipamento (top 15, últimos 12 meses){etipo ? ` · ${etipo}` : ''}</CardTitle></CardHeader>
+          <CardContent className="space-y-4"><TypeFilter k="etipo" current={etipo} /><StackedByType rows={byEquipment} /></CardContent>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>Intervenções por cliente (top 15, últimos 12 meses)</CardTitle></CardHeader>
-          <CardContent><StackedByType rows={byClient} /></CardContent>
+        <Card id="por-cliente">
+          <CardHeader><CardTitle>Intervenções por cliente (top 15, últimos 12 meses){ctipo ? ` · ${ctipo}` : ''}</CardTitle></CardHeader>
+          <CardContent className="space-y-4"><TypeFilter k="ctipo" current={ctipo} /><StackedByType rows={byClient} /></CardContent>
         </Card>
       </div>
     </div>
