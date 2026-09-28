@@ -73,7 +73,12 @@ export function HardwareMapping({ rows, equipment }: { rows: HardwareRow[]; equi
             </div>
             {list.map((r, i) => (
               <div key={r.hardware} className={cn('grid grid-cols-[minmax(0,2fr)_5rem_minmax(0,2fr)] items-center gap-3 border-t border-fc-dark-10 px-4 py-1.5', i % 2 === 0 && 'bg-fc-grey-80')}>
-                <span className="truncate">{r.hardware}</span>
+                <div className="min-w-0">
+                  <p className="truncate">{r.hardware}</p>
+                  <p className="fc-small text-fc-dark-60">
+                    ex.: IMEI {r.sample_imei} · sincronizado {new Date(r.synced_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' })}
+                  </p>
+                </div>
                 <span className="text-right tabular-nums text-fc-dark-60">{r.devices.toLocaleString('pt-PT')}</span>
                 <div className="min-w-0 space-y-0.5">
                   <SearchableSelect

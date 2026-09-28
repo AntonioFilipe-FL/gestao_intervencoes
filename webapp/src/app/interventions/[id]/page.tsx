@@ -8,6 +8,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import Link from 'next/link'
 import { ArrowLeft, Pencil } from 'lucide-react'
+import { LinkText } from '@/components/ui/link-text'
 
 const fmtDate = (d: string | null) => (d ? d.split('-').reverse().join('/') : null)
 
@@ -191,9 +192,10 @@ export default async function InterventionDetailsPage({ params }: Props) {
               <CardTitle>CRM e Documentos</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <DetailItem label="Viatura CRM" value={intervention.crm_vehicle} />
-              <DetailItem label="Contrato / Adenda" value={intervention.contract_addendum} />
-              <DetailItem label="Formulário Zoho" value={intervention.zoho_form} />
+              <DetailItem label="Report / Projeto" value={intervention.report_projeto && <LinkText value={intervention.report_projeto} />} />
+              <DetailItem label="Viatura CRM" value={intervention.crm_vehicle && <LinkText value={intervention.crm_vehicle} />} />
+              <DetailItem label="Contrato / Adenda" value={intervention.contract_addendum && <LinkText value={intervention.contract_addendum} />} />
+              <DetailItem label="Formulário Zoho" value={intervention.zoho_form && <LinkText value={intervention.zoho_form} />} />
             </CardContent>
           </Card>
         </div>

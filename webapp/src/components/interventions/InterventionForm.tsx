@@ -17,6 +17,7 @@ import { PlateField } from '@/components/interventions/PlateField'
 import type { ClientOption } from '@/lib/intranet'
 import { getPlateImeis, type PlateImeis } from '@/actions/intranet'
 import { matchEquipment } from '@/lib/hardware'
+import { firstUrl } from '@/components/ui/link-text'
 
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
@@ -105,6 +106,15 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
   }
 
   const selectedClientId = watch('client_id')
+  /** link "Abrir" por baixo de campos que guardam links */
+  const OpenLink = ({ name }: { name: 'report_projeto' | 'crm_vehicle' | 'contract_addendum' | 'zoho_form' }) => {
+    const url = firstUrl(watch(name))
+    return url ? (
+      <a href={url} target="_blank" rel="noopener noreferrer" className="fc-small inline-block text-fc-light-100 underline hover:text-fc-light-60">
+        Abrir link ↗
+      </a>
+    ) : null
+  }
   const plate = watch('license_plate')
   const [plateImeis, setPlateImeis] = useState<PlateImeis | null>(null)
   // ao editar, a matrícula já gravada não volta a preencher os IMEIs (só se for alterada)
@@ -274,6 +284,7 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
           <div className="space-y-1.5">
             <Label htmlFor="report_projeto">Report / Projeto</Label>
             <Input id="report_projeto" {...register('report_projeto')} readOnly className="bg-fc-grey-100 text-fc-dark-60" />
+              <OpenLink name="report_projeto" />
           </div>
         </CardContent>
       </Card>
@@ -703,14 +714,17 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
             <div className="space-y-1.5">
               <Label htmlFor="crm_vehicle">Viatura CRM</Label>
               <Input id="crm_vehicle" {...register('crm_vehicle')} />
+              <OpenLink name="crm_vehicle" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="contract_addendum">Contrato / Adenda</Label>
               <Input id="contract_addendum" {...register('contract_addendum')} />
+              <OpenLink name="contract_addendum" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="zoho_form">Formulário Zoho</Label>
               <Input id="zoho_form" {...register('zoho_form')} />
+              <OpenLink name="zoho_form" />
             </div>
           </div>
         </CardContent>

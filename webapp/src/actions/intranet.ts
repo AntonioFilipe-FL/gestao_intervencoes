@@ -165,13 +165,14 @@ export async function getPlateImeis(plate: string): Promise<PlateImeis> {
   return { current: cur ? { imei: cur.imei, model: cur.model, client_name: cur.client_name } : null, previous }
 }
 
-export type HardwareRow = { hardware: string; devices: number; equipment_id: string | null }
+export type HardwareRow = { hardware: string; devices: number; equipment_id: string | null; sample_imei: string; synced_at: string }
 
 /** Hardware distinto que veio da Intranet, com nº de equipamentos e a correspondência manual (se houver) */
 export async function getHardwareList(): Promise<HardwareRow[]> {
   await requireAdmin()
   return sql<HardwareRow[]>`
-    select d.model as hardware, count(*)::int as devices, m.equipment_id
+    select d.model as hardware, count(*)::int as devices, m.equipment_id,
+           min(d.imei) as sample_imei, max(d.synced_at)::text as synced_at
     from devices d left join hardware_map m on m.hardware = d.model
     where d.active and d.model is not null
     group by d.model, m.equipment_id order by count(*) desc, d.model`
