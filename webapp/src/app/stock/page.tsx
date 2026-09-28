@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { sql } from '@/lib/db'
 import { requireUser } from '@/lib/auth'
-import { getMovements, getStockItems, getStockTotals } from '@/actions/stock'
+import { getInstalledConflicts, getMovements, getStockItems, getStockTotals } from '@/actions/stock'
+import { AlertTriangle } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -14,7 +15,7 @@ import { MovementDelete } from '@/components/stock/MovementDelete'
 import { cn } from '@/lib/utils'
 
 interface Props {
-  searchParams: Promise<{ wh?: string; mod?: string; q?: string; imei?: string }>
+  searchParams: Promise<{ wh?: string; mod?: string; q?: string; imei?: string; inst?: string }>
 }
 
 const fmtDate = (d: string) => d.slice(0, 10).split('-').reverse().join('/')
@@ -31,17 +32,19 @@ export default async function StockPage({ searchParams }: Props) {
   const p = await searchParams
   const user = await requireUser()
   const isAdmin = user.role === 'admin'
-  const [{ byWarehouse, byModel }, items, movements, warehouses, equipment] = await Promise.all([
+  const [{ byWarehouse, byModel }, items, movements, warehouses, equipment, conflicts] = await Promise.all([
     getStockTotals(),
-    getStockItems({ warehouseId: p.wh, modality: p.mod, q: p.q }),
+    getStockItems({ warehouseId: p.wh, modality: p.mod, q: p.q, installed: p.inst === '1' }),
     getMovements(p.imei),
     sql<{ id: string; name: string }[]>`select id, name from warehouses where active order by name`,
     sql<{ id: string; name: string }[]>`select id, name from equipment_list where active order by name`,
+    getInstalledConflicts(),
   ])
+  const conflictOf = (wh?: string) => conflicts.filter((c) => !wh || c.warehouse_id === wh).reduce((a, c) => a + c.n, 0)
 
   const total = byWarehouse.reduce((a, w) => ({ venda: a.venda + w.venda, aluguer: a.aluguer + w.aluguer, sem: a.sem + w.sem, total: a.total + w.total }), { venda: 0, aluguer: 0, sem: 0, total: 0 })
   const href = (q: Record<string, string | undefined>) => {
-    const s = new URLSearchParams(Object.entries({ wh: p.wh, mod: p.mod, q: p.q, ...q }).filter(([, v]) => v) as [string, string][])
+    const s = new URLSearchParams(Object.entries({ wh: p.wh, mod: p.mod, q: p.q, inst: p.inst, ...q }).filter(([, v]) => v) as [string, string][])
     return `/stock${s.size ? `?${s}` : ''}`
   }
   const selectedWh = byWarehouse.find((w) => w.warehouse_id === p.wh)
@@ -83,16 +86,30 @@ export default async function StockPage({ searchParams }: Props) {
                   <Badge variant="info">Venda {n(w.venda)}</Badge>
                   <Badge variant="secondary">Aluguer {n(w.aluguer)}</Badge>
                   {w.sem > 0 && <Badge variant="secondary">Sem modalidade {n(w.sem)}</Badge>}
+                  {conflictOf(w.warehouse_id) > 0 && <Badge variant="warning">Instalados na Intranet {n(conflictOf(w.warehouse_id))}</Badge>}
                 </div>
               </CardContent>
             </Card>
           </Link>
         ))}
       </div>
+      {conflictOf(p.wh) > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border border-fc-warning bg-fc-warning/10 px-4 py-3">
+          <p className="flex items-center gap-2">
+            <AlertTriangle className="size-4 text-[#c7830b]" />
+            <span>
+              <b>{n(conflictOf(p.wh))} IMEI(s)</b> aparecem em stock{p.wh ? ' neste armazém' : ''}, mas a Intranet mostra-os <b>instalados numa viatura</b>.
+              Provavelmente falta registar a instalação (ou a Intranet está desatualizada).
+            </span>
+          </p>
+          <Link href={href({ inst: p.inst === '1' ? undefined : '1' })} className={buttonVariants({ variant: p.inst === '1' ? 'secondary' : 'inverse', size: 'sm' })}>
+            {p.inst === '1' ? 'Mostrar todos' : 'Ver só estes'}
+          </Link>
+        </div>
+      )}
       {byWarehouse.length === 0 && (
         <Card><CardContent className="py-8 text-center text-fc-dark-60">
-          Ainda não há equipamentos em stock. Registe o stock atual com <b>Receção</b> (pode colar a lista de IMEIs de cada armazém).
-          As intervenções importadas da Sheet só têm IMEI no material gasto, por isso servem apenas para descontar.
+          Ainda não há equipamentos em stock. O stock é calculado a partir das intervenções (armazém de saída/entrada) e das receções e transferências registadas aqui.
         </CardContent></Card>
       )}
 
@@ -126,6 +143,7 @@ export default async function StockPage({ searchParams }: Props) {
         <CardContent className="pb-3">
           <form className="flex flex-wrap items-end gap-3">
             {p.wh && <input type="hidden" name="wh" value={p.wh} />}
+            {p.inst && <input type="hidden" name="inst" value={p.inst} />}
             <div className="space-y-1.5">
               <Label htmlFor="q">IMEI / equipamento</Label>
               <Input id="q" name="q" defaultValue={p.q} placeholder="Pesquisar" className="w-64" />
@@ -146,7 +164,7 @@ export default async function StockPage({ searchParams }: Props) {
           <Table>
             <TableHeader><TableRow>
               <TableHead>IMEI</TableHead><TableHead>Equipamento</TableHead><TableHead>Armazém</TableHead>
-              <TableHead>Modalidade</TableHead><TableHead>Desde</TableHead><TableHead>Último movimento</TableHead>
+              <TableHead>Modalidade</TableHead><TableHead>Desde</TableHead><TableHead>Último movimento</TableHead><TableHead>Na Intranet</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {items.map((i) => (
@@ -157,6 +175,13 @@ export default async function StockPage({ searchParams }: Props) {
                   <TableCell>{i.modality ?? '—'}</TableCell>
                   <TableCell>{fmtDate(i.moved_at)}</TableCell>
                   <TableCell className="text-fc-dark-60">{KIND[i.kind] ?? i.kind}</TableCell>
+                  <TableCell>
+                    {i.installed_plate ? (
+                      <span className="flex items-center gap-1 text-[#c7830b]" title="A Intranet mostra este IMEI instalado">
+                        <AlertTriangle className="size-3.5" /> {i.installed_plate}{i.installed_client ? ` · ${i.installed_client}` : ''}
+                      </span>
+                    ) : <span className="text-fc-dark-40">—</span>}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

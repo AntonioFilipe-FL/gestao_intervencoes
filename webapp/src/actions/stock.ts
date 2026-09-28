@@ -10,6 +10,8 @@ export type ModelTotal = { warehouse_id: string; equipment: string; venda: numbe
 export type StockItem = {
   imei: string; warehouse_id: string; warehouse: string; equipment: string | null; modality: string | null
   moved_at: string; kind: string; hardware: string | null
+  /** a Intranet mostra este IMEI instalado numa viatura (matrícula) */
+  installed_plate: string | null; installed_client: string | null
 }
 export type Movement = {
   id: string; imei: string; kind: string; moved_at: string; from_wh: string | null; to_wh: string | null
@@ -42,18 +44,22 @@ export async function getStockTotals() {
 }
 
 /** IMEIs em stock (com filtros) */
-export async function getStockItems(f: { warehouseId?: string; modality?: string; q?: string }) {
+export async function getStockItems(f: { warehouseId?: string; modality?: string; q?: string; installed?: boolean }) {
   await requireUser()
   const q = (f.q ?? '').replace(/\s/g, '')
   return sql<StockItem[]>`
-    select c.imei, c.warehouse_id, w.name as warehouse, e.name as equipment, c.modality, c.moved_at::text, c.kind, d.model as hardware
+    select c.imei, c.warehouse_id, w.name as warehouse, e.name as equipment, c.modality, c.moved_at::text, c.kind, d.model as hardware,
+           case when d.active and nullif(btrim(d.license_plate), '') is not null then d.license_plate end as installed_plate,
+           case when d.active and nullif(btrim(d.license_plate), '') is not null then dc.name end as installed_client
     from stock_current c
     join warehouses w on w.id = c.warehouse_id
     left join equipment_list e on e.id = c.equipment_id
     left join devices d on d.imei = c.imei
+    left join clients dc on dc.id = d.client_id
     where true
       ${f.warehouseId ? sql`and c.warehouse_id = ${f.warehouseId}` : sql``}
       ${f.modality === 'Venda' || f.modality === 'Aluguer' ? sql`and c.modality = ${f.modality}` : f.modality === 'sem' ? sql`and c.modality is null` : sql``}
+      ${f.installed ? sql`and d.active and nullif(btrim(d.license_plate), '') is not null` : sql``}
       ${q ? sql`and (c.imei like ${'%' + q + '%'} or e.name ilike ${'%' + q + '%'})` : sql``}
     order by w.name, e.name nulls last, c.imei
     limit 500`
@@ -158,4 +164,14 @@ export async function deleteMovement(id: string) {
   } catch (e) {
     return { ok: false as const, error: (e as Error).message }
   }
+}
+
+/** Nº de IMEIs em stock que a Intranet mostra instalados numa viatura, por armazém */
+export async function getInstalledConflicts() {
+  await requireUser()
+  return sql<{ warehouse_id: string; n: number }[]>`
+    select c.warehouse_id, count(*)::int as n
+    from stock_current c join devices d on d.imei = c.imei
+    where c.warehouse_id is not null and d.active and nullif(btrim(d.license_plate), '') is not null
+    group by c.warehouse_id`
 }
