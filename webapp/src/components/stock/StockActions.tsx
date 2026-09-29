@@ -17,13 +17,15 @@ const countImeis = (t: string) => new Set(t.split(/[\s,;]+/).filter(Boolean)).si
 const MOD = [{ value: 'Venda', label: 'Venda' }, { value: 'Aluguer', label: 'Aluguer' }]
 
 /** Botões "Receção" e "Transferência" do ecrã de stock (só admin) */
-export function StockActions({ warehouses, equipment }: { warehouses: Opt[]; equipment: Opt[] }) {
+export function StockActions({ warehouses, originWarehouses, equipment }: { warehouses: Opt[]; originWarehouses?: Opt[]; equipment: Opt[] }) {
   const router = useRouter()
   const [busy, start] = useTransition()
   const [open, setOpen] = useState<'rececao' | 'transferencia' | null>(null)
   const [f, setF] = useState({ from: '', to: '', modality: '', equipment: '', imeis: '', date: today(), notes: '' })
   const [msg, setMsg] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null)
   const whOpts = warehouses.map((w) => ({ value: w.id, label: w.name }))
+  // a origem da transferência pode ser o "Instalado Aluguer (Mobilizado)" (retornos de clientes)
+  const fromOpts = (originWarehouses ?? warehouses).map((w) => ({ value: w.id, label: w.name }))
   const eqOpts = equipment.map((e) => ({ value: e.id, label: e.name }))
   const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }))
 
@@ -63,13 +65,13 @@ export function StockActions({ warehouses, equipment }: { warehouses: Opt[]; equ
                 Material que chega (compra, fornecedor ou contagem de stock inicial). Os IMEIs ficam em stock no armazém escolhido.
               </p>
             ) : (
-              <p className="fc-small text-fc-dark-60">Os IMEIs têm de estar em stock no armazém de origem.</p>
+              <p className="fc-small text-fc-dark-60">Os IMEIs têm de estar no armazém de origem. Para um retorno de aluguer (ex.: Proef), escolha como origem &ldquo;Instalado Aluguer (Mobilizado)&rdquo;.</p>
             )}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {open === 'transferencia' && (
                 <div className="space-y-1.5">
                   <Label>Armazém de origem *</Label>
-                  <SearchableSelect options={whOpts} value={f.from} onChange={set('from')} placeholder="Origem" />
+                  <SearchableSelect options={fromOpts} value={f.from} onChange={set('from')} placeholder="Origem" />
                 </div>
               )}
               <div className="space-y-1.5">

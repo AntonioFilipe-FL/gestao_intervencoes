@@ -33,14 +33,15 @@ export default async function StockPage({ searchParams }: Props) {
   const p = await searchParams
   const user = await requireUser()
   const isAdmin = user.role === 'admin'
-  const [{ byWarehouse, byModel }, items, movements, warehouses, equipment, conflicts] = await Promise.all([
+  const [{ byWarehouse, byModel }, items, movements, allWarehouses, equipment, conflicts] = await Promise.all([
     getStockTotals(),
     isAdmin ? getStockItems({ warehouseId: p.wh, modality: p.mod, q: p.q, installed: p.inst === '1' }) : Promise.resolve([]),
     isAdmin ? getMovements(p.imei) : Promise.resolve([]),
-    sql<{ id: string; name: string }[]>`select id, name from warehouses where active and type <> 'mobilizado' order by name`,
+    sql<{ id: string; name: string; type: string }[]>`select id, name, type from warehouses where active order by name`,
     sql<{ id: string; name: string }[]>`select id, name from equipment_list where active order by name`,
     getInstalledConflicts(),
   ])
+  const warehouses = allWarehouses.filter((w) => w.type !== 'mobilizado')
   const conflictOf = (wh?: string) => conflicts.filter((c) => !wh || c.warehouse_id === wh).reduce((a, c) => a + c.n, 0)
 
   const total = byWarehouse.filter((w) => !w.mobilized).reduce((a, w) => ({ venda: a.venda + w.venda, aluguer: a.aluguer + w.aluguer, sem: a.sem + w.sem, total: a.total + w.total }), { venda: 0, aluguer: 0, sem: 0, total: 0 })
@@ -69,7 +70,7 @@ export default async function StockPage({ searchParams }: Props) {
             <a href={`/stock/export${p.wh ? `?wh=${p.wh}` : ''}`} className={buttonVariants({ size: 'lg', variant: 'inverse' })}>
               <FileSpreadsheet /> Exportar Excel{selectedWhName ? ` (${selectedWhName})` : ''}
             </a>
-            <StockActions warehouses={warehouses} equipment={equipment} />
+            <StockActions warehouses={warehouses} originWarehouses={allWarehouses} equipment={equipment} />
           </>
         )}
       />
