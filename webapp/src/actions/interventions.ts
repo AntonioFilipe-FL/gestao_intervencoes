@@ -125,3 +125,20 @@ export async function resendBillingEmail(id: string) {
   revalidatePath(`/interventions/${id}`)
   return r
 }
+
+/** Elimina uma intervenção (só admin). Apaga também os acessórios e os movimentos de stock dela. */
+export async function deleteIntervention(id: string) {
+  try {
+    const user = await requireAdmin()
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return { success: false as const, error: 'Registo inválido.' }
+    const [row] = await sql`delete from interventions where id = ${id} returning id, intervention_date::text, license_plate`
+    if (!row) return { success: false as const, error: 'Registo não encontrado.' }
+    console.log(`Intervenção ${id} (${row.intervention_date} ${row.license_plate ?? ''}) eliminada por ${user.email}`)
+    revalidatePath('/interventions')
+    revalidatePath('/reports')
+    revalidatePath('/stock')
+    return { success: true as const }
+  } catch (e) {
+    return { success: false as const, error: (e as Error).message }
+  }
+}

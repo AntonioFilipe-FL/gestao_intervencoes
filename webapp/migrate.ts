@@ -215,7 +215,9 @@ async function main() {
   const extra = header.filter(k => k && !EXPECTED_HEADER.includes(k) && !OPTIONAL_HEADER.includes(k))
   if (extra.length) console.warn(`Aviso: colunas novas na Sheet que não são importadas: ${extra.join(', ')}`)
   // Ano e Mês são fórmulas na Sheet: linhas só com essas duas colunas estão vazias
-  const rows = rowsRaw.filter(r => r.slice(2).some(c => c && c.trim()))
+  // Ano e Mês são fórmulas; linhas só com Ano/Mês/Data (sem mais nenhum dado) estão vazias e não são importadas
+  const dateCol = header.indexOf('dataintervencao')
+  const rows = rowsRaw.filter(r => r.some((c, i) => i > 1 && i !== dateCol && c && c.trim()))
   console.log(`Linhas na folha principal: ${rows.length}`)
 
   const listCol = (name: string) => {

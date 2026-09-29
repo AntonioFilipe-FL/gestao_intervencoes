@@ -1,6 +1,7 @@
 import { getInterventionById } from '@/services/database'
 import { requireUser } from '@/lib/auth'
 import { BillingEmailStatus } from '@/components/interventions/BillingEmailStatus'
+import { DeleteIntervention } from '@/components/interventions/DeleteIntervention'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -73,9 +74,16 @@ export default async function InterventionDetailsPage({ params }: Props) {
           </div>
         </div>
         {user.role === 'admin' && (
-          <Link href={`/interventions/${intervention.id}/edit`} className={buttonVariants({ size: 'lg' })}>
-            <Pencil /> Editar
-          </Link>
+          <div className="flex gap-2">
+            <DeleteIntervention
+              id={intervention.id}
+              label={[fmtDate(intervention.intervention_date), intervention.client?.name, intervention.license_plate].filter(Boolean).join(' · ')}
+              emailSent={!!intervention.billing_notified_at}
+            />
+            <Link href={`/interventions/${intervention.id}/edit`} className={buttonVariants({ size: 'lg' })}>
+              <Pencil /> Editar
+            </Link>
+          </div>
         )}
       </div>
 
