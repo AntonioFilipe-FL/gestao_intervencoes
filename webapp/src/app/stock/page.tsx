@@ -45,7 +45,7 @@ export default async function StockPage({ searchParams }: Props) {
 
   const total = byWarehouse.reduce((a, w) => ({ venda: a.venda + w.venda, aluguer: a.aluguer + w.aluguer, sem: a.sem + w.sem, total: a.total + w.total }), { venda: 0, aluguer: 0, sem: 0, total: 0 })
   const href = (q: Record<string, string | undefined>) => {
-    const s = new URLSearchParams(Object.entries({ wh: p.wh, mod: p.mod, q: p.q, inst: p.inst, ...q }).filter(([, v]) => v) as [string, string][])
+    const s = new URLSearchParams(Object.entries({ wh: p.wh, mod: p.mod, q: p.q, inst: p.inst, imei: p.imei, ...q }).filter(([, v]) => v) as [string, string][])
     return `/stock${s.size ? `?${s}` : ''}`
   }
   const selectedWh = byWarehouse.find((w) => w.warehouse_id === p.wh)
@@ -59,7 +59,7 @@ export default async function StockPage({ searchParams }: Props) {
   ).sort((a, b) => b.total - a.total)
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-screen-2xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
         title="Stock material"
         subtitle={isAdmin ? 'Equipamentos em stock por IMEI. Receções e transferências registam-se aqui; as intervenções descontam (IMEI gasto) e acrescentam (IMEI retomado) automaticamente.' : 'Equipamentos em stock por armazém.'}
@@ -150,6 +150,7 @@ export default async function StockPage({ searchParams }: Props) {
           <form className="flex flex-wrap items-end gap-3">
             {p.wh && <input type="hidden" name="wh" value={p.wh} />}
             {p.inst && <input type="hidden" name="inst" value={p.inst} />}
+            {p.imei && <input type="hidden" name="imei" value={p.imei} />}
             <div className="space-y-1.5">
               <Label htmlFor="q">IMEI / equipamento</Label>
               <Input id="q" name="q" defaultValue={p.q} placeholder="Pesquisar" className="w-64" />
@@ -175,7 +176,7 @@ export default async function StockPage({ searchParams }: Props) {
             <TableBody>
               {items.map((i) => (
                 <TableRow key={i.imei}>
-                  <TableCell className="font-mono text-[12px]"><Link href={`/stock?imei=${i.imei}#movimentos`} className="text-fc-light-100 hover:text-fc-light-60">{i.imei}</Link></TableCell>
+                  <TableCell className="font-mono text-[12px]"><Link href={`${href({ imei: i.imei })}#movimentos`} className="text-fc-light-100 hover:text-fc-light-60">{i.imei}</Link></TableCell>
                   <TableCell>{i.equipment ?? <span className="text-fc-dark-60">{i.hardware ?? '—'}</span>}</TableCell>
                   <TableCell>{i.warehouse}</TableCell>
                   <TableCell>{i.modality ?? '—'}</TableCell>
@@ -201,13 +202,18 @@ export default async function StockPage({ searchParams }: Props) {
       <Card id="movimentos">
         <CardHeader><CardTitle>{p.imei ? `Movimentos do IMEI ${p.imei}` : 'Últimos movimentos'}</CardTitle></CardHeader>
         <CardContent className="pb-3">
-          <form className="flex items-end gap-3">
+          {/* mantém o armazém e os filtros escolhidos */}
+          <form action="#movimentos" className="flex items-end gap-3">
+            {p.wh && <input type="hidden" name="wh" value={p.wh} />}
+            {p.mod && <input type="hidden" name="mod" value={p.mod} />}
+            {p.q && <input type="hidden" name="q" value={p.q} />}
+            {p.inst && <input type="hidden" name="inst" value={p.inst} />}
             <div className="space-y-1.5">
               <Label htmlFor="imei">Histórico de um IMEI</Label>
               <Input id="imei" name="imei" defaultValue={p.imei} placeholder="IMEI" className="w-64 font-mono" />
             </div>
             <button className={buttonVariants({ variant: 'secondary' })}>Ver</button>
-            {p.imei && <Link href="/stock#movimentos" className={buttonVariants({ variant: 'inverse' })}>Todos</Link>}
+            {p.imei && <Link href={`${href({ imei: undefined })}#movimentos`} className={buttonVariants({ variant: 'inverse' })}>Todos</Link>}
           </form>
         </CardContent>
         {movements.length === 0 ? (
@@ -216,7 +222,7 @@ export default async function StockPage({ searchParams }: Props) {
           <Table>
             <TableHeader><TableRow>
               <TableHead>Data</TableHead><TableHead>Tipo</TableHead><TableHead>IMEI</TableHead><TableHead>Equipamento</TableHead>
-              <TableHead>De</TableHead><TableHead>Para</TableHead><TableHead>Modalidade</TableHead><TableHead>Origem</TableHead>
+              <TableHead>De</TableHead><TableHead>Para</TableHead><TableHead>Modalidade</TableHead><TableHead>Origem</TableHead>{isAdmin && <TableHead className="text-right">Ações</TableHead>}
             </TableRow></TableHeader>
             <TableBody>
               {movements.map((m) => (
@@ -232,12 +238,14 @@ export default async function StockPage({ searchParams }: Props) {
                     {m.intervention_id ? (
                       <Link href={`/interventions/${m.intervention_id}`} className="text-fc-light-100 hover:text-fc-light-60">Intervenção</Link>
                     ) : (
-                      <span className="flex items-center gap-2">
-                        <span className="truncate">{[m.notes, m.created_by].filter(Boolean).join(' · ') || '—'}</span>
-                        {isAdmin && <MovementDelete id={m.id} />}
-                      </span>
+                      <span className="block max-w-md whitespace-normal">{[m.notes, m.created_by].filter(Boolean).join(' · ') || '—'}</span>
                     )}
                   </TableCell>
+                  {isAdmin && (
+                    <TableCell className="text-right">
+                      {m.intervention_id ? <span className="fc-small text-fc-dark-40" title="Altera-se editando a intervenção">—</span> : <MovementDelete id={m.id} />}
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
