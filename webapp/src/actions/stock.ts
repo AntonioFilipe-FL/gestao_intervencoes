@@ -175,3 +175,35 @@ export async function getInstalledConflicts() {
     where c.warehouse_id is not null and d.active and nullif(btrim(d.license_plate), '') is not null and not gestao_interv.is_internal_account(d.intranet_account_id)
     group by c.warehouse_id`
 }
+
+/**
+ * Dá saída (ajuste) aos IMEIs em stock que a Intranet mostra instalados numa viatura
+ * (fora das contas internas Frotcom Lusitana). Sem `imeis`, aplica a todos os assinalados (do armazém, se indicado).
+ */
+export async function removeInstalledFromStock(input: { warehouseId?: string; imeis?: string[] }) {
+  try {
+    const user = await requireAdmin()
+    const imeis = (input.imeis ?? []).filter((i) => /^\d{8,20}$/.test(i))
+    const rows = await sql<{ imei: string; warehouse_id: string; equipment_id: string | null; modality: string | null; plate: string; client: string | null }[]>`
+      select c.imei, c.warehouse_id, c.equipment_id, c.modality, d.license_plate as plate, coalesce(dc.name, p.name) as client
+      from stock_current c
+      join devices d on d.imei = c.imei
+      left join clients dc on dc.id = d.client_id
+      left join intranet_pending p on p.intranet_account_id = d.intranet_account_id
+      where c.warehouse_id is not null and d.active and nullif(btrim(d.license_plate), '') is not null
+        and not gestao_interv.is_internal_account(d.intranet_account_id)
+        ${input.warehouseId ? sql`and c.warehouse_id = ${input.warehouseId}` : sql``}
+        ${imeis.length ? sql`and c.imei = any(${imeis})` : sql``}`
+    if (!rows.length) throw new Error('Não há IMEIs assinalados para dar saída.')
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Lisbon' })
+    await sql`insert into stock_movements ${sql(rows.map((r) => ({
+      imei: r.imei, equipment_id: r.equipment_id, kind: 'ajuste', from_warehouse_id: r.warehouse_id, to_warehouse_id: null,
+      modality: r.modality, moved_at: today, created_by: user.email,
+      notes: `Instalado segundo a Intranet: ${r.plate}${r.client ? ` · ${r.client}` : ''}`,
+    })))}`
+    revalidatePath('/stock')
+    return { ok: true as const, n: rows.length }
+  } catch (e) {
+    return { ok: false as const, error: (e as Error).message }
+  }
+}

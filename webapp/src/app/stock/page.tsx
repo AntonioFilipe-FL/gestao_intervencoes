@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { buttonVariants } from '@/components/ui/button'
 import { StockActions } from '@/components/stock/StockActions'
 import { MovementDelete } from '@/components/stock/MovementDelete'
+import { RemoveInstalled } from '@/components/stock/RemoveInstalled'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -104,9 +105,12 @@ export default async function StockPage({ searchParams }: Props) {
               Provavelmente falta registar a instalação (ou a Intranet está desatualizada).
             </span>
           </p>
-          <Link href={href({ inst: p.inst === '1' ? undefined : '1' })} className={buttonVariants({ variant: p.inst === '1' ? 'secondary' : 'inverse', size: 'sm' })}>
-            {p.inst === '1' ? 'Mostrar todos' : 'Ver só estes'}
-          </Link>
+          <div className="flex gap-2">
+            <Link href={href({ inst: p.inst === '1' ? undefined : '1' })} className={buttonVariants({ variant: p.inst === '1' ? 'secondary' : 'inverse', size: 'sm' })}>
+              {p.inst === '1' ? 'Mostrar todos' : 'Ver só estes'}
+            </Link>
+            <RemoveInstalled warehouseId={p.wh} count={conflictOf(p.wh)} />
+          </div>
         </div>
       )}
       {byWarehouse.length === 0 && (
@@ -181,6 +185,7 @@ export default async function StockPage({ searchParams }: Props) {
                     {i.installed_plate ? (
                       <span className="flex items-center gap-1 text-[#c7830b]" title="A Intranet mostra este IMEI instalado">
                         <AlertTriangle className="size-3.5" /> {i.installed_plate}{i.installed_client ? ` · ${i.installed_client}` : ''}
+                        <RemoveInstalled imei={i.imei} />
                       </span>
                     ) : <span className="text-fc-dark-40">—</span>}
                   </TableCell>
@@ -221,7 +226,7 @@ export default async function StockPage({ searchParams }: Props) {
                   <TableCell className="font-mono text-[12px]">{m.imei}</TableCell>
                   <TableCell>{m.equipment ?? '—'}</TableCell>
                   <TableCell>{m.from_wh ?? '—'}</TableCell>
-                  <TableCell>{m.to_wh ?? (m.kind === 'intervencao_saida' ? 'Instalado' : '—')}</TableCell>
+                  <TableCell>{m.to_wh ?? (m.kind === 'intervencao_saida' || m.kind === 'ajuste' ? 'Instalado' : '—')}</TableCell>
                   <TableCell>{m.modality ?? '—'}</TableCell>
                   <TableCell className="text-fc-dark-60">
                     {m.intervention_id ? (
