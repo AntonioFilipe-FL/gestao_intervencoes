@@ -383,10 +383,10 @@ with b as (
                  and lower(btrim(t.name)) = any(array['envio de material', 'envio rma', 'entrada de material', 'entrada de rma',
                    'entrega de material', 'entrega de material try and buy', 'recolha de material',
                    'desinstalação try and buy', 'desinstalação', 'acerto de stock'])) as is_logistic,
-         -- tipos em que o equipamento fica instalado na viatura: sai do stock mesmo sem armazém de saída indicado
+         -- intervenções na viatura (instalação, assistência, upgrade, troca…; não logística nem desinstalação):
+         -- o IMEI com que a viatura fica está instalado, por isso sai do stock mesmo sem armazém de saída indicado
          exists (select 1 from gestao_interv.intervention_types t where t.id = b.intervention_type_id
-                 and (t.name ilike '%instala%' and t.name not ilike '%desinstala%'
-                      or t.name ilike 'reinstala%' or t.name ilike 'troca de viatura%' or t.name ilike 'upgrade%')) as is_install,
+                 and t.name not ilike '%desinstala%') as is_field_type,
          (stock_exit_warehouse_id is not null and stock_entry_warehouse_id is not null and rt is null
           and (sp is null or im is null or sp = im)
           and has_spent_eq and has_return_eq) as is_transfer
@@ -406,7 +406,9 @@ select id, coalesce(sp, im), coalesce(spent_equipment_id, equipment_id), 'interv
 from c where not is_transfer and coalesce(sp, im) ~ '^[0-9]{8,20}$'
   and ((stock_exit_warehouse_id is not null and has_spent_eq)
        -- instalação/reinstalação/troca sem armazém de saída: o IMEI instalado sai de onde estiver
-       or (stock_exit_warehouse_id is null and is_install))
+       or (stock_exit_warehouse_id is null and is_field_type and not is_logistic and nullif(btrim(license_plate), '') is not null
+           -- a não ser que esse IMEI seja o que entra no armazém (equipamento retirado)
+           and not (stock_entry_warehouse_id is not null and has_return_eq and coalesce(rt, im) = coalesce(sp, im) and sp is null)))
 union all
 select id, coalesce(rt, case when is_logistic then coalesce(sp, im) when im is distinct from sp then im end),
        coalesce(return_equipment_id, case when is_logistic then spent_equipment_id end, equipment_id), 'intervencao_entrada', null, stock_entry_warehouse_id,
