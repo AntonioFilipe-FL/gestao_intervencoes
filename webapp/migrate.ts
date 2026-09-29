@@ -248,10 +248,11 @@ async function main() {
       for (const n of listCol('Cliente')) clientMap.set(norm(n), { id: `dry:${n}`, name: n })
     } else {
       const data = await readDb<{ id: string; name: string; sheet_names: string[] | null }[]>`select id, name, sheet_names from clients`
-      for (const c of data) clientMap.set(norm(c.name), c)
-      // nomes antigos da Sheet de clientes renomeados para o nome da Intranet
-      for (const c of data) for (const n of c.sheet_names ?? []) if (!clientMap.has(norm(n))) clientMap.set(norm(n), c)
-      for (const [k, c] of clientAliases) if (!clientMap.has(k)) clientMap.set(k, c)
+      // 1.º nomes antigos da Sheet (clientes renomeados para o nome da Intranet — vários podem ter o mesmo nome Intranet),
+      // 2.º o que as linhas já importadas mostram, 3.º o nome atual
+      for (const c of data) for (const n of c.sheet_names ?? []) clientMap.set(norm(n), c)
+      for (const [k, c] of clientAliases) clientMap.set(k, c)
+      for (const c of data) if (!clientMap.has(norm(c.name))) clientMap.set(norm(c.name), c)
     }
   }
   await loadClients()
@@ -398,7 +399,7 @@ async function main() {
       const c = byId.get(best)
       if (c) clientAliases.set(k, c)
     }
-    for (const [k, c] of clientAliases) if (!clientMap.has(k)) clientMap.set(k, c)
+    for (const [k, c] of clientAliases) clientMap.set(k, c)
   }
 
   // 4. Criar valores em falta nas tabelas de apoio

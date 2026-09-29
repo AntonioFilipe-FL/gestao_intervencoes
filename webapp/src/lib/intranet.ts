@@ -107,15 +107,15 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
       for (const a of accounts) {
         const linkedList = byIntranet.get(a.id)
         if (linkedList?.length) {
-          // só renomeia quando a conta tem um único cliente (com vários, cada um mantém o seu nome, ex.: "X Aluguer")
-          const linked = linkedList[0]
-          if (linkedList.length === 1 && linked.name !== a.name) {
-            // evitar colisão com outro cliente que já tenha esse nome
-            const [clash] = await tx`select id from clients where lower(name) = lower(${a.name}) and id <> ${linked.id}`
-            if (!clash) {
-              await tx`update clients set name = ${a.name}, sheet_names = array_append(coalesce(sheet_names, '{}'), ${linked.name}::text) where id = ${linked.id}`
-              result.accounts.renamed++
-            }
+          // todos os clientes da conta ficam com o nome (curto) da Intranet; o nome antigo fica guardado para a importação da Sheet.
+          // Com vários clientes (venda/aluguer) o nome repete-se e distinguem-se pela modalidade no registo.
+          for (const linked of linkedList) {
+            if (linked.name === a.name) continue
+            await tx`update clients set name = ${a.name},
+                       sheet_names = case when ${linked.name}::text = any(coalesce(sheet_names, '{}')) then sheet_names
+                                          else array_append(coalesce(sheet_names, '{}'), ${linked.name}::text) end
+                     where id = ${linked.id}`
+            result.accounts.renamed++
           }
           await tx`update clients set active = true, intranet_short_name = ${a.name}, intranet_synced_at = now()
                    where intranet_account_id = ${a.id}`
@@ -328,10 +328,9 @@ export async function linkPending(intranetId: string, clientId: string) {
     const [c] = await tx`select id, name, intranet_account_id from clients where id = ${clientId}`
     if (!c) throw new Error('Cliente não encontrado.')
     if (c.intranet_account_id) throw new Error(`O cliente "${c.name}" já está ligado a outra conta da Intranet.`)
-    // passa a usar o nome da Intranet, salvo se outro cliente já tiver esse nome
-    const [clash] = await tx`select id from clients where lower(name) = lower(${p.name}) and id <> ${clientId}`
+    // passa a usar o nome da Intranet (o nome antigo fica guardado para a importação da Sheet)
     await tx`update clients set intranet_account_id = ${intranetId}, intranet_short_name = ${p.name}, active = true,
-             intranet_synced_at = now() ${clash || c.name === p.name ? tx`` : tx`, name = ${p.name}, sheet_names = array_append(coalesce(sheet_names, '{}'), ${c.name}::text)`} where id = ${clientId}`
+             intranet_synced_at = now() ${c.name === p.name ? tx`` : tx`, name = ${p.name}, sheet_names = array_append(coalesce(sheet_names, '{}'), ${c.name}::text)`} where id = ${clientId}`
     await attachDevices(tx as unknown as typeof sql, intranetId, clientId)
     await tx`delete from intranet_pending where intranet_account_id = ${intranetId}`
   })
@@ -347,9 +346,12 @@ export async function linkAdditionalClient(intranetId: string, clientId: string)
     const [main] = await tx`select intranet_short_name from clients where intranet_account_id = ${intranetId} limit 1`
     const [p] = await tx`select name from intranet_pending where intranet_account_id = ${intranetId}`
     if (!main && !p) throw new Error('Conta da Intranet não encontrada (sincronize de novo).')
-    // mantém o nome do cliente (não é renomeado para o nome da Intranet)
-    await tx`update clients set intranet_account_id = ${intranetId}, intranet_short_name = ${main?.intranet_short_name ?? p.name},
-             active = true, intranet_synced_at = now() where id = ${clientId}`
+    // fica com o nome da Intranet, como os restantes clientes da conta (distingue-se pela modalidade Venda/Aluguer)
+    const accName = (main?.intranet_short_name ?? p.name) as string
+    await tx`update clients set intranet_account_id = ${intranetId}, intranet_short_name = ${accName},
+             active = true, intranet_synced_at = now()
+             ${c.name === accName ? tx`` : tx`, name = ${accName}, sheet_names = array_append(coalesce(sheet_names, '{}'), ${c.name}::text)`}
+             where id = ${clientId}`
     // se a conta ainda estava por associar, os IMEIs ficam neste cliente
     if (p) {
       await attachDevices(tx as unknown as typeof sql, intranetId, clientId)
@@ -363,7 +365,11 @@ export async function unlinkClient(clientId: string) {
   await sql.begin(async tx => {
     const [c] = await tx`select id, name, intranet_account_id, intranet_short_name from clients where id = ${clientId}`
     if (!c?.intranet_account_id) throw new Error('Este cliente não está ligado à Intranet.')
-    await tx`update clients set intranet_account_id = null, intranet_synced_at = null where id = ${clientId}`
+    // volta ao último nome da BD/Sheet (os clientes sem ligação têm nomes únicos)
+    const back = (await tx`select coalesce(sheet_names[array_length(sheet_names, 1)], name) as n from clients where id = ${clientId}`)[0].n as string
+    const [taken] = await tx`select id from clients where lower(name) = lower(${back}) and intranet_account_id is null and id <> ${clientId}`
+    await tx`update clients set intranet_account_id = null, intranet_synced_at = null,
+             name = ${taken ? `${back} (${String(clientId).slice(0, 4)})` : back} where id = ${clientId}`
     const [other] = await tx`select id from clients where intranet_account_id = ${c.intranet_account_id}
                              order by intranet_synced_at nulls last, created_at limit 1`
     await tx`update devices set client_id = ${other?.id ?? null} where intranet_account_id = ${c.intranet_account_id}`
@@ -390,10 +396,11 @@ export async function createFromPending(intranetIds: string[]) {
   await sql.begin(async tx => {
     const rows = await tx`select intranet_account_id, name from intranet_pending where intranet_account_id = any(${intranetIds})`
     for (const p of rows) {
+      // já existe um cliente da BD (sem ligação) com este nome: tem de ser associado manualmente
+      const [same] = await tx`select id from clients where lower(name) = lower(${p.name}) and intranet_account_id is null`
+      if (same) continue
       const [c] = await tx`insert into clients (name, active, intranet_account_id, intranet_short_name, intranet_synced_at, created_via)
-                           values (${p.name}, true, ${p.intranet_account_id}, ${p.name}, now(), 'intranet_manual')
-                           on conflict (lower(name)) do nothing returning id`
-      if (!c) continue // já existe um cliente com este nome: tem de ser associado manualmente
+                           values (${p.name}, true, ${p.intranet_account_id}, ${p.name}, now(), 'intranet_manual') returning id`
       await attachDevices(tx as unknown as typeof sql, p.intranet_account_id, c.id)
       await tx`delete from intranet_pending where intranet_account_id = ${p.intranet_account_id}`
       created++
@@ -497,7 +504,7 @@ export async function getClientOptions(currentClientId?: string | null): Promise
   ])
   const opts: ClientOption[] = [
     // conta com vários clientes (ex.: venda e aluguer): mostra a modalidade para distinguir
-    ...linked.map(c => ({ value: c.id, label: c.n > 1 && c.venda_aluguer ? `${c.name} · ${c.venda_aluguer}` : c.name })),
+    ...linked.map(c => ({ value: c.id, label: c.n > 1 ? `${c.name} · ${c.venda_aluguer || 'sem modalidade'}` : c.name })),
     ...pending.map(p => ({
       value: PENDING_PREFIX + p.intranet_account_id,
       label: p.name,

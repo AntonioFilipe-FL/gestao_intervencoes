@@ -56,7 +56,10 @@ create table if not exists clients (
   active                  boolean not null default true,
   created_at              timestamptz not null default now()
 );
-create unique index if not exists clients_name_uq on clients (lower(name));
+-- nomes únicos só entre clientes não ligados à Intranet (os ligados usam o nome da Intranet, que pode repetir-se: venda/aluguer)
+drop index if exists gestao_interv.clients_name_uq;
+create unique index if not exists clients_name_unlinked_uq on clients (lower(name)) where intranet_account_id is null;
+create index if not exists clients_name_idx on clients (lower(name));
 
 -- -----------------------------------------------------------------------------
 -- Intervenções (tabela principal — equivalente à folha "Validação de Formulários")
@@ -365,6 +368,7 @@ $$;
  *  - armazém de saída → sai o IMEI gasto (ou o IMEI, se não houver gasto)          (ex.: instalação)
  *  - armazém de entrada → entra o IMEI retomado (ou o IMEI, se for diferente do gasto) (ex.: desinstalação, troca)
  */
+-- no mesmo dia: primeiro as entradas (desinstalação), depois transferências, por fim as saídas (instalação)
 create or replace view gestao_interv.intervention_stock_moves as
 with b as (
   select i.*,
@@ -379,6 +383,10 @@ with b as (
                  and lower(btrim(t.name)) = any(array['envio de material', 'envio rma', 'entrada de material', 'entrada de rma',
                    'entrega de material', 'entrega de material try and buy', 'recolha de material',
                    'desinstalação try and buy', 'desinstalação', 'acerto de stock'])) as is_logistic,
+         -- tipos em que o equipamento fica instalado na viatura: sai do stock mesmo sem armazém de saída indicado
+         exists (select 1 from gestao_interv.intervention_types t where t.id = b.intervention_type_id
+                 and (t.name ilike '%instala%' and t.name not ilike '%desinstala%'
+                      or t.name ilike 'reinstala%' or t.name ilike 'troca de viatura%' or t.name ilike 'upgrade%')) as is_install,
          (stock_exit_warehouse_id is not null and stock_entry_warehouse_id is not null and rt is null
           and (sp is null or im is null or sp = im)
           and has_spent_eq and has_return_eq) as is_transfer
@@ -390,16 +398,19 @@ with b as (
 )
 select id as intervention_id, coalesce(sp, im) as imei, coalesce(spent_equipment_id, equipment_id) as equipment_id,
        'transferencia'::text as kind, stock_exit_warehouse_id as from_wh, stock_entry_warehouse_id as to_wh,
-       coalesce(return_modality, gestao_interv.modality_of(venda_aluguer)) as modality, intervention_date, coalesce(updated_by, created_by) as by, created_at, 1 as ord
+       coalesce(return_modality, gestao_interv.modality_of(venda_aluguer)) as modality, intervention_date, coalesce(updated_by, created_by) as by, created_at, 2 as ord
 from c where is_transfer and coalesce(sp, im) ~ '^[0-9]{8,20}$'
 union all
 select id, coalesce(sp, im), coalesce(spent_equipment_id, equipment_id), 'intervencao_saida', stock_exit_warehouse_id, null,
-       gestao_interv.modality_of(venda_aluguer), intervention_date, coalesce(updated_by, created_by), created_at, 1
-from c where not is_transfer and stock_exit_warehouse_id is not null and has_spent_eq and coalesce(sp, im) ~ '^[0-9]{8,20}$'
+       gestao_interv.modality_of(venda_aluguer), intervention_date, coalesce(updated_by, created_by), created_at, 3
+from c where not is_transfer and coalesce(sp, im) ~ '^[0-9]{8,20}$'
+  and ((stock_exit_warehouse_id is not null and has_spent_eq)
+       -- instalação/reinstalação/troca sem armazém de saída: o IMEI instalado sai de onde estiver
+       or (stock_exit_warehouse_id is null and is_install))
 union all
 select id, coalesce(rt, case when is_logistic then coalesce(sp, im) when im is distinct from sp then im end),
        coalesce(return_equipment_id, case when is_logistic then spent_equipment_id end, equipment_id), 'intervencao_entrada', null, stock_entry_warehouse_id,
-       coalesce(return_modality, gestao_interv.modality_of(venda_aluguer)), intervention_date, coalesce(updated_by, created_by), created_at, 2
+       coalesce(return_modality, gestao_interv.modality_of(venda_aluguer)), intervention_date, coalesce(updated_by, created_by), created_at, 1
 from c where not is_transfer and stock_entry_warehouse_id is not null and has_return_eq
   -- numa intervenção de logística só com armazém de entrada, o material entra (não há saída)
   and not (is_logistic and stock_exit_warehouse_id is not null)
@@ -421,7 +432,7 @@ begin
   insert into gestao_interv.stock_movements (imei, equipment_id, kind, from_warehouse_id, to_warehouse_id, modality, intervention_id, moved_at, created_by, created_at)
   select imei, equipment_id, kind, from_wh, to_wh, modality, intervention_id, intervention_date, by, created_at
   from gestao_interv.intervention_stock_moves
-  order by intervention_date, created_at, ord;
+  order by intervention_date, ord, created_at;
   get diagnostics n = row_count;
   return n;
 end $$;
