@@ -69,7 +69,7 @@ export default async function ReportsPage({ searchParams }: Props) {
 
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-screen-2xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">
       <div>
         <h1>Relatórios e estatísticas</h1>
         <p className="fc-small text-fc-dark-60">Visão geral da operação e métricas de desempenho. Contam só intervenções técnicas: Assistência, Desinstalação, Instalação (incl. Try and Buy), Reinstalação, Troca de Viatura e Upgrade.</p>

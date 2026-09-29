@@ -452,3 +452,34 @@ create or replace function gestao_interv.is_internal_account(p_account text) ret
     select 1 from gestao_interv.intranet_pending p where p.intranet_account_id = p_account
       and (p.name ilike '%frotcom lusitana%' or p.full_name ilike '%frotcom lusitana%'))
 $$;
+
+-- Correções manuais do stock (“Dar saída” pela Intranet): deixam de contar quando, depois delas,
+-- é registada ou editada uma intervenção com o mesmo IMEI (a informação real passa à frente)
+alter table stock_movements add column if not exists is_correction boolean not null default false;
+alter table stock_movements add column if not exists superseded_at timestamptz;
+update stock_movements set is_correction = true
+ where not is_correction and intervention_id is null
+   and (kind = 'ajuste' or notes like 'Transferido (Intranet mostra%');
+
+create or replace view stock_current as
+select distinct on (m.imei)
+       m.imei, m.to_warehouse_id as warehouse_id, m.moved_at, m.kind, m.intervention_id,
+       coalesce(m.equipment_id, (select m2.equipment_id from stock_movements m2 where m2.imei = m.imei and m2.equipment_id is not null
+                                 order by m2.moved_at desc, m2.seq desc limit 1)) as equipment_id,
+       coalesce(m.modality, (select m3.modality from stock_movements m3 where m3.imei = m.imei and m3.modality is not null
+                             order by m3.moved_at desc, m3.seq desc limit 1)) as modality
+from stock_movements m
+where not (m.is_correction and m.superseded_at is not null)
+order by m.imei, m.moved_at desc, m.seq desc;
+
+/** Marca como substituídas as correções dos IMEIs de uma intervenção (chamado ao registar/editar/importar) */
+create or replace function gestao_interv.supersede_corrections(p_intervention uuid) returns int language plpgsql as $$
+declare n int;
+begin
+  update gestao_interv.stock_movements m set superseded_at = now()
+  from gestao_interv.interventions i
+  where i.id = p_intervention and m.is_correction and m.superseded_at is null
+    and m.imei in (btrim(i.imei), btrim(i.spent_equipment_imei), btrim(i.return_equipment_imei));
+  get diagnostics n = row_count;
+  return n;
+end $$;

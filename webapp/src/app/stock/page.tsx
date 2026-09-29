@@ -246,7 +246,7 @@ export default async function StockPage({ searchParams }: Props) {
                     {m.intervention_id ? (
                       <Link href={`/interventions/${m.intervention_id}`} className="text-fc-light-100 hover:text-fc-light-60">Intervenção</Link>
                     ) : (
-                      <span className="block max-w-md whitespace-normal">{[m.notes, m.created_by].filter(Boolean).join(' · ') || '—'}</span>
+                      <span className="block max-w-md whitespace-normal">{[m.notes, m.created_by].filter(Boolean).join(' · ') || '—'}{m.superseded_at && <span className="ml-1 font-bold text-fc-dark-60">· substituído por intervenção registada depois</span>}</span>
                     )}
                   </TableCell>
                   {isAdmin && (

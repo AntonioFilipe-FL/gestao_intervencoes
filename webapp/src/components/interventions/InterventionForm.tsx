@@ -183,7 +183,7 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="mx-auto max-w-5xl space-y-5 px-4 pt-6 pb-20 sm:px-6 lg:px-8">
+    <form onSubmit={handleSubmit(onSubmit)} className="mx-auto max-w-screen-2xl space-y-5 px-4 pt-6 pb-20 sm:px-6 lg:px-8">
       <div className="space-y-1">
         <h1>{editing ? 'Editar intervenção' : 'Nova intervenção'}</h1>
         <p className="fc-small text-fc-dark-60">Os campos assinalados com * são obrigatórios.</p>

@@ -47,6 +47,7 @@ export async function createIntervention(input: unknown) {
       ]
       if (lines.length) await tx`insert into intervention_accessories ${tx(lines)}`
       await tx`select gestao_interv.sync_intervention_stock(${row.id})`
+      await tx`select gestao_interv.supersede_corrections(${row.id})`
       return row.id as string
     })
 
@@ -94,6 +95,7 @@ export async function updateIntervention(id: string, input: unknown) {
       ]
       if (lines.length) await tx`insert into intervention_accessories ${tx(lines)}`
       await tx`select gestao_interv.sync_intervention_stock(${id})`
+      await tx`select gestao_interv.supersede_corrections(${id})`
       return prev as { billing: string | null; billing_notified_at: string | null }
     })
 

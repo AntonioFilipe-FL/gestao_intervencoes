@@ -21,7 +21,7 @@ export default async function SettingsPage({
   if (!userIsAdmin) redirect('/interventions')
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-screen-2xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">
       <div>
         <h1>Configurações</h1>
         <p className="fc-small text-fc-dark-60">Gerir tabelas de referência e listas de apoio.</p>

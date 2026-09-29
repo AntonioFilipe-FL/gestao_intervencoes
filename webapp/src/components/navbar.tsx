@@ -15,13 +15,20 @@ export function Navbar({ user }: { user: CurrentUser }) {
     <header>
       {/* Barra superior */}
       <div className="bg-fc-dark-100 text-white">
-        <div className="mx-auto flex h-12 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link href="/interventions" className="flex items-center gap-3">
-            <span className="h-6 w-1.5 bg-fc-red" aria-hidden />
-            <span className="text-[15px] font-bold tracking-[0.04em] uppercase">Frotcom</span>
-            <span className="text-[13px] font-light tracking-[0.02em] text-fc-dark-40 uppercase">Gestão de intervenções</span>
-          </Link>
-          <form action="/auth/logout" method="post" className="flex items-center gap-4">
+        <div className="mx-auto flex h-12 max-w-screen-2xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-center">
+            <Link href="/interventions" className="flex shrink-0 items-center gap-3">
+              <span className="h-6 w-1.5 bg-fc-red" aria-hidden />
+              <span className="text-[15px] font-bold tracking-[0.04em] uppercase">Frotcom</span>
+              <span className="hidden text-[13px] font-light tracking-[0.02em] text-fc-dark-40 uppercase lg:inline">Gestão de intervenções</span>
+            </Link>
+            {/* separador + menu na barra de topo */}
+            <span className="mx-6 h-6 w-px shrink-0 bg-fc-dark-80" aria-hidden />
+            <nav className="min-w-0">
+              <NavLinks links={links} />
+            </nav>
+          </div>
+          <form action="/auth/logout" method="post" className="ml-4 flex shrink-0 items-center gap-4">
             <span className="hidden text-[12px] text-fc-dark-40 md:inline">{user.email}</span>
             <button
               type="submit"
@@ -32,12 +39,6 @@ export function Navbar({ user }: { user: CurrentUser }) {
           </form>
         </div>
       </div>
-      {/* Navegação secundária */}
-      <nav className="border-b border-fc-dark-10 bg-white">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <NavLinks links={links} />
-        </div>
-      </nav>
     </header>
   )
 }

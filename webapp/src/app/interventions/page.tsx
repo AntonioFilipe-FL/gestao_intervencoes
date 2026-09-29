@@ -34,7 +34,7 @@ export default async function InterventionsPage({ searchParams }: Props) {
 
   if (error) {
     return (
-      <div className="mx-auto max-w-7xl p-8">
+      <div className="mx-auto max-w-screen-2xl p-8">
         <div className="bg-fc-danger/20 px-4 py-3 text-[#b31d25]">Erro ao carregar intervenções: {error.message}</div>
       </div>
     )
@@ -47,7 +47,7 @@ export default async function InterventionsPage({ searchParams }: Props) {
   const to = Math.min(currentPage * PAGE_SIZE, count)
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-screen-2xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
         title="Intervenções"
         subtitle={`${count.toLocaleString('pt-PT')} registos${hasFilters ? ' encontrados' : ''}`}

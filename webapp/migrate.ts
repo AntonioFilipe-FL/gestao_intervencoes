@@ -585,12 +585,15 @@ async function main() {
       try {
         const cols = Object.keys(batch[0])
         const updates = cols.filter(c => c !== 'legacy_key')
-        await sql`
+        const res = await sql<{ id: string; inserted: boolean }[]>`
           insert into interventions ${sql(batch as any, cols as any)}
           on conflict (legacy_key) do update set
           ${sql.unsafe(updates.map(c => `"${c}" = excluded."${c}"`).join(', '))}
           where interventions.updated_by is null
+          returning id, (xmax = 0) as inserted
         `
+        // linhas novas da Sheet: as correções manuais de stock desses IMEIs deixam de contar
+        for (const r of res) if (r.inserted) await sql`select gestao_interv.supersede_corrections(${r.id})`
         ok += batch.length
         console.log(`Gravados ${ok} / ${toWrite.length}`)
       } catch (e) {

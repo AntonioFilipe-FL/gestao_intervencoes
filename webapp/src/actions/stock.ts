@@ -16,6 +16,7 @@ export type StockItem = {
 export type Movement = {
   id: string; imei: string; kind: string; moved_at: string; from_wh: string | null; to_wh: string | null
   equipment: string | null; modality: string | null; intervention_id: string | null; notes: string | null; created_by: string | null
+  superseded_at: string | null
 }
 
 /** Totais por armazém e por modelo (só o que está atualmente em stock) */
@@ -71,7 +72,7 @@ export async function getMovements(imei?: string) {
   const v = (imei ?? '').replace(/\s/g, '')
   return sql<Movement[]>`
     select m.id, m.imei, m.kind, m.moved_at::text, wf.name as from_wh, wt.name as to_wh, e.name as equipment,
-           m.modality, m.intervention_id, m.notes, m.created_by
+           m.modality, m.intervention_id, m.notes, m.created_by, m.superseded_at::text
     from stock_movements m
     left join warehouses wf on wf.id = m.from_warehouse_id
     left join warehouses wt on wt.id = m.to_warehouse_id
@@ -200,7 +201,7 @@ export async function removeInstalledFromStock(input: { warehouseId?: string; im
     const list = rows.filter((r) => r.warehouse_id !== to)
     if (!list.length) throw new Error('Os IMEIs já estão nesse armazém.')
     await sql`insert into stock_movements ${sql(list.map((r) => ({
-      imei: r.imei, equipment_id: r.equipment_id, kind: to ? 'transferencia' : 'ajuste', from_warehouse_id: r.warehouse_id, to_warehouse_id: to,
+      imei: r.imei, equipment_id: r.equipment_id, kind: to ? 'transferencia' : 'ajuste', is_correction: true, from_warehouse_id: r.warehouse_id, to_warehouse_id: to,
       modality: r.modality, moved_at: today, created_by: user.email,
       notes: `${to ? 'Transferido (Intranet mostra' : 'Instalado segundo a Intranet:'} ${r.plate}${r.client ? ` · ${r.client}` : ''}${to ? ')' : ''}`,
     })))}`
