@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { sql } from '@/lib/db'
 import { requireUser } from '@/lib/auth'
 import { getInstalledConflicts, getMovements, getStockItems, getStockTotals } from '@/actions/stock'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, FileSpreadsheet } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -49,6 +49,7 @@ export default async function StockPage({ searchParams }: Props) {
     return `/stock${s.size ? `?${s}` : ''}`
   }
   const selectedWh = byWarehouse.find((w) => w.warehouse_id === p.wh)
+  const selectedWhName = selectedWh?.warehouse
   const models = byModel.filter((m) => !p.wh || m.warehouse_id === p.wh)
   const modelAgg = Object.values(
     models.reduce<Record<string, { equipment: string; venda: number; aluguer: number; sem: number; total: number }>>((acc, m) => {
@@ -63,7 +64,14 @@ export default async function StockPage({ searchParams }: Props) {
       <PageHeader
         title="Stock material"
         subtitle={isAdmin ? 'Equipamentos em stock por IMEI. Receções e transferências registam-se aqui; as intervenções descontam (IMEI gasto) e acrescentam (IMEI retomado) automaticamente.' : 'Equipamentos em stock por armazém.'}
-        actions={isAdmin && <StockActions warehouses={warehouses} equipment={equipment} />}
+        actions={isAdmin && (
+          <>
+            <a href={`/stock/export${p.wh ? `?wh=${p.wh}` : ''}`} className={buttonVariants({ size: 'lg', variant: 'inverse' })}>
+              <FileSpreadsheet /> Exportar Excel{selectedWhName ? ` (${selectedWhName})` : ''}
+            </a>
+            <StockActions warehouses={warehouses} equipment={equipment} />
+          </>
+        )}
       />
 
       {/* Totalizadores por armazém */}
