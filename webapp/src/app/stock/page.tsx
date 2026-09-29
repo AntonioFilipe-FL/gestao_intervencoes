@@ -109,7 +109,7 @@ export default async function StockPage({ searchParams }: Props) {
             <Link href={href({ inst: p.inst === '1' ? undefined : '1' })} className={buttonVariants({ variant: p.inst === '1' ? 'secondary' : 'inverse', size: 'sm' })}>
               {p.inst === '1' ? 'Mostrar todos' : 'Ver só estes'}
             </Link>
-            <RemoveInstalled warehouseId={p.wh} count={conflictOf(p.wh)} />
+            <RemoveInstalled warehouseId={p.wh} count={conflictOf(p.wh)} warehouses={warehouses} />
           </div>
         </div>
       )}
@@ -185,7 +185,7 @@ export default async function StockPage({ searchParams }: Props) {
                     {i.installed_plate ? (
                       <span className="flex items-center gap-1 text-[#c7830b]" title="A Intranet mostra este IMEI instalado">
                         <AlertTriangle className="size-3.5" /> {i.installed_plate}{i.installed_client ? ` · ${i.installed_client}` : ''}
-                        <RemoveInstalled imei={i.imei} />
+                        <RemoveInstalled imei={i.imei} warehouseId={i.warehouse_id} warehouses={warehouses} />
                       </span>
                     ) : <span className="text-fc-dark-40">—</span>}
                   </TableCell>

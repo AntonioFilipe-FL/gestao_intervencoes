@@ -180,7 +180,7 @@ export async function getInstalledConflicts() {
  * Dá saída (ajuste) aos IMEIs em stock que a Intranet mostra instalados numa viatura
  * (fora das contas internas Frotcom Lusitana). Sem `imeis`, aplica a todos os assinalados (do armazém, se indicado).
  */
-export async function removeInstalledFromStock(input: { warehouseId?: string; imeis?: string[] }) {
+export async function removeInstalledFromStock(input: { warehouseId?: string; imeis?: string[]; toWarehouseId?: string }) {
   try {
     const user = await requireAdmin()
     const imeis = (input.imeis ?? []).filter((i) => /^\d{8,20}$/.test(i))
@@ -196,13 +196,16 @@ export async function removeInstalledFromStock(input: { warehouseId?: string; im
         ${imeis.length ? sql`and c.imei = any(${imeis})` : sql``}`
     if (!rows.length) throw new Error('Não há IMEIs assinalados para dar saída.')
     const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Lisbon' })
-    await sql`insert into stock_movements ${sql(rows.map((r) => ({
-      imei: r.imei, equipment_id: r.equipment_id, kind: 'ajuste', from_warehouse_id: r.warehouse_id, to_warehouse_id: null,
+    const to = input.toWarehouseId && /^[0-9a-f-]{36}$/i.test(input.toWarehouseId) ? input.toWarehouseId : null
+    const list = rows.filter((r) => r.warehouse_id !== to)
+    if (!list.length) throw new Error('Os IMEIs já estão nesse armazém.')
+    await sql`insert into stock_movements ${sql(list.map((r) => ({
+      imei: r.imei, equipment_id: r.equipment_id, kind: to ? 'transferencia' : 'ajuste', from_warehouse_id: r.warehouse_id, to_warehouse_id: to,
       modality: r.modality, moved_at: today, created_by: user.email,
-      notes: `Instalado segundo a Intranet: ${r.plate}${r.client ? ` · ${r.client}` : ''}`,
+      notes: `${to ? 'Transferido (Intranet mostra' : 'Instalado segundo a Intranet:'} ${r.plate}${r.client ? ` · ${r.client}` : ''}${to ? ')' : ''}`,
     })))}`
     revalidatePath('/stock')
-    return { ok: true as const, n: rows.length }
+    return { ok: true as const, n: list.length }
   } catch (e) {
     return { ok: false as const, error: (e as Error).message }
   }
