@@ -477,7 +477,7 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
                 <SearchableSelect
                   id="stock_exit_warehouse_id"
                   invalid={!!errors.stock_exit_warehouse_id}
-                  options={(referenceData.warehouses ?? []).filter((w) => w.type !== 'entrada').map((w) => ({ value: w.id, label: w.name }))}
+                  options={(referenceData.warehouses ?? []).filter((w) => w.type !== 'entrada' && (w.type as string) !== 'mobilizado').map((w) => ({ value: w.id, label: w.name }))}
                   value={field.value ?? ''}
                   onChange={field.onChange}
                   placeholder="Selecione o armazém"
@@ -585,7 +585,7 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
                 <SearchableSelect
                   id="stock_entry_warehouse_id"
                   invalid={!!errors.stock_entry_warehouse_id}
-                  options={(referenceData.warehouses ?? []).filter((w) => w.type !== 'saida').map((w) => ({ value: w.id, label: w.name }))}
+                  options={(referenceData.warehouses ?? []).filter((w) => w.type !== 'saida' && (w.type as string) !== 'mobilizado').map((w) => ({ value: w.id, label: w.name }))}
                   value={field.value ?? ''}
                   onChange={field.onChange}
                   placeholder="Selecione o armazém"

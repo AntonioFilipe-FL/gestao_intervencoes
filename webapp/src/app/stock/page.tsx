@@ -37,13 +37,13 @@ export default async function StockPage({ searchParams }: Props) {
     getStockTotals(),
     isAdmin ? getStockItems({ warehouseId: p.wh, modality: p.mod, q: p.q, installed: p.inst === '1' }) : Promise.resolve([]),
     isAdmin ? getMovements(p.imei) : Promise.resolve([]),
-    sql<{ id: string; name: string }[]>`select id, name from warehouses where active order by name`,
+    sql<{ id: string; name: string }[]>`select id, name from warehouses where active and type <> 'mobilizado' order by name`,
     sql<{ id: string; name: string }[]>`select id, name from equipment_list where active order by name`,
     getInstalledConflicts(),
   ])
   const conflictOf = (wh?: string) => conflicts.filter((c) => !wh || c.warehouse_id === wh).reduce((a, c) => a + c.n, 0)
 
-  const total = byWarehouse.reduce((a, w) => ({ venda: a.venda + w.venda, aluguer: a.aluguer + w.aluguer, sem: a.sem + w.sem, total: a.total + w.total }), { venda: 0, aluguer: 0, sem: 0, total: 0 })
+  const total = byWarehouse.filter((w) => !w.mobilized).reduce((a, w) => ({ venda: a.venda + w.venda, aluguer: a.aluguer + w.aluguer, sem: a.sem + w.sem, total: a.total + w.total }), { venda: 0, aluguer: 0, sem: 0, total: 0 })
   const href = (q: Record<string, string | undefined>) => {
     const s = new URLSearchParams(Object.entries({ wh: p.wh, mod: p.mod, q: p.q, inst: p.inst, imei: p.imei, ...q }).filter(([, v]) => v) as [string, string][])
     return `/stock${s.size ? `?${s}` : ''}`
@@ -87,10 +87,11 @@ export default async function StockPage({ searchParams }: Props) {
         </Link>
         {byWarehouse.map((w) => (
           <Link key={w.warehouse_id} href={href({ wh: w.warehouse_id })} className={cn('block', p.wh === w.warehouse_id && 'ring-2 ring-fc-light-60')}>
-            <Card className="h-full">
+            <Card className={cn('h-full', w.mobilized && 'border-fc-light-60 bg-fc-light-100/5')}>
               <CardHeader><CardTitle>{w.warehouse}</CardTitle></CardHeader>
               <CardContent className="space-y-2">
                 <div className="text-[28px] leading-9 font-light text-fc-dark-100">{n(w.total)}</div>
+                {w.mobilized && <p className="fc-small text-fc-dark-60">Equipamentos da Frotcom instalados em viaturas (aluguer). Não contam no total em stock.</p>}
                 <div className="flex flex-wrap gap-1.5">
                   <Badge variant="info">Venda {n(w.venda)}</Badge>
                   <Badge variant="secondary">Aluguer {n(w.aluguer)}</Badge>

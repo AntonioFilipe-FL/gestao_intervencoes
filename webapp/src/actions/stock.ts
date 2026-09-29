@@ -5,7 +5,7 @@ import { sql } from '@/lib/db'
 import { requireAdmin, requireUser } from '@/lib/auth'
 import { matchEquipment } from '@/lib/hardware'
 
-export type WarehouseTotal = { warehouse_id: string; warehouse: string; venda: number; aluguer: number; sem: number; total: number }
+export type WarehouseTotal = { warehouse_id: string; warehouse: string; venda: number; aluguer: number; sem: number; total: number; mobilized: boolean }
 export type ModelTotal = { warehouse_id: string; equipment: string; venda: number; aluguer: number; sem: number; total: number }
 export type StockItem = {
   imei: string; warehouse_id: string; warehouse: string; equipment: string | null; modality: string | null
@@ -24,13 +24,13 @@ export async function getStockTotals() {
   await requireUser()
   const [byWarehouse, byModel] = await Promise.all([
     sql<WarehouseTotal[]>`
-      select w.id as warehouse_id, w.name as warehouse,
+      select w.id as warehouse_id, w.name as warehouse, (w.type = 'mobilizado') as mobilized,
              count(*) filter (where c.modality = 'Venda')::int as venda,
              count(*) filter (where c.modality = 'Aluguer')::int as aluguer,
              count(*) filter (where c.modality is null)::int as sem,
              count(*)::int as total
       from stock_current c join warehouses w on w.id = c.warehouse_id
-      group by w.id, w.name order by w.name`,
+      group by w.id, w.name, w.type order by (w.type = 'mobilizado'), w.name`,
     sql<ModelTotal[]>`
       select c.warehouse_id, coalesce(e.name, '(sem equipamento)') as equipment,
              count(*) filter (where c.modality = 'Venda')::int as venda,
@@ -174,6 +174,7 @@ export async function getInstalledConflicts() {
     select c.warehouse_id, count(*)::int as n
     from stock_current c join devices d on d.imei = c.imei
     where c.warehouse_id is not null and d.active and nullif(btrim(d.license_plate), '') is not null and not gestao_interv.is_internal_account(d.intranet_account_id)
+      and c.warehouse_id is distinct from gestao_interv.mobilized_wh() -- no Mobilizado estar instalado é o normal
     group by c.warehouse_id`
 }
 
@@ -193,15 +194,19 @@ export async function removeInstalledFromStock(input: { warehouseId?: string; im
       left join intranet_pending p on p.intranet_account_id = d.intranet_account_id
       where c.warehouse_id is not null and d.active and nullif(btrim(d.license_plate), '') is not null
         and not gestao_interv.is_internal_account(d.intranet_account_id)
+        and c.warehouse_id is distinct from gestao_interv.mobilized_wh()
         ${input.warehouseId ? sql`and c.warehouse_id = ${input.warehouseId}` : sql``}
         ${imeis.length ? sql`and c.imei = any(${imeis})` : sql``}`
     if (!rows.length) throw new Error('Não há IMEIs assinalados para dar saída.')
     const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Lisbon' })
     const to = input.toWarehouseId && /^[0-9a-f-]{36}$/i.test(input.toWarehouseId) ? input.toWarehouseId : null
-    const list = rows.filter((r) => r.warehouse_id !== to)
+    const [mob] = await sql<{ id: string }[]>`select gestao_interv.mobilized_wh() as id`
+    const list = rows.filter((r) => r.warehouse_id !== to && !(to === null && r.warehouse_id === mob?.id))
     if (!list.length) throw new Error('Os IMEIs já estão nesse armazém.')
     await sql`insert into stock_movements ${sql(list.map((r) => ({
-      imei: r.imei, equipment_id: r.equipment_id, kind: to ? 'transferencia' : 'ajuste', is_correction: true, from_warehouse_id: r.warehouse_id, to_warehouse_id: to,
+      imei: r.imei, equipment_id: r.equipment_id, kind: to ? 'transferencia' : 'ajuste', is_correction: true, from_warehouse_id: r.warehouse_id,
+      // instalado: Aluguer fica no armazém Mobilizado (continua a ser da Frotcom); Venda sai do stock
+      to_warehouse_id: to ?? (r.modality === 'Aluguer' ? mob?.id ?? null : null),
       modality: r.modality, moved_at: today, created_by: user.email,
       notes: `${to ? 'Transferido (Intranet mostra' : 'Instalado segundo a Intranet:'} ${r.plate}${r.client ? ` · ${r.client}` : ''}${to ? ')' : ''}`,
     })))}`

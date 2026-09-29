@@ -47,6 +47,15 @@ create table if not exists warehouses (
 );
 create unique index if not exists warehouses_name_uq on warehouses (lower(name));
 
+-- Armazém virtual "Instalado Aluguer (Mobilizado)": equipamentos de ALUGUER instalados em viaturas continuam a ser da Frotcom
+alter table warehouses drop constraint if exists warehouses_type_check;
+alter table warehouses add constraint warehouses_type_check check (type in ('saida', 'entrada', 'ambos', 'mobilizado'));
+insert into warehouses (name, type) select 'Instalado Aluguer (Mobilizado)', 'mobilizado'
+ where not exists (select 1 from warehouses where type = 'mobilizado');
+create or replace function gestao_interv.mobilized_wh() returns uuid language sql stable as $$
+  select id from gestao_interv.warehouses where type = 'mobilizado' order by created_at limit 1
+$$;
+
 create table if not exists clients (
   id                      uuid primary key default gen_random_uuid(),
   name                    text not null check (btrim(name) <> ''),
@@ -391,17 +400,25 @@ with b as (
           and (sp is null or im is null or sp = im)
           and has_spent_eq and has_return_eq) as is_transfer
   from (select b.*,
-               -- só há movimento de stock quando há EQUIPAMENTO (não só acessórios) do lado respetivo
-               (sp is not null or spent_equipment_id is not null or nullif(btrim(spent_equipment), '') is not null) as has_spent_eq,
-               (rt is not null or return_equipment_id is not null or nullif(btrim(equipment_return), '') is not null) as has_return_eq
-        from b) b
+               -- só há movimento de stock quando há EQUIPAMENTO (não só acessórios) do lado respetivo;
+               -- na logística basta o "Equipamentos" (equipamento principal) + IMEI
+               (sp is not null or spent_equipment_id is not null or nullif(btrim(spent_equipment), '') is not null
+                or (b.lg and b.equipment_id is not null and b.im is not null)) as has_spent_eq,
+               (rt is not null or return_equipment_id is not null or nullif(btrim(equipment_return), '') is not null
+                or (b.lg and b.equipment_id is not null and b.im is not null)) as has_return_eq
+        from (select b.*, exists (select 1 from gestao_interv.intervention_types t where t.id = b.intervention_type_id
+                 and lower(btrim(t.name)) = any(array['envio de material', 'envio rma', 'entrada de material', 'entrada de rma',
+                   'entrega de material', 'entrega de material try and buy', 'recolha de material',
+                   'desinstalação try and buy', 'desinstalação', 'acerto de stock'])) as lg from b) b) b
 )
 select id as intervention_id, coalesce(sp, im) as imei, coalesce(spent_equipment_id, equipment_id) as equipment_id,
        'transferencia'::text as kind, stock_exit_warehouse_id as from_wh, stock_entry_warehouse_id as to_wh,
        coalesce(return_modality, gestao_interv.modality_of(venda_aluguer)) as modality, intervention_date, coalesce(updated_by, created_by) as by, created_at, 2 as ord
 from c where is_transfer and coalesce(sp, im) ~ '^[0-9]{8,20}$'
 union all
-select id, coalesce(sp, im), coalesce(spent_equipment_id, equipment_id), 'intervencao_saida', stock_exit_warehouse_id, null,
+-- equipamento instalado: Aluguer → fica no armazém "Instalado Aluguer (Mobilizado)"; Venda → sai do stock
+select id, coalesce(sp, im), coalesce(spent_equipment_id, equipment_id), 'intervencao_saida', stock_exit_warehouse_id,
+       case when gestao_interv.modality_of(venda_aluguer) = 'Aluguer' then gestao_interv.mobilized_wh() end,
        gestao_interv.modality_of(venda_aluguer), intervention_date, coalesce(updated_by, created_by), created_at, 3
 from c where not is_transfer and coalesce(sp, im) ~ '^[0-9]{8,20}$'
   and ((stock_exit_warehouse_id is not null and has_spent_eq)
