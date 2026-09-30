@@ -31,7 +31,7 @@ interface Props {
   title: string
   table: string
   items: Item[] | null
-  extraColumns?: { label: string; key: string; readOnly?: boolean }[]
+  extraColumns?: { label: string; key: string; readOnly?: boolean; options?: { value: string; label: string }[] }[]
   /**
    * catálogo de material (Equipamentos/Acessórios): o estado passa a "Novos registos" / "Só histórico",
    * com filtro e troca rápida. Os registos antigos mantêm os itens "só histórico".
@@ -131,7 +131,7 @@ export function SettingsTable({ title, table, items, extraColumns = [], catalog 
                 <TableRow key={item.id}>
                   <TableCell className="font-medium">{item.name}</TableCell>
                   {extraColumns.map((col) => (
-                    <TableCell key={col.key}>{item[col.key] || '---'}</TableCell>
+                    <TableCell key={col.key}>{col.options?.find((o) => o.value === item[col.key])?.label ?? (item[col.key] || '---')}</TableCell>
                   ))}
                   {kit && (
                     <TableCell className="text-fc-dark-60">

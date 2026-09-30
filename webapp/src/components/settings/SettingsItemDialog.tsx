@@ -21,7 +21,7 @@ interface Props {
   item: any | null
   isOpen: boolean
   onClose: () => void
-  extraFields?: { label: string; key: string; type?: string }[]
+  extraFields?: { label: string; key: string; type?: string; options?: { value: string; label: string }[] }[]
   /** texto da caixa "ativo" (ex.: "Disponível em novos registos") */
   activeLabel?: string
   /** equipamentos: acessórios que acompanham o equipamento */
@@ -82,11 +82,22 @@ export function SettingsItemDialog({ table, item, isOpen, onClose, extraFields =
           {extraFields.map((field) => (
             <div key={field.key} className="space-y-2">
               <Label htmlFor={field.key}>{field.label}</Label>
-              <Input
-                id={field.key}
-                value={formData[field.key] || ''}
-                onChange={(e) => setFormData({ ...formData, [field.key]: e.target.value })}
-              />
+              {field.options ? (
+                <select
+                  id={field.key}
+                  value={formData[field.key] || field.options[0]?.value || ''}
+                  onChange={(e) => setFormData({ ...formData, [field.key]: e.target.value })}
+                  className="h-[26px] w-full rounded-[2px] border border-fc-dark-40 bg-fc-grey-80 px-2 text-[13px] outline-none focus:border-fc-light-60"
+                >
+                  {field.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              ) : (
+                <Input
+                  id={field.key}
+                  value={formData[field.key] || ''}
+                  onChange={(e) => setFormData({ ...formData, [field.key]: e.target.value })}
+                />
+              )}
             </div>
           ))}
 

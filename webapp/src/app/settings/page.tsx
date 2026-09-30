@@ -98,7 +98,12 @@ export default async function SettingsPage({
                 title="Lista de Armazéns" 
                 table="warehouses"
                 items={data.warehouses} 
-                extraColumns={[{ label: 'Tipo', key: 'type' }]}
+                extraColumns={[{ label: 'Tipo', key: 'type', options: [
+                  { value: 'ambos', label: 'Entrada e saída' },
+                  { value: 'saida', label: 'Só saída' },
+                  { value: 'entrada', label: 'Só entrada' },
+                  { value: 'mobilizado', label: 'Instalado aluguer (mobilizado)' },
+                ] }]}
               />
             </TabsContent>
 
