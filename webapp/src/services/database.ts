@@ -10,6 +10,7 @@ export type InterventionListItem = {
   imei: string | null
   action_description: string | null
   motive_text: string | null
+  billing: string | null
   client: { name: string } | null
   technician: { name: string } | null
   intervention_type: { name: string } | null
@@ -53,7 +54,7 @@ export async function getInterventions({
     `
     const [{ count }] = await sql<{ count: number }[]>`select count(*)::int as count ${from} ${where}`
     const rows = await sql<InterventionListItem[]>`
-      select i.id, i.intervention_date, i.license_plate, i.imei, i.action_description, i.motive_text,
+      select i.id, i.intervention_date, i.license_plate, i.imei, i.action_description, i.motive_text, i.billing,
         case when c.id is null then null else json_build_object('name', c.name) end as client,
         case when t.id is null then null else json_build_object('name', t.name) end as technician,
         case when it.id is null then null else json_build_object('name', it.name) end as intervention_type

@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { PageHeader } from '@/components/page-header'
 import { Pagination } from '@/components/pagination'
+import { isBillable } from '@/lib/billing-notification'
 
 const PAGE_SIZE = 25
 
@@ -113,6 +114,7 @@ export default async function InterventionsPage({ searchParams }: Props) {
                 <TableHead>Técnico</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Descrição</TableHead>
+                <TableHead>Faturar</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -140,6 +142,7 @@ export default async function InterventionsPage({ searchParams }: Props) {
                   <TableCell className="max-w-80 truncate text-fc-dark-60">
                     {i.action_description ?? i.motive_text ?? ''}
                   </TableCell>
+                  <TableCell>{isBillable(i.billing) ? <Badge variant="success">Sim</Badge> : ''}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
