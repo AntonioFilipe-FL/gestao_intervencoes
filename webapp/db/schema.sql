@@ -496,7 +496,17 @@ begin
   update gestao_interv.stock_movements m set superseded_at = now()
   from gestao_interv.interventions i
   where i.id = p_intervention and m.is_correction and m.superseded_at is null
-    and m.imei in (btrim(i.imei), btrim(i.spent_equipment_imei), btrim(i.return_equipment_imei));
+    and m.imei in (btrim(i.imei), btrim(i.spent_equipment_imei), btrim(i.return_equipment_imei))
+    -- só se a intervenção é posterior (ou do mesmo dia) à correção; importações de intervenções antigas não anulam correções
+    and i.intervention_date >= m.moved_at;
   get diagnostics n = row_count;
   return n;
 end $$;
+
+-- repara correções marcadas como substituídas por intervenções com data anterior (ex.: reimportação da Sheet)
+update gestao_interv.stock_movements m set superseded_at = null
+where m.is_correction and m.superseded_at is not null
+  and not exists (
+    select 1 from gestao_interv.interventions i
+    where m.imei in (btrim(i.imei), btrim(i.spent_equipment_imei), btrim(i.return_equipment_imei))
+      and i.intervention_date >= m.moved_at);

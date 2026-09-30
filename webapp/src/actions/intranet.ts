@@ -195,3 +195,22 @@ export async function setHardwareMapping(hardware: string, equipmentId: string |
     return { ok: false as const, error: (e as Error).message }
   }
 }
+
+/**
+ * "Conta Intranet" e "Matrícula Intranet" de um IMEI, para preencher o formulário.
+ * Conta: nome da conta interna da Frotcom (ex.: "Frotcom Lusitana Storage Service") ou "Conta do cliente".
+ */
+export async function getImeiIntranetInfo(imei: string): Promise<{ account: string | null; plate: string | null } | null> {
+  await requireUser()
+  const i = imei.trim()
+  if (!i) return null
+  const [d] = await sql<{ account_id: string | null; plate: string | null; internal: boolean; name: string | null }[]>`
+    select d.intranet_account_id as account_id, nullif(btrim(d.license_plate), '') as plate,
+           gestao_interv.is_internal_account(d.intranet_account_id) as internal,
+           coalesce((select p.name from intranet_pending p where p.intranet_account_id = d.intranet_account_id),
+                    (select c.intranet_short_name from clients c where c.intranet_account_id = d.intranet_account_id and c.intranet_short_name is not null limit 1),
+                    (select c.name from clients c where c.intranet_account_id = d.intranet_account_id limit 1)) as name
+    from devices d where d.imei = ${i} limit 1`
+  if (!d) return null
+  return { account: d.account_id ? (d.internal ? d.name : 'Conta do cliente') : null, plate: d.plate }
+}

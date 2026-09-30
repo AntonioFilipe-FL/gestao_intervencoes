@@ -15,7 +15,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select'
 import { ImeiField } from '@/components/interventions/ImeiField'
 import { PlateField } from '@/components/interventions/PlateField'
 import type { ClientOption } from '@/lib/intranet'
-import { getPlateImeis, type PlateImeis } from '@/actions/intranet'
+import { getPlateImeis, getImeiIntranetInfo, type PlateImeis } from '@/actions/intranet'
 import { matchEquipment } from '@/lib/hardware'
 import { firstUrl } from '@/components/ui/link-text'
 
@@ -110,6 +110,13 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
   }
 
   const selectedClientId = watch('client_id')
+  // Conta / Matrícula Intranet: preenchidas pela Intranet ao escolher o IMEI (editáveis; não apaga o que já foi escrito)
+  const fillIntranet = async (imei: string) => {
+    const r = await getImeiIntranetInfo(imei).catch(() => null)
+    if (!r) return
+    if (r.account && !getValues('intranet_account')) setValue('intranet_account', r.account, { shouldDirty: true })
+    if (r.plate && !getValues('intranet_license_plate')) setValue('intranet_license_plate', r.plate, { shouldDirty: true })
+  }
   /** link "Abrir" por baixo de campos que guardam links */
   const OpenLink = ({ name }: { name: 'report_projeto' | 'crm_vehicle' | 'contract_addendum' | 'zoho_form' }) => {
     const url = firstUrl(watch(name))
@@ -314,6 +321,7 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
                   clientId={selectedClientId || undefined}
                   onPick={(d) => {
                     if (!getValues('imei')) setValue('imei', d.imei)
+                    void fillIntranet(d.imei)
                     const eq = matchEq(d.model)
                     if (eq && !getValues('equipment_id')) setValue('equipment_id', eq.id)
                   }}
@@ -335,12 +343,24 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
                   clientName={clientOptions.find((c) => c.value === selectedClientId)?.label}
                   onPick={(d) => {
                     if (d.license_plate && !getValues('license_plate')) setValue('license_plate', d.license_plate)
+                    void fillIntranet(d.imei)
                     const eq = matchEq(d.model)
                     if (eq && !getValues('equipment_id')) setValue('equipment_id', eq.id)
                   }}
                 />
               )}
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="intranet_account">Conta Intranet</Label>
+            <Input id="intranet_account" list="intranet-accounts" {...register('intranet_account')} placeholder="Automático ao escolher o IMEI (ex.: Conta do cliente)" />
+            <datalist id="intranet-accounts">
+              {['Conta do cliente', ...(referenceData.intranetAccounts ?? []).map((a) => a.name).filter((n) => n !== 'Conta do cliente')].map((n) => <option key={n} value={n} />)}
+            </datalist>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="intranet_license_plate">Matrícula Intranet</Label>
+            <Input id="intranet_license_plate" {...register('intranet_license_plate')} placeholder="Automático ao escolher o IMEI" />
           </div>
           <div className="space-y-1.5">
             <Label>Equipamento Principal</Label>
