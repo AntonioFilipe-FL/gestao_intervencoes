@@ -486,7 +486,7 @@ select distinct on (m.imei)
        coalesce(m.modality, (select m3.modality from stock_movements m3 where m3.imei = m.imei and m3.modality is not null
                              order by m3.moved_at desc, m3.seq desc limit 1)) as modality
 from stock_movements m
-where not (m.is_correction and m.superseded_at is not null)
+where m.superseded_at is null
 order by m.imei, m.moved_at desc, m.seq desc;
 
 /** Marca como substituídas as correções dos IMEIs de uma intervenção (chamado ao registar/editar/importar) */
@@ -500,6 +500,16 @@ begin
     -- só se a intervenção é posterior (ou do mesmo dia) à correção; importações de intervenções antigas não anulam correções
     and i.intervention_date >= m.moved_at;
   get diagnostics n = row_count;
+  -- transferências manuais feitas ANTES de esta intervenção ser gravada, com data posterior à saída que ela regista:
+  -- foram feitas com informação desatualizada (o IMEI já tinha saído) → deixam de contar
+  update gestao_interv.stock_movements m set superseded_at = now()
+  from gestao_interv.stock_movements s
+  where s.intervention_id = p_intervention and s.kind = 'intervencao_saida'
+    and m.imei = s.imei and m.intervention_id is null and m.kind = 'transferencia'
+    and m.superseded_at is null and m.moved_at >= s.moved_at and m.created_at < s.created_at
+    and not exists (select 1 from gestao_interv.stock_movements x
+                    where x.imei = m.imei and x.intervention_id is not null and x.id <> s.id
+                      and x.moved_at between s.moved_at and m.moved_at and (x.moved_at, x.seq) > (s.moved_at, s.seq));
   return n;
 end $$;
 
