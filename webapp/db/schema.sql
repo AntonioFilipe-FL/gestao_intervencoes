@@ -510,3 +510,10 @@ where m.is_correction and m.superseded_at is not null
     select 1 from gestao_interv.interventions i
     where m.imei in (btrim(i.imei), btrim(i.spent_equipment_imei), btrim(i.return_equipment_imei))
       and i.intervention_date >= m.moved_at);
+
+-- Papel "financeiro": só consulta e marca intervenções faturáveis como processadas
+alter table profiles drop constraint if exists profiles_role_check;
+alter table profiles add constraint profiles_role_check check (role in ('admin', 'user', 'financeiro'));
+alter table interventions
+  add column if not exists billing_processed_at timestamptz,
+  add column if not exists billing_processed_by text;

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { sql } from '@/lib/db'
-import { requireAdmin } from '@/lib/auth'
+import { requireAdmin, requireBilling } from '@/lib/auth'
 import { interventionSchema, toDbValues, type AccessoryLine } from '@/lib/schemas/intervention'
 import { isBillable, notifyBilling } from '@/lib/billing-notification'
 import { headers } from 'next/headers'
@@ -140,5 +140,24 @@ export async function deleteIntervention(id: string) {
     return { success: true as const }
   } catch (e) {
     return { success: false as const, error: (e as Error).message }
+  }
+}
+
+/** Financeiro/admin: marca (ou desmarca) uma intervenção com Faturar = Sim como processada. Não mexe em mais nada. */
+export async function setBillingProcessed(id: string, processed: boolean) {
+  try {
+    const user = await requireBilling()
+    const [row] = await sql<{ billing: string | null }[]>`select billing from interventions where id = ${id}`
+    if (!row) throw new Error('Intervenção não encontrada.')
+    if (!isBillable(row.billing)) throw new Error('Só é possível processar intervenções com Faturar = Sim.')
+    await sql`update interventions set
+                billing_processed_at = ${processed ? sql`now()` : null},
+                billing_processed_by = ${processed ? user.email : null}
+              where id = ${id}`
+    revalidatePath('/interventions')
+    revalidatePath(`/interventions/${id}`)
+    return { ok: true as const }
+  } catch (e) {
+    return { ok: false as const, error: (e as Error).message }
   }
 }

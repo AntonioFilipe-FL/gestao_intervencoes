@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import { sql } from '@/lib/db'
 import { getSession } from '@/lib/session'
 
-export type CurrentUser = { email: string; name?: string; picture?: string; role: 'admin' | 'user' }
+export type CurrentUser = { email: string; name?: string; picture?: string; role: 'admin' | 'user' | 'financeiro' }
 
 /**
  * Utilizador autenticado E autorizado (email na tabela profiles).
@@ -13,7 +13,7 @@ export type CurrentUser = { email: string; name?: string; picture?: string; role
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const session = await getSession()
   if (!session?.email) return null
-  const [profile] = await sql<{ role: 'admin' | 'user' }[]>`
+  const [profile] = await sql<{ role: CurrentUser['role'] }[]>`
     select role from profiles where email = ${session.email.toLowerCase()}
   `
   if (!profile) return null
@@ -23,6 +23,13 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
 export async function requireUser() {
   const user = await getCurrentUser()
   if (!user) redirect((await getSession()) ? '/unauthorized' : '/login')
+  return user
+}
+
+/** Admin ou financeiro (marcar faturação como processada) */
+export async function requireBilling() {
+  const user = await requireUser()
+  if (user.role !== 'admin' && user.role !== 'financeiro') throw new Error('Sem permissões: apenas o financeiro ou administradores.')
   return user
 }
 

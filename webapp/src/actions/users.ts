@@ -16,7 +16,7 @@ export async function updateUserRole(email: string, role: string) {
     const me = await requireAdmin()
     const e = email.toLowerCase().trim()
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) throw new Error('Email inválido')
-    if (!['admin', 'user'].includes(role)) throw new Error('Papel inválido')
+    if (!['admin', 'user', 'financeiro'].includes(role)) throw new Error('Papel inválido')
     if (e === me.email.toLowerCase() && role !== 'admin') throw new Error('Não pode retirar a si próprio o papel de admin.')
     await sql`insert into profiles (email, role) values (${e}, ${role})
               on conflict (email) do update set role = excluded.role`

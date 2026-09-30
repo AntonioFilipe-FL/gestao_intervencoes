@@ -10,11 +10,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { PageHeader } from '@/components/page-header'
 import { Pagination } from '@/components/pagination'
 import { isBillable } from '@/lib/billing-notification'
+import { BillingProcessed } from '@/components/interventions/BillingProcessed'
 
 const PAGE_SIZE = 25
 
 interface Props {
-  searchParams: Promise<{ page?: string; client?: string; tech?: string; plate?: string; from?: string; to?: string }>
+  searchParams: Promise<{ page?: string; client?: string; tech?: string; plate?: string; from?: string; to?: string; fat?: string }>
 }
 
 const fmtDate = (d: string) => d.split('-').reverse().join('/')
@@ -27,10 +28,11 @@ export default async function InterventionsPage({ searchParams }: Props) {
   const plateSearch = params.plate || ''
   const dateFrom = params.from || ''
   const dateTo = params.to || ''
+  const billingFilter = ['faturar', 'pendente', 'processado'].includes(params.fat ?? '') ? params.fat! : ''
 
   const [user, { interventions, totalPages, count, error }] = await Promise.all([
     getCurrentUser(),
-    getInterventions({ page: currentPage, pageSize: PAGE_SIZE, clientSearch, techSearch, plateSearch, dateFrom, dateTo }),
+    getInterventions({ page: currentPage, pageSize: PAGE_SIZE, clientSearch, techSearch, plateSearch, dateFrom, dateTo, billingFilter }),
   ])
 
   if (error) {
@@ -41,9 +43,9 @@ export default async function InterventionsPage({ searchParams }: Props) {
     )
   }
 
-  const hasFilters = clientSearch || techSearch || plateSearch || dateFrom || dateTo
+  const hasFilters = clientSearch || techSearch || plateSearch || dateFrom || dateTo || billingFilter
   const pageHref = (p: number) =>
-    `/interventions?${new URLSearchParams({ page: String(p), client: clientSearch, tech: techSearch, plate: plateSearch, from: dateFrom, to: dateTo })}`
+    `/interventions?${new URLSearchParams({ page: String(p), client: clientSearch, tech: techSearch, plate: plateSearch, from: dateFrom, to: dateTo, fat: billingFilter })}`
   const from = count === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
   const to = Math.min(currentPage * PAGE_SIZE, count)
 
@@ -64,7 +66,7 @@ export default async function InterventionsPage({ searchParams }: Props) {
       {/* Filtros */}
       <Card>
         <CardContent className="py-4">
-          <form className="grid grid-cols-1 items-end gap-4 md:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_9.5rem_9.5rem_auto]">
+          <form className="grid grid-cols-1 items-end gap-4 md:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_9.5rem_9.5rem_10rem_auto]">
             <div className="space-y-1.5">
               <Label htmlFor="client">Cliente</Label>
               <Input id="client" name="client" placeholder="Nome do cliente" defaultValue={clientSearch} />
@@ -84,6 +86,15 @@ export default async function InterventionsPage({ searchParams }: Props) {
             <div className="space-y-1.5">
               <Label htmlFor="to">Data até</Label>
               <Input id="to" name="to" type="date" defaultValue={dateTo} min={dateFrom || undefined} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="fat">Faturação</Label>
+              <select id="fat" name="fat" defaultValue={billingFilter} className="h-[26px] w-full rounded-[2px] border border-fc-dark-40 bg-fc-grey-80 px-2 text-[13px] outline-none focus:border-fc-light-60">
+                <option value="">Todas</option>
+                <option value="faturar">Faturar = Sim</option>
+                <option value="pendente">Por processar</option>
+                <option value="processado">Processadas</option>
+              </select>
             </div>
             <div className="flex gap-2">
               <button type="submit" className={buttonVariants({ variant: 'secondary' })}>Filtrar</button>
@@ -115,6 +126,7 @@ export default async function InterventionsPage({ searchParams }: Props) {
                 <TableHead>Tipo</TableHead>
                 <TableHead>Descrição</TableHead>
                 <TableHead>Faturar</TableHead>
+                <TableHead>Processado</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -143,6 +155,12 @@ export default async function InterventionsPage({ searchParams }: Props) {
                     {i.action_description ?? i.motive_text ?? ''}
                   </TableCell>
                   <TableCell>{isBillable(i.billing) ? <Badge variant="success">Sim</Badge> : ''}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {isBillable(i.billing) && (
+                      <BillingProcessed id={i.id} processedAt={i.billing_processed_at} processedBy={i.billing_processed_by}
+                        canEdit={user?.role === 'admin' || user?.role === 'financeiro'} compact />
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

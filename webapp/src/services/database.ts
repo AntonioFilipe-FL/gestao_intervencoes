@@ -11,6 +11,8 @@ export type InterventionListItem = {
   action_description: string | null
   motive_text: string | null
   billing: string | null
+  billing_processed_at: string | null
+  billing_processed_by: string | null
   client: { name: string } | null
   technician: { name: string } | null
   intervention_type: { name: string } | null
@@ -24,6 +26,7 @@ export async function getInterventions({
   plateSearch = '',
   dateFrom = '',
   dateTo = '',
+  billingFilter = '',
 }: {
   page?: number
   pageSize?: number
@@ -33,6 +36,8 @@ export async function getInterventions({
   /** YYYY-MM-DD (inclusive) */
   dateFrom?: string
   dateTo?: string
+  /** 'pendente' | 'processado' | 'faturar' */
+  billingFilter?: string
 } = {}) {
   await requireUser()
   try {
@@ -44,6 +49,8 @@ export async function getInterventions({
       ${isDate(dateTo) ? sql`and i.intervention_date <= ${dateTo}::date` : sql``}
       ${clientSearch ? sql`and c.name ilike ${like(clientSearch)}` : sql``}
       ${techSearch ? sql`and t.name ilike ${like(techSearch)}` : sql``}
+      ${billingFilter ? sql`and lower(btrim(i.billing)) = 'sim'` : sql``}
+      ${billingFilter === 'pendente' ? sql`and i.billing_processed_at is null` : billingFilter === 'processado' ? sql`and i.billing_processed_at is not null` : sql``}
       ${plateSearch ? sql`and (i.license_plate ilike ${like(plateSearch)} or i.imei ilike ${like(plateSearch)} or i.crm_vehicle ilike ${like(plateSearch)})` : sql``}
     `
     const from = sql`
@@ -54,7 +61,7 @@ export async function getInterventions({
     `
     const [{ count }] = await sql<{ count: number }[]>`select count(*)::int as count ${from} ${where}`
     const rows = await sql<InterventionListItem[]>`
-      select i.id, i.intervention_date, i.license_plate, i.imei, i.action_description, i.motive_text, i.billing,
+      select i.id, i.intervention_date, i.license_plate, i.imei, i.action_description, i.motive_text, i.billing, i.billing_processed_at::text, i.billing_processed_by,
         case when c.id is null then null else json_build_object('name', c.name) end as client,
         case when t.id is null then null else json_build_object('name', t.name) end as technician,
         case when it.id is null then null else json_build_object('name', it.name) end as intervention_type

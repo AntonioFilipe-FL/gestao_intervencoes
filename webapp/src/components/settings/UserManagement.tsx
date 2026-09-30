@@ -131,6 +131,7 @@ export function UserManagement() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="user">User</SelectItem>
+                        <SelectItem value="financeiro">Financeiro</SelectItem>
                         <SelectItem value="admin">Admin</SelectItem>
                       </SelectContent>
                     </Select>
@@ -175,6 +176,7 @@ export function UserManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="user">Utilizador Comum</SelectItem>
+                  <SelectItem value="financeiro">Financeiro (só marca faturação como processada)</SelectItem>
                   <SelectItem value="admin">Administrador</SelectItem>
                 </SelectContent>
               </Select>

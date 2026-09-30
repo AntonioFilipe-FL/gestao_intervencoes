@@ -1,5 +1,7 @@
 import { getInterventionById } from '@/services/database'
 import { requireUser } from '@/lib/auth'
+import { BillingProcessed } from '@/components/interventions/BillingProcessed'
+import { isBillable } from '@/lib/billing-notification'
 import { BillingEmailStatus } from '@/components/interventions/BillingEmailStatus'
 import { DeleteIntervention } from '@/components/interventions/DeleteIntervention'
 import { notFound } from 'next/navigation'
@@ -172,6 +174,10 @@ export default async function InterventionDetailsPage({ params }: Props) {
             </CardHeader>
             <CardContent className="space-y-6">
               <DetailItem label="Faturar?" value={intervention.billing} />
+              {isBillable(intervention.billing) && (
+                <BillingProcessed id={intervention.id} processedAt={intervention.billing_processed_at ? String(intervention.billing_processed_at) : null}
+                  processedBy={intervention.billing_processed_by} canEdit={user.role === 'admin' || user.role === 'financeiro'} />
+              )}
               {intervention.billing_email && <DetailItem label="Email de faturação (histórico)" value={intervention.billing_email} />}
               <DetailItem label="Observações de Faturação" value={intervention.billing_observations} />
               <Separator />
