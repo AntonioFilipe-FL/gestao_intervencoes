@@ -8,6 +8,12 @@ export const billingRecipients = () =>
   (process.env.BILLING_EMAIL_TO || 'financeira@pt.frotcom.com').split(',').map(s => s.trim()).filter(Boolean)
 
 /** "Faturar = Sim" (ignora maiúsculas/acentos) */
+/** Envio automático ligado/desligado (Configurações › Email). Por omissão: ligado. */
+export async function isBillingEmailEnabled() {
+  const [r] = await sql<{ value: string | null }[]>`select value from app_settings where key = 'billing_email_enabled'`
+  return r?.value !== 'off'
+}
+
 export const isBillable = (v: string | null | undefined) =>
   (v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase() === 'sim'
 

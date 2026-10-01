@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { sql } from '@/lib/db'
 import { requireAdmin, requireBilling } from '@/lib/auth'
 import { interventionSchema, toDbValues, type AccessoryLine } from '@/lib/schemas/intervention'
-import { isBillable, notifyBilling } from '@/lib/billing-notification'
+import { isBillable, notifyBilling, isBillingEmailEnabled } from '@/lib/billing-notification'
 import { headers } from 'next/headers'
 import { resolveClientId } from '@/lib/intranet'
 
@@ -53,7 +53,7 @@ export async function createIntervention(input: unknown) {
 
     // Faturar = Sim → email automático à financeira, a partir da conta de quem gravou
     let emailWarning: string | undefined
-    if (isBillable(parsed.data.billing)) {
+    if (isBillable(parsed.data.billing) && (await isBillingEmailEnabled())) {
       const r = await notifyBilling(id, user, await appUrl())
       if (!r.ok) emailWarning = `O registo foi gravado, mas o email à financeira não foi enviado: ${r.error}`
     }
@@ -102,7 +102,7 @@ export async function updateIntervention(id: string, input: unknown) {
     // só envia quando o registo PASSA a Faturar = Sim e ainda não tinha sido enviado
     // (registos antigos da folha que já eram "Sim" não geram email ao serem editados)
     let emailWarning: string | undefined
-    if (isBillable(parsed.data.billing) && !isBillable(before.billing ?? undefined) && !before.billing_notified_at) {
+    if (isBillable(parsed.data.billing) && !isBillable(before.billing ?? undefined) && !before.billing_notified_at && (await isBillingEmailEnabled())) {
       const r = await notifyBilling(id, user, await appUrl())
       if (!r.ok) emailWarning = `As alterações foram gravadas, mas o email à financeira não foi enviado: ${r.error}`
     }
@@ -121,6 +121,8 @@ export async function updateIntervention(id: string, input: unknown) {
 /** Reenvia manualmente o email à financeira (ex.: após um erro) */
 export async function resendBillingEmail(id: string) {
   const user = await requireAdmin()
+  if (!(await isBillingEmailEnabled()))
+    return { ok: false as const, error: 'O envio de emails à financeira está desligado (Configurações › Email).' }
   const r = await notifyBilling(id, user, await appUrl())
   revalidatePath(`/interventions/${id}`)
   return r
