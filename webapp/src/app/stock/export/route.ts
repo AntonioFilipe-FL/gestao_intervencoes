@@ -1,6 +1,10 @@
 import ExcelJS from 'exceljs'
 import { sql } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
+import { syncFromIntranet, waitForAutoSync, getLastSync, intranetConfigured } from '@/lib/intranet'
+
+// antes de exportar, atualiza os IMEIs da Intranet se a última sincronização tiver mais do que isto
+const MAX_SYNC_AGE_MS = 10 * 60 * 1000
 
 /**
  * Exporta o stock para Excel: uma folha por armazém (ou só o armazém indicado em ?wh=),
@@ -12,15 +16,27 @@ export async function GET(request: Request) {
   const wh = new URL(request.url).searchParams.get('wh')
   const whId = wh && /^[0-9a-f-]{36}$/i.test(wh) ? wh : null
 
+  // dados da Intranet no momento da exportação
+  let syncNote = ''
+  if (intranetConfigured()) {
+    await waitForAutoSync()
+    const last = await getLastSync()
+    if (!last?.at || Date.now() - new Date(last.at).getTime() > MAX_SYNC_AGE_MS) {
+      const r = await syncFromIntranet(`${user.email} (exportação de stock)`)
+      if (!r.ok) syncNote = `Não foi possível atualizar da Intranet (${r.error ?? 'erro'}); dados da última sincronização.`
+    }
+  }
+  const lastSync = await getLastSync()
+
   const rows = await sql<{
     warehouse: string; imei: string; equipment: string | null; hardware: string | null; modality: string | null
-    moved_at: string; kind: string; plate: string | null; client: string | null
+    moved_at: string; kind: string; installed: boolean; plate: string | null; client: string | null
   }[]>`
     select w.name as warehouse, c.imei, e.name as equipment, d.model as hardware, c.modality, c.moved_at::text, c.kind,
-           case when d.active and nullif(btrim(d.license_plate), '') is not null
-                 and not gestao_interv.is_internal_account(d.intranet_account_id) then d.license_plate end as plate,
-           case when d.active and nullif(btrim(d.license_plate), '') is not null
-                 and not gestao_interv.is_internal_account(d.intranet_account_id) then coalesce(dc.name, p.name) end as client
+           (d.active and nullif(btrim(d.license_plate), '') is not null
+              and not gestao_interv.is_internal_account(d.intranet_account_id)) as installed,
+           nullif(btrim(d.license_plate), '') as plate,
+           coalesce(dc.name, p.name) as client
     from stock_current c
     join warehouses w on w.id = c.warehouse_id
     left join equipment_list e on e.id = c.equipment_id
@@ -60,9 +76,12 @@ export async function GET(request: Request) {
     sum.addRow({
       wh: name, t: list.length, v: list.filter((r) => r.modality === 'Venda').length,
       a: list.filter((r) => r.modality === 'Aluguer').length, s: list.filter((r) => !r.modality).length,
-      i: list.filter((r) => r.plate).length,
+      i: list.filter((r) => r.installed).length,
     })
   header(sum)
+  sum.addRow([])
+  sum.addRow([`Dados da Intranet (matrícula/conta): ${lastSync?.at ? new Date(lastSync.at).toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon' }) : 'nunca sincronizado'}`])
+  if (syncNote) sum.addRow([syncNote])
 
   // Uma folha por armazém
   for (const [name, list] of groups) {
@@ -72,17 +91,17 @@ export async function GET(request: Request) {
       { header: 'Hardware (Intranet)', key: 'hw', width: 28 }, { header: 'Venda / Aluguer', key: 'mod', width: 16 },
       { header: 'Em stock desde', key: 'since', width: 15 }, { header: 'Último movimento', key: 'kind', width: 20 },
       { header: 'Estado', key: 'state', width: 26 }, { header: 'Matrícula (Intranet)', key: 'plate', width: 20 },
-      { header: 'Cliente (Intranet)', key: 'client', width: 32 },
+      { header: 'Cliente / Conta (Intranet)', key: 'client', width: 34 },
     ]
     for (const r of list) {
       const row = ws.addRow({
         imei: r.imei, eq: r.equipment ?? '', hw: r.hardware ?? '', mod: r.modality ?? '',
         since: new Date(`${r.moved_at.slice(0, 10)}T00:00:00Z`), kind: KIND[r.kind] ?? r.kind,
-        state: r.plate ? 'Instalado (segundo a Intranet)' : 'Em stock', plate: r.plate ?? '', client: r.client ?? '',
+        state: r.installed ? 'Instalado (segundo a Intranet)' : 'Em stock', plate: r.plate ?? '', client: r.client ?? '',
       })
       row.getCell('imei').numFmt = '@'
       row.getCell('since').numFmt = 'dd/mm/yyyy'
-      if (r.plate) row.getCell('state').font = { color: { argb: 'FFC7830B' }, bold: true }
+      if (r.installed) row.getCell('state').font = { color: { argb: 'FFC7830B' }, bold: true }
     }
     header(ws)
   }
