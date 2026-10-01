@@ -15,7 +15,7 @@ import { BillingProcessed } from '@/components/interventions/BillingProcessed'
 const PAGE_SIZE = 25
 
 interface Props {
-  searchParams: Promise<{ page?: string; client?: string; tech?: string; plate?: string; from?: string; to?: string; fat?: string }>
+  searchParams: Promise<{ page?: string; client?: string; tech?: string; plate?: string; from?: string; to?: string; fat?: string; ord?: string }>
 }
 
 const fmtDate = (d: string) => d.split('-').reverse().join('/')
@@ -28,11 +28,12 @@ export default async function InterventionsPage({ searchParams }: Props) {
   const plateSearch = params.plate || ''
   const dateFrom = params.from || ''
   const dateTo = params.to || ''
+  const orderBy = params.ord === 'registo' ? 'registo' : 'intervencao'
   const billingFilter = ['faturar', 'pendente', 'processado'].includes(params.fat ?? '') ? params.fat! : ''
 
   const [user, { interventions, totalPages, count, error }] = await Promise.all([
     getCurrentUser(),
-    getInterventions({ page: currentPage, pageSize: PAGE_SIZE, clientSearch, techSearch, plateSearch, dateFrom, dateTo, billingFilter }),
+    getInterventions({ page: currentPage, pageSize: PAGE_SIZE, clientSearch, techSearch, plateSearch, dateFrom, dateTo, billingFilter, orderBy }),
   ])
 
   if (error) {
@@ -45,7 +46,9 @@ export default async function InterventionsPage({ searchParams }: Props) {
 
   const hasFilters = clientSearch || techSearch || plateSearch || dateFrom || dateTo || billingFilter
   const pageHref = (p: number) =>
-    `/interventions?${new URLSearchParams({ page: String(p), client: clientSearch, tech: techSearch, plate: plateSearch, from: dateFrom, to: dateTo, fat: billingFilter })}`
+    `/interventions?${new URLSearchParams({ page: String(p), client: clientSearch, tech: techSearch, plate: plateSearch, from: dateFrom, to: dateTo, fat: billingFilter, ord: orderBy === 'registo' ? 'registo' : '' })}`
+  const sortHref = (o: string) =>
+    `/interventions?${new URLSearchParams(Object.entries({ client: clientSearch, tech: techSearch, plate: plateSearch, from: dateFrom, to: dateTo, fat: billingFilter, ord: o === 'registo' ? 'registo' : '' }).filter(([, v]) => v))}`
   const from = count === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
   const to = Math.min(currentPage * PAGE_SIZE, count)
 
@@ -96,6 +99,7 @@ export default async function InterventionsPage({ searchParams }: Props) {
                 <option value="processado">Processadas</option>
               </select>
             </div>
+            {orderBy === 'registo' && <input type="hidden" name="ord" value="registo" />}
             <div className="flex gap-2">
               <button type="submit" className={buttonVariants({ variant: 'secondary' })}>Filtrar</button>
               {hasFilters && (
@@ -119,7 +123,16 @@ export default async function InterventionsPage({ searchParams }: Props) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Data</TableHead>
+                <TableHead>
+                  <Link href={sortHref('intervencao')} className={orderBy === 'intervencao' ? 'underline' : 'hover:underline'} title="Ordenar por data de intervenção">
+                    Data{orderBy === 'intervencao' ? ' ▼' : ''}
+                  </Link>
+                </TableHead>
+                <TableHead>
+                  <Link href={sortHref('registo')} className={orderBy === 'registo' ? 'underline' : 'hover:underline'} title="Ordenar por data de registo">
+                    Registo{orderBy === 'registo' ? ' ▼' : ''}
+                  </Link>
+                </TableHead>
                 <TableHead>Cliente</TableHead>
                 <TableHead>Matrícula</TableHead>
                 <TableHead>Técnico</TableHead>
@@ -137,6 +150,7 @@ export default async function InterventionsPage({ searchParams }: Props) {
                       {fmtDate(i.intervention_date)}
                     </Link>
                   </TableCell>
+                  <TableCell className="text-fc-dark-60">{i.registered_at ? fmtDate(i.registered_at) : '—'}</TableCell>
                   <TableCell className="max-w-56 truncate">
                     <Link href={`/interventions/${i.id}`} className="text-fc-light-100 hover:text-fc-light-60">
                       {i.client?.name ?? '—'}
