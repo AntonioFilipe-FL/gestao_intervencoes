@@ -154,10 +154,10 @@ export default async function StockPage({ searchParams }: Props) {
       )}
 
       {/* IMEIs em stock */}
-      <Card>
+      <Card id="imeis" className="scroll-mt-4">
         <CardHeader><CardTitle>IMEIs em stock {selectedWh ? `· ${selectedWh.warehouse}` : ''}</CardTitle></CardHeader>
         <CardContent className="pb-3">
-          <form className="flex flex-wrap items-end gap-3">
+          <form action="/stock#imeis" className="flex flex-wrap items-end gap-3">
             {p.wh && <input type="hidden" name="wh" value={p.wh} />}
             {p.inst && <input type="hidden" name="inst" value={p.inst} />}
             {p.imei && <input type="hidden" name="imei" value={p.imei} />}
@@ -172,7 +172,7 @@ export default async function StockPage({ searchParams }: Props) {
               </select>
             </div>
             <button className={buttonVariants({ variant: 'secondary' })}>Filtrar</button>
-            {(p.q || p.mod) && <Link href={href({ q: undefined, mod: undefined })} className={buttonVariants({ variant: 'inverse' })}>Limpar</Link>}
+            {(p.q || p.mod) && <Link href={`${href({ q: undefined, mod: undefined })}#imeis`} className={buttonVariants({ variant: 'inverse' })}>Limpar</Link>}
           </form>
         </CardContent>
         {items.length === 0 ? (
@@ -209,11 +209,11 @@ export default async function StockPage({ searchParams }: Props) {
       </Card>
 
       {/* Movimentos */}
-      <Card id="movimentos">
+      <Card id="movimentos" className="scroll-mt-4">
         <CardHeader><CardTitle>{p.imei ? `Movimentos do IMEI ${p.imei}` : 'Últimos movimentos'}</CardTitle></CardHeader>
         <CardContent className="pb-3">
           {/* mantém o armazém e os filtros escolhidos */}
-          <form action="#movimentos" className="flex items-end gap-3">
+          <form action="/stock#movimentos" className="flex items-end gap-3">
             {p.wh && <input type="hidden" name="wh" value={p.wh} />}
             {p.mod && <input type="hidden" name="mod" value={p.mod} />}
             {p.q && <input type="hidden" name="q" value={p.q} />}
