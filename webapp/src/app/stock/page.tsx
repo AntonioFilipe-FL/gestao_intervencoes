@@ -42,6 +42,7 @@ export default async function StockPage({ searchParams }: Props) {
     getInstalledConflicts(),
   ])
   const warehouses = allWarehouses.filter((w) => w.type !== 'mobilizado')
+  const mobilizedIds = new Set(allWarehouses.filter((w) => w.type === 'mobilizado').map((w) => w.id))
   const conflictOf = (wh?: string) => conflicts.filter((c) => !wh || c.warehouse_id === wh).reduce((a, c) => a + c.n, 0)
 
   const total = byWarehouse.filter((w) => !w.mobilized).reduce((a, w) => ({ venda: a.venda + w.venda, aluguer: a.aluguer + w.aluguer, sem: a.sem + w.sem, total: a.total + w.total }), { venda: 0, aluguer: 0, sem: 0, total: 0 })
@@ -193,7 +194,11 @@ export default async function StockPage({ searchParams }: Props) {
                   <TableCell>{fmtDate(i.moved_at)}</TableCell>
                   <TableCell className="text-fc-dark-60">{KIND[i.kind] ?? i.kind}</TableCell>
                   <TableCell>
-                    {i.installed_plate ? (
+                    {i.installed_plate && mobilizedIds.has(i.warehouse_id) ? (
+                      <span className="text-[#4b850d]" title="Instalado em aluguer: já saiu do stock físico (Mobilizado)">
+                        ✓ {i.installed_plate}{i.installed_client ? ` · ${i.installed_client}` : ''}
+                      </span>
+                    ) : i.installed_plate ? (
                       <span className="flex items-center gap-1 text-[#c7830b]" title="A Intranet mostra este IMEI instalado">
                         <AlertTriangle className="size-3.5" /> {i.installed_plate}{i.installed_client ? ` · ${i.installed_client}` : ''}
                         <RemoveInstalled imei={i.imei} warehouseId={i.warehouse_id} warehouses={warehouses} />
