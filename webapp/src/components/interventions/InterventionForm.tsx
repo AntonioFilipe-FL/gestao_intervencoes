@@ -15,7 +15,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select'
 import { ImeiField } from '@/components/interventions/ImeiField'
 import { PlateField } from '@/components/interventions/PlateField'
 import type { ClientOption } from '@/lib/intranet'
-import { getPlateImeis, getImeiIntranetInfo, type PlateImeis } from '@/actions/intranet'
+import { getPlateImeis, getImeiIntranetInfo, getLaterPlateInterventions, type PlateImeis, type LaterIntervention } from '@/actions/intranet'
 import { matchEquipment } from '@/lib/hardware'
 import { firstUrl } from '@/components/ui/link-text'
 
@@ -127,7 +127,20 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
     ) : null
   }
   const plate = watch('license_plate')
+  const interventionDate = watch('intervention_date')
   const [plateImeis, setPlateImeis] = useState<PlateImeis | null>(null)
+  // intervenções desta viatura com data posterior (registo de uma intervenção antiga em falta)
+  const [laterInfo, setLaterInfo] = useState<{ later: LaterIntervention[]; imeiAtDate: string | null } | null>(null)
+  useEffect(() => {
+    const p = (plate ?? '').replace(/[^A-Za-z0-9]/g, '')
+    if (p.length < 6 || !interventionDate) { setLaterInfo(null); return }
+    let cancel = false
+    const t = setTimeout(async () => {
+      const r = await getLaterPlateInterventions(p, String(interventionDate), initial?.id).catch(() => null)
+      if (!cancel) setLaterInfo(r && r.later.length ? r : null)
+    }, 400)
+    return () => { cancel = true; clearTimeout(t) }
+  }, [plate, interventionDate, initial?.id])
   // ao editar, a matrícula já gravada não volta a preencher os IMEIs (só se for alterada)
   const initialPlate = useRef(initial ? (initial.values.license_plate ?? '') : null)
 
@@ -143,6 +156,10 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
       setPlateImeis(r)
       if (initialPlate.current !== null && initialPlate.current === plate) return
       initialPlate.current = null
+      // se já há intervenções posteriores desta viatura, o IMEI atual da Intranet NÃO é o desta data
+      const lt = await getLaterPlateInterventions(p, String(getValues('intervention_date') ?? ''), initial?.id).catch(() => null)
+      if (cancel) return
+      if (lt?.later.length) return
       if (r.current && !getValues('spent_equipment_imei')) {
         setValue('spent_equipment_imei', r.current.imei)
         fillMaterialEquipment('spent_equipment_id', r.current.model)
@@ -308,6 +325,35 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
           <CardTitle>Identificação e Equipamento</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
+          {laterInfo && (
+            <div className="md:col-span-2 space-y-1.5 border border-fc-warning bg-fc-warning/15 px-4 py-3">
+              <p className="font-bold">Atenção: esta viatura já tem intervenções registadas com data posterior</p>
+              <ul className="fc-small list-disc pl-5">
+                {laterInfo.later.map((l) => (
+                  <li key={l.id}>
+                    {l.date.split('-').reverse().join('/')} · {l.type ?? 'sem tipo'}
+                    {l.return_imei ? ` · retirado ${l.return_imei}` : ''}
+                    {l.spent_imei ? ` · instalado ${l.spent_imei}` : !l.return_imei && l.imei ? ` · IMEI ${l.imei}` : ''}
+                  </li>
+                ))}
+              </ul>
+              <p className="fc-small">
+                O stock é calculado por ordem de data: esta intervenção conta <b>antes</b> dessas. O IMEI atual da Intranet é o da
+                intervenção mais recente, por isso não foi preenchido automaticamente.
+                {laterInfo.imeiAtDate && <> Segundo os registos, nesta data a viatura tinha o IMEI <b className="font-mono">{laterInfo.imeiAtDate}</b>.</>}
+              </p>
+              {laterInfo.imeiAtDate && (watch('imei') !== laterInfo.imeiAtDate || watch('spent_equipment_imei') !== laterInfo.imeiAtDate) && (
+                <Button type="button" size="sm" onClick={() => {
+                  setValue('imei', laterInfo.imeiAtDate!, { shouldDirty: true })
+                  if (!/desinstala/i.test(referenceData.interventionTypes?.find((t) => t.id === getValues('intervention_type_id'))?.name ?? ''))
+                    setValue('spent_equipment_imei', laterInfo.imeiAtDate!, { shouldDirty: true })
+                  void fillIntranet(laterInfo.imeiAtDate!)
+                }}>
+                  Usar IMEI {laterInfo.imeiAtDate}
+                </Button>
+              )}
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="license_plate">Matrícula</Label>
             <Controller
@@ -320,6 +366,7 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
                   onChange={field.onChange}
                   clientId={selectedClientId || undefined}
                   onPick={(d) => {
+                    if (laterInfo) return // há intervenções posteriores: o IMEI atual da Intranet não é o desta data
                     if (!getValues('imei')) setValue('imei', d.imei)
                     void fillIntranet(d.imei)
                     const eq = matchEq(d.model)

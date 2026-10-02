@@ -214,3 +214,35 @@ export async function getImeiIntranetInfo(imei: string): Promise<{ account: stri
   if (!d) return null
   return { account: d.account_id ? (d.internal ? d.name : 'Conta do cliente') : null, plate: d.plate }
 }
+
+export type LaterIntervention = {
+  id: string; date: string; type: string | null; imei: string | null; spent_imei: string | null; return_imei: string | null
+}
+
+/**
+ * Intervenções JÁ registadas para a mesma viatura com data POSTERIOR à indicada (ex.: registar agora uma instalação
+ * antiga quando já existe a assistência com troca). Devolve também o IMEI que, segundo esses registos, estava na viatura
+ * nessa data: o IMEI retirado na primeira intervenção posterior com troca/retoma.
+ */
+export async function getLaterPlateInterventions(plate: string, date: string, excludeId?: string) {
+  await requireUser()
+  const p = plate.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+  if (p.length < 4 || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { later: [] as LaterIntervention[], imeiAtDate: null as string | null }
+  const later = await sql<LaterIntervention[]>`
+    select i.id, i.intervention_date::text as date, it.name as type,
+           nullif(btrim(i.imei), '') as imei, nullif(btrim(i.spent_equipment_imei), '') as spent_imei,
+           nullif(btrim(i.return_equipment_imei), '') as return_imei
+    from interventions i left join intervention_types it on it.id = i.intervention_type_id
+    where gestao_interv.plate_norm(i.license_plate) = ${p} and i.intervention_date > ${date}::date
+      ${excludeId && /^[0-9a-f-]{36}$/i.test(excludeId) ? sql`and i.id <> ${excludeId}` : sql``}
+    order by i.intervention_date, i.created_at limit 10`
+  // IMEI na viatura nessa data = o retirado na 1.ª intervenção posterior que retoma equipamento;
+  // se a 1.ª posterior não retoma nada, é o IMEI com que ela ficou
+  let imeiAtDate: string | null = null
+  for (const l of later) {
+    if (l.return_imei) { imeiAtDate = l.return_imei; break }
+    if (l.type && /desinstala/i.test(l.type) && l.imei) { imeiAtDate = l.imei; break }
+  }
+  if (!imeiAtDate && later[0]) imeiAtDate = later[0].spent_imei ?? later[0].imei
+  return { later, imeiAtDate }
+}
