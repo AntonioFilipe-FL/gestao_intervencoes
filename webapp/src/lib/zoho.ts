@@ -28,25 +28,37 @@ async function accessToken() {
   return cached.token
 }
 
-const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+// COQL: aspas dentro do texto escrevem-se em dobro ('Espiga d''Ouro')
+const esc = (s: string) => s.replace(/'/g, "''")
 
 /** Regime Contratual (array) por Nome Intranet (minúsculas), para os nomes pedidos */
 export async function getCrmRegimes(names: string[]): Promise<Map<string, string[]>> {
   const out = new Map<string, string[]>()
   const uniq = [...new Set(names.map((n) => n.trim()).filter(Boolean))]
   const token = await accessToken()
-  for (let i = 0; i < uniq.length; i += 50) {
-    const chunk = uniq.slice(i, i + 50)
-    const query = `select NomeIntranet, Regime_Contratual from Accounts where NomeIntranet in (${chunk.map((n) => `'${esc(n)}'`).join(', ')}) limit 2000`
+  const query = async (names: string[]) => {
+    const q = `select NomeIntranet, Regime_Contratual from Accounts where NomeIntranet in (${names.map((n) => `'${esc(n)}'`).join(', ')}) limit 200`
     const r = await fetch(`${API}/crm/v6/coql`, {
       method: 'POST', cache: 'no-store',
       headers: { Authorization: `Zoho-oauthtoken ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ select_query: query }),
+      body: JSON.stringify({ select_query: q }),
     })
-    if (r.status === 204) continue
+    if (r.status === 204) return []
     const j = await r.json().catch(() => ({}))
     if (!r.ok) throw new Error(`Zoho CRM: ${j.message ?? j.code ?? r.status}`)
-    for (const a of j.data ?? []) {
+    return (j.data ?? []) as { NomeIntranet?: string; Regime_Contratual?: string[] | string | null }[]
+  }
+  for (let i = 0; i < uniq.length; i += 50) {
+    const chunk = uniq.slice(i, i + 50)
+    let data: Awaited<ReturnType<typeof query>>
+    try {
+      data = await query(chunk)
+    } catch {
+      // um nome com caracteres que o CRM não aceita não deve bloquear os outros: tenta um a um
+      data = []
+      for (const n of chunk) data.push(...(await query([n]).catch(() => [])))
+    }
+    for (const a of data) {
       const key = String(a.NomeIntranet ?? '').trim().toLowerCase()
       if (!key) continue
       const reg: string[] = Array.isArray(a.Regime_Contratual) ? a.Regime_Contratual : a.Regime_Contratual ? [a.Regime_Contratual] : []
