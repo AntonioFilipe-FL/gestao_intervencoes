@@ -391,7 +391,14 @@ with b as (
   select i.*,
          gestao_interv.imei_norm(i.imei) as im,
          gestao_interv.imei_norm(i.spent_equipment_imei) as sp,
-         gestao_interv.imei_norm(i.return_equipment_imei) as rt
+         gestao_interv.imei_norm(i.return_equipment_imei) as rt,
+         -- armazém de entrada efetivo: o indicado; se faltar e houver equipamento retirado da viatura (IMEI retomado),
+         -- entra no stock Frotcom da modalidade: Aluguer → "A2 - …", Venda → "A1 - …" (ex.: upgrade sem armazém de entrada)
+         coalesce(i.stock_entry_warehouse_id,
+           case when gestao_interv.imei_norm(i.return_equipment_imei) is not null then
+             (select w.id from gestao_interv.warehouses w
+               where w.active and w.name ilike (case when gestao_interv.modality_of(coalesce(i.return_modality, i.venda_aluguer)) = 'Venda' then 'A1 %' else 'A2 %' end)
+               order by w.name limit 1) end) as entry_wh
   from gestao_interv.interventions i
 ), c as (
   select b.*,
@@ -440,9 +447,9 @@ from c where not is_transfer and coalesce(sp, im) ~ '^[0-9]{15}$'
            and not (stock_entry_warehouse_id is not null and has_return_eq and coalesce(rt, im) = coalesce(sp, im) and sp is null)))
 union all
 select id, coalesce(rt, case when is_logistic then coalesce(sp, im) when im is distinct from sp then im end),
-       coalesce(return_equipment_id, case when is_logistic then spent_equipment_id end, equipment_id), 'intervencao_entrada', null, stock_entry_warehouse_id,
+       coalesce(return_equipment_id, case when is_logistic then spent_equipment_id end, equipment_id), 'intervencao_entrada', null, entry_wh,
        coalesce(return_modality, gestao_interv.modality_of(venda_aluguer)), intervention_date, coalesce(updated_by, created_by), created_at, 1
-from c where not is_transfer and stock_entry_warehouse_id is not null and has_return_eq
+from c where not is_transfer and entry_wh is not null and has_return_eq
   -- numa intervenção de logística só com armazém de entrada, o material entra (não há saída)
   and not (is_logistic and stock_exit_warehouse_id is not null)
   and coalesce(rt, case when is_logistic then coalesce(sp, im) when im is distinct from sp then im end) ~ '^[0-9]{15}$';
