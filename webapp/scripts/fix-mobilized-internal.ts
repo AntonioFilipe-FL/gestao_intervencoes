@@ -43,7 +43,8 @@ async function main() {
     const m = maps.find(([k]) => acc.toLowerCase().includes(k))
     return m ? whByName.get(m[1].toLowerCase())! : null
   }
-  const byAcc = new Map<string, typeof rows>()
+  type R = { imei: string; account: string; plate: string | null }
+  const byAcc = new Map<string, R[]>()
   for (const r of rows) byAcc.set(r.account, [...(byAcc.get(r.account) ?? []), r])
   console.log(`IMEIs no Mobilizado numa conta interna: ${rows.length}\n`)
   for (const [acc, list] of byAcc) {
