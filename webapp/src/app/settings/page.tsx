@@ -10,7 +10,7 @@ import { EmailSettings } from '@/components/settings/EmailSettings'
 import { IntranetSettings } from '@/components/settings/IntranetSettings'
 import { HardwareMapping } from '@/components/settings/HardwareMapping'
 import { getHardwareList } from '@/actions/intranet'
-import { countAutoCreatedClients, getLastSync, getLinkedAccounts, getPendingAccounts, intranetConfigured } from '@/lib/intranet'
+import { listAutoCreatedClients, countAutoCreatedClients, getLastSync, getLinkedAccounts, getPendingAccounts, intranetConfigured } from '@/lib/intranet'
 
 export default async function SettingsPage({
   searchParams,
@@ -126,7 +126,7 @@ export default async function SettingsPage({
             )}
             {userIsAdmin && (
               <TabsContent value="intranet">
-                <IntranetSettings configured={intranetConfigured()} last={await getLastSync()} {...(await getPendingAccounts())} autoCreated={await countAutoCreatedClients()} linked={await getLinkedAccounts()} />
+                <IntranetSettings configured={intranetConfigured()} last={await getLastSync()} {...(await getPendingAccounts())} autoCreated={await countAutoCreatedClients()} autoCreatedList={await listAutoCreatedClients()} linked={await getLinkedAccounts()} />
               </TabsContent>
             )}
           </div>

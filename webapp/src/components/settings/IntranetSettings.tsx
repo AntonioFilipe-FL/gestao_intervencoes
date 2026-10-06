@@ -29,6 +29,7 @@ export function IntranetSettings({
   pending,
   candidates,
   autoCreated,
+  autoCreatedList = [],
   linked,
 }: {
   configured: boolean
@@ -37,6 +38,7 @@ export function IntranetSettings({
   candidates: { id: string; name: string }[]
   /** clientes criados automaticamente por versões anteriores que podem voltar a "Por associar" */
   autoCreated: number
+  autoCreatedList?: { name: string; devices: number }[]
   /** contas ligadas e os seus clientes */
   linked: LinkedAccount[]
 }) {
@@ -127,6 +129,11 @@ export function IntranetSettings({
                 <b>{autoCreated.toLocaleString('pt-PT')} cliente(s)</b> foram criados automaticamente por uma sincronização anterior
                 (não têm intervenções nem dados da folha). Pode passá-los para <b>Por associar</b> para os ligar a clientes já existentes.
               </p>
+              {autoCreatedList.length > 0 && (
+                <ul className="fc-small list-disc pl-5">
+                  {autoCreatedList.map((c) => <li key={c.name}>{c.name} <span className="text-fc-dark-60">({c.devices} IMEIs na Intranet)</span></li>)}
+                </ul>
+              )}
               <Button
                 variant="secondary"
                 disabled={syncing}

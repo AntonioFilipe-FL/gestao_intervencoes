@@ -434,6 +434,12 @@ const autoCreatedWhere = (tx: typeof sql) => tx`
   and not exists (select 1 from interventions i where i.client_id = c.id)
   and not exists (select 1 from clients o where o.id <> c.id and o.intranet_account_id is null and lower(o.name) = lower(c.name))`
 
+export async function listAutoCreatedClients() {
+  return sql<{ name: string; devices: number }[]>`
+    select c.name, (select count(*)::int from devices d where d.client_id = c.id) as devices
+    from clients c where ${autoCreatedWhere(sql)} order by lower(c.name)`
+}
+
 export async function countAutoCreatedClients() {
   const [{ n }] = await sql`select count(*)::int as n from clients c where ${autoCreatedWhere(sql)}`
   return n as number
@@ -447,6 +453,7 @@ export async function revertAutoCreatedClients() {
     await tx`insert into intranet_pending ${tx(rows.map(r => ({ intranet_account_id: r.intranet_account_id, name: r.name, full_name: null })))}
              on conflict (intranet_account_id) do update set status = 'pending'`
     await tx`update devices set client_id = null where client_id = any(${ids})`
+    await tx`update device_plate_history set client_id = null where client_id = any(${ids})`
     await tx`delete from clients where id = any(${ids})`
     return rows.length
   })
