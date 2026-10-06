@@ -156,7 +156,14 @@ export default async function StockPage({ searchParams }: Props) {
 
       {/* IMEIs em stock */}
       <Card id="imeis" className="scroll-mt-4">
-        <CardHeader><CardTitle>IMEIs em stock {selectedWh ? `· ${selectedWh.warehouse}` : ''}</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row flex-wrap items-center gap-3">
+          <CardTitle>IMEIs em stock {selectedWh ? `· ${selectedWh.warehouse}` : ''}</CardTitle>
+          {p.inst === '1' && (
+            <Link href={`${href({ inst: undefined })}#imeis`} className="inline-flex items-center gap-1 bg-fc-warning/20 px-2 py-0.5 fc-small text-[#8a5a00] hover:bg-fc-warning/30" title="Retirar este filtro">
+              Filtro ativo: só instalados na Intranet ✕
+            </Link>
+          )}
+        </CardHeader>
         <CardContent className="pb-3">
           <form action="/stock#imeis" className="flex flex-wrap items-end gap-3">
             {p.wh && <input type="hidden" name="wh" value={p.wh} />}
@@ -173,7 +180,7 @@ export default async function StockPage({ searchParams }: Props) {
               </select>
             </div>
             <button className={buttonVariants({ variant: 'secondary' })}>Filtrar</button>
-            {(p.q || p.mod) && <Link href={`${href({ q: undefined, mod: undefined })}#imeis`} className={buttonVariants({ variant: 'inverse' })}>Limpar</Link>}
+            {(p.q || p.mod || p.inst) && <Link href={`${href({ q: undefined, mod: undefined, inst: undefined })}#imeis`} className={buttonVariants({ variant: 'inverse' })}>Limpar</Link>}
           </form>
         </CardContent>
         {items.length === 0 ? (
