@@ -82,7 +82,8 @@ export async function getMovements(imei?: string) {
     limit ${v ? 200 : 100}`
 }
 
-const parseImeis = (text: string) => [...new Set(text.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean))]
+// 14 dígitos a começar por 1 = IMEI sem o 0 inicial (perdido no Excel) → repõe
+const parseImeis = (text: string) => [...new Set(text.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean).map((x) => (/^1\d{13}$/.test(x) ? `0${x}` : x)))]
 
 type Result = { ok: true; n: number; warnings: string[] } | { ok: false; error: string }
 
@@ -95,7 +96,7 @@ export async function registerReception(input: {
     if (!input.warehouseId) throw new Error('Escolha o armazém.')
     if (input.modality !== 'Venda' && input.modality !== 'Aluguer') throw new Error('Escolha Venda ou Aluguer.')
     const imeis = parseImeis(input.imeis)
-    const bad = imeis.filter((i) => !/^\d{8,20}$/.test(i))
+    const bad = imeis.filter((i) => !/^\d{15}$/.test(i))
     if (bad.length) throw new Error(`IMEI(s) inválido(s): ${bad.slice(0, 5).join(', ')}${bad.length > 5 ? '…' : ''}`)
     if (!imeis.length) throw new Error('Indique pelo menos um IMEI.')
 
@@ -185,7 +186,7 @@ export async function getInstalledConflicts() {
 export async function removeInstalledFromStock(input: { warehouseId?: string; imeis?: string[]; toWarehouseId?: string }) {
   try {
     const user = await requireAdmin()
-    const imeis = (input.imeis ?? []).filter((i) => /^\d{8,20}$/.test(i))
+    const imeis = (input.imeis ?? []).filter((i) => /^\d{15}$/.test(i))
     const rows = await sql<{ imei: string; warehouse_id: string; equipment_id: string | null; modality: string | null; plate: string; client: string | null }[]>`
       select c.imei, c.warehouse_id, c.equipment_id, c.modality, d.license_plate as plate, coalesce(dc.name, p.name) as client
       from stock_current c

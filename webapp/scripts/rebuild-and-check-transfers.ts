@@ -5,6 +5,8 @@
  *
  *   npx tsx scripts/rebuild-and-check-transfers.ts            → recalcula e LISTA (não marca nada)
  *   npx tsx scripts/rebuild-and-check-transfers.ts --confirm  → recalcula e marca as transferências inválidas
+ *   npx tsx scripts/rebuild-and-check-transfers.ts --so-curtos [--confirm] → só os números com menos de 14 dígitos
+ * 3) Lista/anula movimentos manuais com números que não são IMEI (≠ 15 dígitos, ex.: acessórios).
  * O recálculo dos movimentos das intervenções é sempre feito (é o mesmo que o npm run migrate faz no fim).
  */
 import dotenv from 'dotenv'
@@ -12,6 +14,8 @@ import postgres from 'postgres'
 dotenv.config({ path: '.env.local' })
 
 const CONFIRM = process.argv.includes('--confirm')
+// --so-curtos: anula APENAS os movimentos com números de menos de 14 dígitos (acessórios); não mexe em mais nada
+const ONLY_SHORT = process.argv.includes('--so-curtos')
 const sql = postgres(process.env.DATABASE_URL!, { onnotice: () => {}, connection: { search_path: 'gestao_interv' } })
 
 type M = { id: string; imei: string; kind: string; from_wh: string | null; to_wh: string | null; manual: boolean; moved_at: string; superseded: boolean }
@@ -47,7 +51,18 @@ async function main() {
     console.log(`  ${m.imei}  ${m.moved_at}  ${names.get(m.from_wh ?? '') ?? '—'} → ${names.get(m.to_wh ?? '') ?? '—'}   | estava em: ${m.where ? names.get(m.where) : 'fora do stock (instalado/saído)'}`)
   if (invalid.length > 60) console.log(`  … e mais ${invalid.length - 60}`)
 
-  if (!CONFIRM) { console.log('\nNenhuma transferência foi marcada. Para as anular, corra de novo com --confirm'); return sql.end() }
+  // movimentos manuais com "IMEI" que não tem 15 dígitos (acessórios, sensores…) — não devem contar como stock
+  const short = await sql<{ id: string; imei: string; kind: string; moved_at: string }[]>`
+    select id, imei, kind, moved_at::text from stock_movements
+    where intervention_id is null and superseded_at is null and imei !~ '^[0-9]{15}$'
+      ${ONLY_SHORT ? sql`and length(imei) < 14` : sql``} order by imei`
+  console.log(`\nMovimentos manuais com número que não é IMEI (≠ 15 dígitos): ${short.length}`)
+  for (const m of short.slice(0, ONLY_SHORT ? 200 : 20)) console.log(`  ${m.imei}  ${m.kind}  ${m.moved_at}`)
+  if (!ONLY_SHORT && short.length > 20) console.log(`  … e mais ${short.length - 20}`)
+  if (CONFIRM && short.length) await sql`update stock_movements set superseded_at = now() where id = any(${short.map((m) => m.id)})`
+
+  if (!CONFIRM) { console.log('\nNada foi marcado. Para anular estes movimentos, corra de novo com --confirm'); return sql.end() }
+  if (ONLY_SHORT) { console.log(`\nAnulados ${short.length} movimentos de acessórios. As transferências inválidas não foram mexidas.`); return sql.end() }
   if (invalid.length) await sql`update stock_movements set superseded_at = now() where id = any(${invalid.map((m) => m.id)})`
   console.log(`\nMarcadas ${invalid.length} transferências como substituídas (deixam de contar).`)
   await sql.end()

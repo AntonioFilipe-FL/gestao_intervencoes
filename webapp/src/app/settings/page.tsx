@@ -1,3 +1,5 @@
+import { CrmModality } from '@/components/settings/CrmModality'
+import { zohoConfigured } from '@/lib/zoho'
 import { redirect } from 'next/navigation'
 import { getReferenceData } from '@/services/database'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -54,6 +56,7 @@ export default async function SettingsPage({
             </TabsContent>
 
             <TabsContent value="clients">
+              <CrmModality configured={zohoConfigured()} />
               <SettingsTable 
                 title="Lista de Clientes" 
                 table="clients"

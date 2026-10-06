@@ -1,5 +1,6 @@
 import 'server-only'
 import { sql } from '@/lib/db'
+import { zohoConfigured, fillClientModalityFromCrm } from '@/lib/zoho'
 
 /**
  * Integração com a Intranet API da Frotcom (mesmo padrão do projeto Car_Sharing):
@@ -334,6 +335,7 @@ export async function linkPending(intranetId: string, clientId: string) {
     await attachDevices(tx as unknown as typeof sql, intranetId, clientId)
     await tx`delete from intranet_pending where intranet_account_id = ${intranetId}`
   })
+  await fillFromCrmQuietly([clientId])
 }
 
 /** Liga mais um cliente da BD a uma conta da Intranet já ligada (ex.: o cliente de aluguer da mesma empresa) */
@@ -391,8 +393,15 @@ export async function getLinkedAccounts(): Promise<LinkedAccount[]> {
     group by intranet_account_id order by lower(min(coalesce(intranet_short_name, name)))`
 }
 
+/** Venda/Aluguer do cliente a partir do Zoho CRM (se configurado); nunca falha a operação principal */
+async function fillFromCrmQuietly(clientIds: string[]) {
+  if (!clientIds.length || !zohoConfigured()) return
+  try { await fillClientModalityFromCrm(clientIds) } catch (e) { console.error('Zoho CRM (Regime Contratual):', (e as Error).message) }
+}
+
 export async function createFromPending(intranetIds: string[]) {
   let created = 0
+  const newIds: string[] = []
   await sql.begin(async tx => {
     const rows = await tx`select intranet_account_id, name from intranet_pending where intranet_account_id = any(${intranetIds})`
     for (const p of rows) {
@@ -403,9 +412,11 @@ export async function createFromPending(intranetIds: string[]) {
                            values (${p.name}, true, ${p.intranet_account_id}, ${p.name}, now(), 'intranet_manual') returning id`
       await attachDevices(tx as unknown as typeof sql, p.intranet_account_id, c.id)
       await tx`delete from intranet_pending where intranet_account_id = ${p.intranet_account_id}`
+      newIds.push(c.id)
       created++
     }
   })
+  await fillFromCrmQuietly(newIds)
   return created
 }
 

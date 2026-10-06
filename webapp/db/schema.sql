@@ -370,6 +370,14 @@ create or replace function gestao_interv.modality_of(v text) returns text langua
   select case when v ilike '%alug%' then 'Aluguer' when v ilike '%vend%' then 'Venda' else null end
 $$;
 
+-- IMEI normalizado: sem espaços; 14 dígitos a começar por 1 = IMEI a que o Excel tirou o 0 inicial → repõe o 0
+create or replace function gestao_interv.imei_norm(v text) returns text language sql immutable as $$
+  select case when btrim(v) ~ '^1[0-9]{13}$' then '0' || btrim(v) else nullif(btrim(v), '') end
+$$;
+-- corrige movimentos manuais já gravados com o 0 em falta (idempotente)
+update gestao_interv.stock_movements set imei = '0' || imei where imei ~ '^1[0-9]{13}$';
+
+-- Só contam para stock IMEIs com 15 dígitos (equipamentos). Números mais curtos (acessórios, sensores, cartões…) não movimentam stock.
 /**
  * Movimentos de stock implícitos em cada intervenção (serve para as importadas da Sheet e para as novas):
  *  - armazém de saída E de entrada, com um só IMEI (gasto = IMEI, ou só IMEI) → transferência
@@ -381,9 +389,9 @@ $$;
 create or replace view gestao_interv.intervention_stock_moves as
 with b as (
   select i.*,
-         nullif(btrim(i.imei), '') as im,
-         nullif(btrim(i.spent_equipment_imei), '') as sp,
-         nullif(btrim(i.return_equipment_imei), '') as rt
+         gestao_interv.imei_norm(i.imei) as im,
+         gestao_interv.imei_norm(i.spent_equipment_imei) as sp,
+         gestao_interv.imei_norm(i.return_equipment_imei) as rt
   from gestao_interv.interventions i
 ), c as (
   select b.*,
@@ -418,13 +426,13 @@ with b as (
 select id as intervention_id, coalesce(sp, im) as imei, coalesce(spent_equipment_id, equipment_id) as equipment_id,
        'transferencia'::text as kind, stock_exit_warehouse_id as from_wh, stock_entry_warehouse_id as to_wh,
        coalesce(return_modality, gestao_interv.modality_of(venda_aluguer)) as modality, intervention_date, coalesce(updated_by, created_by) as by, created_at, 2 as ord
-from c where is_transfer and coalesce(sp, im) ~ '^[0-9]{8,20}$'
+from c where is_transfer and coalesce(sp, im) ~ '^[0-9]{15}$'
 union all
 -- equipamento instalado: Aluguer → fica no armazém "Instalado Aluguer (Mobilizado)"; Venda → sai do stock
 select id, coalesce(sp, im), coalesce(spent_equipment_id, equipment_id), 'intervencao_saida', stock_exit_warehouse_id,
        case when gestao_interv.modality_of(venda_aluguer) = 'Aluguer' then gestao_interv.mobilized_wh() end,
        gestao_interv.modality_of(venda_aluguer), intervention_date, coalesce(updated_by, created_by), created_at, 3
-from c where not is_transfer and coalesce(sp, im) ~ '^[0-9]{8,20}$'
+from c where not is_transfer and coalesce(sp, im) ~ '^[0-9]{15}$'
   and ((stock_exit_warehouse_id is not null and has_spent_eq)
        -- instalação/reinstalação/troca sem armazém de saída: o IMEI instalado sai de onde estiver
        or (stock_exit_warehouse_id is null and is_field_type and not is_logistic and nullif(btrim(license_plate), '') is not null
@@ -437,7 +445,7 @@ select id, coalesce(rt, case when is_logistic then coalesce(sp, im) when im is d
 from c where not is_transfer and stock_entry_warehouse_id is not null and has_return_eq
   -- numa intervenção de logística só com armazém de entrada, o material entra (não há saída)
   and not (is_logistic and stock_exit_warehouse_id is not null)
-  and coalesce(rt, case when is_logistic then coalesce(sp, im) when im is distinct from sp then im end) ~ '^[0-9]{8,20}$';
+  and coalesce(rt, case when is_logistic then coalesce(sp, im) when im is distinct from sp then im end) ~ '^[0-9]{15}$';
 
 create or replace function gestao_interv.sync_intervention_stock(p_id uuid) returns void language plpgsql as $$
 begin
@@ -500,7 +508,7 @@ begin
   update gestao_interv.stock_movements m set superseded_at = now()
   from gestao_interv.interventions i
   where i.id = p_intervention and m.is_correction and m.superseded_at is null
-    and m.imei in (btrim(i.imei), btrim(i.spent_equipment_imei), btrim(i.return_equipment_imei))
+    and m.imei in (gestao_interv.imei_norm(i.imei), gestao_interv.imei_norm(i.spent_equipment_imei), gestao_interv.imei_norm(i.return_equipment_imei))
     -- só se a intervenção é posterior (ou do mesmo dia) à correção; importações de intervenções antigas não anulam correções
     and i.intervention_date >= m.moved_at;
   get diagnostics n = row_count;
@@ -522,7 +530,7 @@ update gestao_interv.stock_movements m set superseded_at = null
 where m.is_correction and m.superseded_at is not null
   and not exists (
     select 1 from gestao_interv.interventions i
-    where m.imei in (btrim(i.imei), btrim(i.spent_equipment_imei), btrim(i.return_equipment_imei))
+    where m.imei in (gestao_interv.imei_norm(i.imei), gestao_interv.imei_norm(i.spent_equipment_imei), gestao_interv.imei_norm(i.return_equipment_imei))
       and i.intervention_date >= m.moved_at);
 
 -- Papel "financeiro": só consulta e marca intervenções faturáveis como processadas
