@@ -398,7 +398,11 @@ with b as (
                  and t.name not ilike '%desinstala%') as is_field_type,
          (stock_exit_warehouse_id is not null and stock_entry_warehouse_id is not null and rt is null
           and (sp is null or im is null or sp = im)
-          and has_spent_eq and has_return_eq) as is_transfer
+          and has_spent_eq and has_return_eq
+          -- só é transferência entre armazéns diferentes e quando não é uma intervenção numa viatura
+          -- (ex.: instalação com equipamento retirado sem IMEI e os dois armazéns = Stock Frotcom → é saída, não transferência)
+          and stock_exit_warehouse_id <> stock_entry_warehouse_id
+          and (b.lg or nullif(btrim(b.license_plate), '') is null)) as is_transfer
   from (select b.*,
                -- só há movimento de stock quando há EQUIPAMENTO (não só acessórios) do lado respetivo;
                -- na logística basta o "Equipamentos" (equipamento principal) + IMEI
