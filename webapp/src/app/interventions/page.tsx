@@ -134,6 +134,7 @@ export default async function InterventionsPage({ searchParams }: Props) {
                   </Link>
                 </TableHead>
                 <TableHead>Cliente</TableHead>
+                <TableHead>Venda/Aluguer</TableHead>
                 <TableHead>Matrícula</TableHead>
                 <TableHead>Técnico</TableHead>
                 <TableHead>Tipo</TableHead>
@@ -155,6 +156,9 @@ export default async function InterventionsPage({ searchParams }: Props) {
                     <Link href={`/interventions/${i.id}`} className="text-fc-light-100 hover:text-fc-light-60">
                       {i.client?.name ?? '—'}
                     </Link>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-fc-dark-60">
+                    {/alug/i.test(i.venda_aluguer ?? '') ? 'Aluguer' : /vend/i.test(i.venda_aluguer ?? '') ? 'Venda' : (i.venda_aluguer || '—')}
                   </TableCell>
                   <TableCell className="font-mono text-[12px]">{i.license_plate ?? '—'}</TableCell>
                   <TableCell>{i.technician?.name ?? '—'}</TableCell>

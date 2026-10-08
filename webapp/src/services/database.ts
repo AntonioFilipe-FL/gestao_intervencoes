@@ -12,6 +12,7 @@ export type InterventionListItem = {
   motive_text: string | null
   billing: string | null
   registered_at: string | null
+  venda_aluguer: string | null
   billing_processed_at: string | null
   billing_processed_by: string | null
   client: { name: string } | null
@@ -65,7 +66,7 @@ export async function getInterventions({
     `
     const [{ count }] = await sql<{ count: number }[]>`select count(*)::int as count ${from} ${where}`
     const rows = await sql<InterventionListItem[]>`
-      select i.id, i.intervention_date, i.license_plate, i.imei, i.action_description, i.motive_text, i.billing, i.billing_processed_at::text, i.billing_processed_by,
+      select i.id, i.intervention_date, i.license_plate, i.imei, i.action_description, i.motive_text, i.billing, i.billing_processed_at::text, i.billing_processed_by, i.venda_aluguer,
         coalesce(i.validation_date, (i.created_at at time zone 'Europe/Lisbon')::date)::text as registered_at,
         case when c.id is null then null else json_build_object('name', c.name) end as client,
         case when t.id is null then null else json_build_object('name', t.name) end as technician,
