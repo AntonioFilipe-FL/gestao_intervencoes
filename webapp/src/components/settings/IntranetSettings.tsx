@@ -115,6 +115,8 @@ export function IntranetSettings({
                   <Row k="Equipamentos na Intranet" v={`${last.devices.total.toLocaleString('pt-PT')}${last.devices.mode ? ` (pedido ${last.devices.mode})` : ''}`} />
                   <Row k="IMEIs guardados" v={last.devices.upserted.toLocaleString('pt-PT')} />
                   <Row k="Sem cliente associado" v={last.devices.withoutClient.toLocaleString('pt-PT')} />
+                  <Row k="Com data de envio (Shipped on)" v={(last.devices.withShippedOn ?? 0).toLocaleString('pt-PT')} />
+                  <Row k="Receção automática no A1" v={last.devices.autoReceiveError ? <span className="text-[#c7830b]">{last.devices.autoReceiveError}</span> : `${(last.devices.autoReceived ?? 0).toLocaleString('pt-PT')} IMEI(s) novos`} />
                   {last.devices.error && <Row k="Aviso" v={<span className="text-[#c7830b]">{last.devices.error}</span>} />}
                 </>
               )}

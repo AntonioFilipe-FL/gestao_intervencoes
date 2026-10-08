@@ -546,3 +546,6 @@ alter table profiles add constraint profiles_role_check check (role in ('admin',
 alter table interventions
   add column if not exists billing_processed_at timestamptz,
   add column if not exists billing_processed_by text;
+
+-- Data de envio ("Shipped on") do equipamento na Intranet — usada na receção automática de material novo (A1)
+alter table devices add column if not exists shipped_on date;

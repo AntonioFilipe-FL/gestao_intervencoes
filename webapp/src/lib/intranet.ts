@@ -1,6 +1,7 @@
 import 'server-only'
 import { sql } from '@/lib/db'
 import { zohoConfigured, fillClientModalityFromCrm } from '@/lib/zoho'
+import { matchEquipment } from '@/lib/hardware'
 
 /**
  * Integração com a Intranet API da Frotcom (mesmo padrão do projeto Car_Sharing):
@@ -54,6 +55,58 @@ const asList = (d: unknown): Json[] => {
 }
 
 /** Primeiro valor não vazio entre vários nomes de campo possíveis (inclui campos aninhados "a.b") */
+/** "2026-10-07T…", "07/10/2026" ou "2026-10-07" → "2026-10-07" */
+function toDate(v: string | null): string | null {
+  if (!v) return null
+  let m = v.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`
+  m = v.match(/^(\d{2})[/.-](\d{2})[/.-](\d{4})/)
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`
+  const d = new Date(v)
+  return isNaN(+d) ? null : d.toISOString().slice(0, 10)
+}
+
+/**
+ * Receção automática de material novo: IMEIs na conta "Frotcom Lusitana" (a conta principal, não as
+ * "- Installation", "- Transit"…) com "Shipped on" na janela (1.ª vez: 15 dias; depois: desde a véspera da última execução), que nunca tiveram movimento
+ * de stock nem intervenção → entram no armazém "A1 …" (Venda). Corre em cada sincronização (1.ª do dia no login);
+ * é idempotente: um IMEI só é recebido uma vez. O responsável da logística distribui depois.
+ */
+export async function autoReceiveNewDevices(): Promise<number> {
+  // janela: na 1.ª execução, os últimos 15 dias; depois, as últimas 24h — contadas desde a última execução,
+  // para não perder nada se passarem dias sem ninguém entrar na app
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Lisbon' })
+  const [last] = await sql<{ value: string }[]>`select value from app_settings where key = 'auto_reception_last_run'`
+  const [{ since }] = await sql<{ since: string }[]>`
+    select (case when ${last?.value ?? null}::date is null then ${today}::date - 15
+                 else least(${last?.value ?? today}::date, ${today}::date) - 1 end)::text as since`
+  const cfg = { value: since }
+  const [a1] = await sql<{ id: string }[]>`select id from warehouses where active and name ilike 'A1 %' order by name limit 1`
+  if (!a1) throw new Error('Não existe um armazém "A1 …" para a receção automática.')
+  const rows = await sql<{ imei: string; model: string | null; shipped_on: string }[]>`
+    select d.imei, d.model, d.shipped_on::text from devices d
+    where d.active and d.shipped_on >= ${cfg.value}::date and d.imei ~ '^[0-9]{15}$'
+      and (exists (select 1 from clients c where c.intranet_account_id = d.intranet_account_id and lower(btrim(coalesce(c.intranet_short_name, c.name))) = 'frotcom lusitana')
+        or exists (select 1 from intranet_pending p where p.intranet_account_id = d.intranet_account_id and lower(btrim(p.name)) = 'frotcom lusitana'))
+      and not exists (select 1 from stock_movements m where m.imei = d.imei)
+      and not exists (select 1 from interventions i where d.imei in (gestao_interv.imei_norm(i.imei), gestao_interv.imei_norm(i.spent_equipment_imei), gestao_interv.imei_norm(i.return_equipment_imei)))`
+  const markRun = () => sql`insert into app_settings (key, value, updated_by) values ('auto_reception_last_run', ${today}, 'sistema')
+                             on conflict (key) do update set value = excluded.value, updated_at = now()`
+  if (!rows.length) { await markRun(); return 0 }
+  const [equipment, mappings] = await Promise.all([
+    sql<{ id: string; name: string }[]>`select id, name from equipment_list where active`,
+    sql<{ hardware: string; equipment_id: string }[]>`select hardware, equipment_id from hardware_map`,
+  ])
+  const ins = rows.map((r) => ({
+    imei: r.imei, equipment_id: matchEquipment(r.model, equipment, mappings)?.item.id ?? null, kind: 'rececao',
+    from_warehouse_id: null, to_warehouse_id: a1.id, modality: 'Venda', moved_at: r.shipped_on,
+    notes: `Receção automática (Intranet · Shipped on ${r.shipped_on.split('-').reverse().join('/')})`, created_by: 'auto:rececao-intranet',
+  }))
+  for (let i = 0; i < ins.length; i += 500) await sql`insert into stock_movements ${sql(ins.slice(i, i + 500))}`
+  await markRun()
+  return ins.length
+}
+
 function pick(o: Json, keys: string[]): string | null {
   for (const k of keys) {
     const v = k.split('.').reduce<unknown>((acc, p) => (acc as Json | undefined)?.[p], o)
@@ -69,7 +122,7 @@ export type SyncResult = {
   ok: boolean
   error?: string
   accounts: { total: number; linked: number; renamed: number; deactivated: number; pending: number }
-  devices: { total: number; upserted: number; withoutClient: number; error?: string; sampleKeys?: string[]; mode?: string }
+  devices: { total: number; upserted: number; withoutClient: number; error?: string; sampleKeys?: string[]; mode?: string; withShippedOn?: number; autoReceived?: number; autoReceiveError?: string }
   unmatchedLocal: string[] // clientes da BD sem correspondência na Intranet
 }
 
@@ -217,6 +270,7 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
             // (type, deviceType…) traziam valores que não são hardware. Valores só numéricos são ignorados.
             model: ((h) => (h && !/^\d+$/.test(h) ? h : null))(pick(d, ['hardware', 'hardwareName'])),
             license_plate: pick(d, ['licensePlate', 'vehicleLicensePlate', 'vehicle.licensePlate', 'plate', 'vehiclePlate']),
+            shipped_on: toDate(pick(d, ['shippedOn', 'shipped_on', 'ShippedOn', 'shippedDate', 'shippingDate', 'shipDate', 'dateShipped'])),
           }
         })
         .filter((d): d is typeof d & { imei: string } => !!d.imei && /^\d{8,20}$/.test(d.imei))
@@ -230,10 +284,11 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
         await sql.begin(async tx => {
           for (let i = 0; i < unique.length; i += 500) {
             const batch = unique.slice(i, i + 500)
-            await tx`insert into devices ${tx(batch, 'imei', 'intranet_device_id', 'intranet_account_id', 'client_id', 'model', 'license_plate')}
+            await tx`insert into devices ${tx(batch, 'imei', 'intranet_device_id', 'intranet_account_id', 'client_id', 'model', 'license_plate', 'shipped_on')}
                      on conflict (imei) do update set intranet_device_id = excluded.intranet_device_id,
                        intranet_account_id = excluded.intranet_account_id, client_id = excluded.client_id,
-                       model = excluded.model, license_plate = excluded.license_plate, active = true, synced_at = now()`
+                       model = excluded.model, license_plate = excluded.license_plate,
+                       shipped_on = coalesce(excluded.shipped_on, devices.shipped_on), active = true, synced_at = now()`
           }
           await tx`update devices set active = false where not (imei = any(${unique.map(u => u.imei)}))`
 
@@ -252,6 +307,10 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
         })
         result.devices.upserted = unique.length
         result.devices.withoutClient = unique.filter(u => !u.client_id).length
+        result.devices.withShippedOn = unique.filter(u => u.shipped_on).length
+        if (!result.devices.withShippedOn) result.devices.sampleKeys = Object.keys(raw[0] ?? {}).filter(k => k !== '__accountId')
+        try { result.devices.autoReceived = await autoReceiveNewDevices() }
+        catch (e) { result.devices.autoReceiveError = (e as Error).message }
       }
     } catch (e) {
       result.devices.error = (e as Error).message
