@@ -104,6 +104,16 @@ export async function autoReceiveNewDevices(): Promise<number> {
   }))
   for (let i = 0; i < ins.length; i += 500) await sql`insert into stock_movements ${sql(ins.slice(i, i + 500))}`
   await markRun()
+  // registo do lote para o aviso (pop-up) aos utilizadores — guarda os últimos 30 lotes
+  const byEquipment: Record<string, number> = {}
+  for (const r of ins) {
+    const name = equipment.find((e) => e.id === r.equipment_id)?.name ?? 'Sem equipamento'
+    byEquipment[name] = (byEquipment[name] ?? 0) + 1
+  }
+  const [prev] = await sql<{ value: string }[]>`select value from app_settings where key = 'auto_reception_batches'`
+  const batches = [...(prev ? JSON.parse(prev.value) : []), { id: Date.now(), at: new Date().toISOString(), n: ins.length, byEquipment }].slice(-30)
+  await sql`insert into app_settings (key, value, updated_by) values ('auto_reception_batches', ${JSON.stringify(batches)}, 'sistema')
+            on conflict (key) do update set value = excluded.value, updated_at = now()`
   return ins.length
 }
 

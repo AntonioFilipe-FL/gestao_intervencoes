@@ -3,6 +3,7 @@ import { Lato } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/navbar";
 import { getCurrentUser } from "@/lib/auth";
+import { AutoReceptionNotice } from "@/components/AutoReceptionNotice";
 
 // Tipografia do FROTCOM Styleguide: Lato (light, regular, bold)
 const lato = Lato({
@@ -28,6 +29,7 @@ export default async function RootLayout({
     <html lang="pt" className={`${lato.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col bg-fc-grey-100 text-fc-dark-100">
         {user && <Navbar user={user} />}
+        {user?.role === "admin" && <AutoReceptionNotice />}
         <main className="flex-1">{children}</main>
       </body>
     </html>
