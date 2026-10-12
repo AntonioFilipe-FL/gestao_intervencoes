@@ -441,8 +441,9 @@ select id, coalesce(sp, im), coalesce(spent_equipment_id, equipment_id), 'interv
        gestao_interv.modality_of(venda_aluguer), intervention_date, coalesce(updated_by, created_by), created_at, 3
 from c where not is_transfer and coalesce(sp, im) ~ '^[0-9]{15}$'
   and ((stock_exit_warehouse_id is not null and has_spent_eq)
-       -- instalação/reinstalação/troca sem armazém de saída: o IMEI instalado sai de onde estiver
-       or (stock_exit_warehouse_id is null and is_field_type and not is_logistic and nullif(btrim(license_plate), '') is not null
+       -- intervenção na viatura (instalação, reinstalação, troca…) com matrícula: o IMEI com que a viatura fica está instalado
+       -- e sai do stock — com ou sem armazém de saída, e mesmo que só o campo IMEI esteja preenchido (registos antigos)
+       or (is_field_type and not is_logistic and nullif(btrim(license_plate), '') is not null
            -- a não ser que esse IMEI seja o que entra no armazém (equipamento retirado)
            and not (stock_entry_warehouse_id is not null and has_return_eq and coalesce(rt, im) = coalesce(sp, im) and sp is null)))
 union all
