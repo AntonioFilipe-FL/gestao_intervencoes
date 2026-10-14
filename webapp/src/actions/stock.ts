@@ -259,3 +259,34 @@ export async function moveToInternalUse(imeis?: string[]) {
     return { ok: false as const, error: (e as Error).message }
   }
 }
+
+export type MovementBatch = {
+  key: string; created_at: string; moved_at: string; kind: string; from_wh: string | null; to_wh: string | null
+  created_by: string | null; notes: string | null; n: number; superseded: number; imeis: { imei: string; equipment: string | null; modality: string | null; superseded: boolean }[]
+}
+
+/** Histórico de lotes manuais (transferências, receções, ajustes): agrupados por registo (mesmo pedido, origem e destino) */
+export async function getMovementBatches(f: { from?: string; to?: string; wh?: string; kind?: string; q?: string }) {
+  await requireAdmin()
+  const isDate = (d?: string) => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d)
+  const kind = ['transferencia', 'rececao', 'ajuste'].includes(f.kind ?? '') ? f.kind! : null
+  return sql<MovementBatch[]>`
+    select md5(m.created_at::text || coalesce(m.from_warehouse_id::text, '') || coalesce(m.to_warehouse_id::text, '') || m.kind) as key,
+           m.created_at::text, min(m.moved_at)::text as moved_at, m.kind, wf.name as from_wh, wt.name as to_wh,
+           min(m.created_by) as created_by, min(m.notes) as notes, count(*)::int as n,
+           count(*) filter (where m.superseded_at is not null)::int as superseded,
+           json_agg(json_build_object('imei', m.imei, 'equipment', e.name, 'modality', m.modality, 'superseded', m.superseded_at is not null) order by m.imei) as imeis
+    from stock_movements m
+    left join warehouses wf on wf.id = m.from_warehouse_id
+    left join warehouses wt on wt.id = m.to_warehouse_id
+    left join equipment_list e on e.id = coalesce(m.equipment_id, (select c.equipment_id from stock_current c where c.imei = m.imei))
+    where m.intervention_id is null
+      ${kind ? sql`and m.kind = ${kind}` : sql``}
+      ${isDate(f.from) ? sql`and m.moved_at >= ${f.from!}::date` : sql``}
+      ${isDate(f.to) ? sql`and m.moved_at <= ${f.to!}::date` : sql``}
+      ${f.wh && /^[0-9a-f-]{36}$/i.test(f.wh) ? sql`and (m.from_warehouse_id = ${f.wh} or m.to_warehouse_id = ${f.wh})` : sql``}
+      ${f.q ? sql`and exists (select 1 from stock_movements x where x.created_at = m.created_at and x.imei like ${'%' + f.q.replace(/\s/g, '') + '%'})` : sql``}
+    group by m.created_at, m.kind, m.from_warehouse_id, m.to_warehouse_id, wf.name, wt.name
+    order by m.created_at desc
+    limit 200`
+}

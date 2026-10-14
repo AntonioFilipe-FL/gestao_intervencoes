@@ -69,6 +69,7 @@ export default async function StockPage({ searchParams }: Props) {
         subtitle={isAdmin ? 'Equipamentos em stock por IMEI. Receções e transferências registam-se aqui; as intervenções descontam (IMEI gasto) e acrescentam (IMEI retomado) automaticamente.' : 'Equipamentos em stock por armazém.'}
         actions={isAdmin && (
           <>
+            <Link href="/stock/transfers" className={buttonVariants({ size: 'lg', variant: 'inverse' })}>Histórico de transferências</Link>
             <a href={`/stock/export${p.wh ? `?wh=${p.wh}` : ''}`} className={buttonVariants({ size: 'lg', variant: 'inverse' })}>
               <FileSpreadsheet /> Exportar Excel{selectedWhName ? ` (${selectedWhName})` : ''}
             </a>
