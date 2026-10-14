@@ -1,4 +1,6 @@
 import { CrmModality } from '@/components/settings/CrmModality'
+import { AccessoryMapping } from '@/components/settings/AccessoryMapping'
+import { getAccessoryMapping } from '@/actions/accessory-stock'
 import { zohoConfigured } from '@/lib/zoho'
 import { redirect } from 'next/navigation'
 import { getReferenceData } from '@/services/database'
@@ -35,6 +37,7 @@ export default async function SettingsPage({
           <TabsTrigger value="clients">Clientes</TabsTrigger>
           <TabsTrigger value="equipment">Equipamentos</TabsTrigger>
           <TabsTrigger value="accessories">Acessórios</TabsTrigger>
+          <TabsTrigger value="accessory_stock">Stock acessórios</TabsTrigger>
           <TabsTrigger value="intervention_types">Tipos Interv.</TabsTrigger>
           <TabsTrigger value="motives">Motivos</TabsTrigger>
           <TabsTrigger value="warehouses">Armazéns</TabsTrigger>
@@ -117,6 +120,11 @@ export default async function SettingsPage({
             {userIsAdmin && (
               <TabsContent value="users">
                 <UserManagement />
+              </TabsContent>
+            )}
+            {userIsAdmin && (
+              <TabsContent value="accessory_stock">
+                <AccessoryMapping {...(await getAccessoryMapping())} />
               </TabsContent>
             )}
             {userIsAdmin && (

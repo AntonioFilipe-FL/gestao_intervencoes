@@ -550,3 +550,114 @@ alter table interventions
 
 -- Data de envio ("Shipped on") do equipamento na Intranet — usada na receção automática de material novo (A1)
 alter table devices add column if not exists shipped_on date;
+
+-- =============================================================================
+-- Stock de ACESSÓRIOS (por quantidades)
+--  - accessory_stock_items: lista de acessórios que contam para stock (nomes "oficiais")
+--  - accessory_stock_map:   nomes da BD (accessories) que correspondem a cada item (vários → um)
+--  - accessory_movements:   receções, transferências, contagens (acerto) e ajustes manuais
+--  - intervenções: gasto = sai do armazém de saída (ou do armazém do técnico); retomado = entra no de entrada (ou do técnico)
+--  - stock = última contagem do armazém + movimentos posteriores (sem contagem: todo o histórico)
+-- =============================================================================
+create table if not exists accessory_stock_items (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null,
+  active     boolean not null default true,
+  created_at timestamptz not null default now()
+);
+create unique index if not exists accessory_stock_items_name_uq on accessory_stock_items (lower(btrim(name)));
+
+create table if not exists accessory_stock_map (
+  accessory_id uuid primary key references accessories(id) on delete cascade,
+  item_id      uuid not null references accessory_stock_items(id) on delete cascade
+);
+
+create table if not exists accessory_movements (
+  id           uuid primary key default gen_random_uuid(),
+  item_id      uuid not null references accessory_stock_items(id) on delete cascade,
+  warehouse_id uuid references warehouses(id),
+  kind         text not null check (kind in ('rececao', 'transferencia', 'contagem', 'ajuste')),
+  quantity     int  not null,            -- contagem: quantidade contada; restantes: +entra / −sai
+  group_id     uuid,                     -- as duas linhas de uma transferência
+  moved_at     date not null default current_date,
+  notes        text,
+  created_by   text,
+  created_at   timestamptz not null default now()
+);
+create index if not exists accessory_movements_item_idx on accessory_movements (item_id, warehouse_id, moved_at);
+
+-- lista inicial (só insere o que ainda não existe)
+insert into accessory_stock_items (name) select n from unnest(array[
+  'Garmin 770', 'Garmin Fleet 780 com câmara', 'Garmin Fleet 790', 'ALLCAN300 Adapter (FMC130)', 'Antena C4MAX',
+  'BLE EYE_Beacon', 'BLE EYE Sensor', 'ELA - BLE "Blue PUCK T EN12830" - Temp Sensor', 'CAN100BLE',
+  'CL-CAN (Contactless-CAN) adapter', 'Smart Card Reader', 'Carrier reefer cable', 'IBUTTON AMI',
+  'DR102 Automatic Driver Identification RFID', 'Sensor Porta - Schmersal', 'Inventure FMS Gateway', 'Front Panel Cable',
+  'IOBOX CAN (FOX3)', 'LV-CAN200', 'LV-CAN200 (FMC640)', 'PB-1 Panic Button', 'TS-1 One Wire Temperature Sensor',
+  'TS2-1W One Wire Temperature Sensor', 'Imobilizador Viaturas - 12V', 'Imobilizador 24V', 'MIO F740S',
+  'Licença Sygic 3 years', 'Licença Sygic 5 years', 'Puck Holder Sticker', 'AC100 Converter Cable', 'CAN100',
+  'ID-IBUTTON RS AMIDATA', 'Buzzer', 'Garmin 670 EU Navigator', 'Leitor Cartões RFID', 'IBP-1 Automatic Driver ID',
+  'LYTX AI-12 DASHCAM', 'DC-1 Data Cable']) n
+where not exists (select 1 from accessory_stock_items i where lower(btrim(i.name)) = lower(btrim(n)));
+
+-- correspondência automática proposta (só para acessórios ainda sem correspondência; editável em Configurações)
+insert into accessory_stock_map (accessory_id, item_id)
+select distinct on (a.id) a.id, i.id
+from accessories a
+join (values
+  ('Garmin 770', '^garmin.*770'), ('Garmin Fleet 780 com câmara', 'garmin.*780'), ('Garmin Fleet 790', 'garmin.*790'),
+  ('ALLCAN300 Adapter (FMC130)', 'all ?can ?300'), ('Antena C4MAX', '^antena c4max'), ('BLE EYE_Beacon', 'eye ?beacon'),
+  ('BLE EYE Sensor', 'eye ?sensor'), ('ELA - BLE "Blue PUCK T EN12830" - Temp Sensor', '(ble ela|blue ?puck)'),
+  ('CAN100BLE', '^can ?100 ?ble'), ('CL-CAN (Contactless-CAN) adapter', '^cl[ -]?can'), ('Smart Card Reader', 'smart ?card'),
+  ('Carrier reefer cable', '(carrier|ref+e+r)'), ('IBUTTON AMI', '^ibutton$'), ('DR102 Automatic Driver Identification RFID', '^dr ?10[0-2]'),
+  ('Sensor Porta - Schmersal', 'sensor(es)? de porta'), ('Inventure FMS Gateway', '^inventure'), ('Front Panel Cable', 'front ?panel'),
+  ('IOBOX CAN (FOX3)', '^io ?box ?can'), ('LV-CAN200 (FMC640)', '(lv ?-?200 ?can|lv ?-?can ?200).*640'),
+  ('LV-CAN200', '^(lv ?-?200 ?can|lv ?-?can ?200)$'), ('PB-1 Panic Button', '(p[aâ]nico|panic)'),
+  ('Imobilizador Viaturas - 12V', '(imobiliz.*12|^rel[eé] 12v$)'), ('Imobilizador 24V', '(imobiliz.*24|^rel[eé]s? 24v$)'),
+  ('MIO F740S', '^mio( |$)'), ('Licença Sygic 3 years', 'syg[iy]c.*3'), ('Licença Sygic 5 years', 'syg[iy]c.*5'),
+  ('Puck Holder Sticker', 'puck ?holder'), ('AC100 Converter Cable', '^ac ?100'), ('CAN100', '^can ?100$'),
+  ('ID-IBUTTON RS AMIDATA', '(amidata|^pen id ibutton)'), ('Buzzer', '^buzzer'), ('Garmin 670 EU Navigator', '^garmin.*670'),
+  ('Leitor Cartões RFID', '(^rfid$|leitor.*rfid)'), ('IBP-1 Automatic Driver ID', '^ibp ?-?1'), ('LYTX AI-12 DASHCAM', '(lytx|dashcam)'),
+  ('DC-1 Data Cable', '^dc ?-?1( |$)')
+) r(item, pat) on a.name ~* r.pat
+join accessory_stock_items i on lower(btrim(i.name)) = lower(btrim(r.item))
+where not exists (select 1 from accessory_stock_map m where m.accessory_id = a.id)
+  and not exists (select 1 from app_settings s where s.key = 'accessory_map_seeded')
+order by a.id, length(r.pat) desc
+on conflict (accessory_id) do nothing;
+insert into app_settings (key, value, updated_by) values ('accessory_map_seeded', 'sim', 'sistema') on conflict (key) do nothing;
+
+-- movimentos de acessórios vindos das intervenções
+create or replace view gestao_interv.accessory_intervention_moves as
+select m.item_id,
+       case when ia.direction = 'gasto' then coalesce(i.stock_exit_warehouse_id, tw.id) else coalesce(i.stock_entry_warehouse_id, tw.id) end as warehouse_id,
+       case when ia.direction = 'gasto' then -ia.quantity else ia.quantity end as quantity,
+       ia.direction, i.id as intervention_id, i.intervention_date as moved_at, i.created_at
+from gestao_interv.intervention_accessories ia
+join gestao_interv.accessory_stock_map m on m.accessory_id = ia.accessory_id
+join gestao_interv.interventions i on i.id = ia.intervention_id
+left join gestao_interv.technicians t on t.id = i.technician_id
+left join lateral (select w.id from gestao_interv.warehouses w where lower(btrim(w.name)) = lower(btrim(t.name)) and w.type <> 'mobilizado' limit 1) tw on true;
+
+-- stock atual por item e armazém
+create or replace view gestao_interv.accessory_stock as
+with all_moves as (
+  select item_id, warehouse_id, 'intervencao'::text as kind, quantity, moved_at, created_at from gestao_interv.accessory_intervention_moves
+  union all
+  select item_id, warehouse_id, kind, quantity, moved_at, created_at from gestao_interv.accessory_movements
+), last_count as (
+  select distinct on (item_id, warehouse_id) item_id, warehouse_id, quantity, moved_at, created_at
+  from gestao_interv.accessory_movements where kind = 'contagem'
+  order by item_id, warehouse_id, moved_at desc, created_at desc
+), keys as (
+  select distinct item_id, warehouse_id from all_moves
+)
+select k.item_id, k.warehouse_id,
+       coalesce(lc.quantity, 0) + coalesce((
+         select sum(a.quantity) from all_moves a
+         where a.item_id = k.item_id and a.warehouse_id is not distinct from k.warehouse_id and a.kind <> 'contagem'
+           and (lc.item_id is null
+                or a.moved_at > lc.moved_at
+                or (a.kind <> 'intervencao' and a.moved_at = lc.moved_at and a.created_at > lc.created_at))), 0)::int as quantity,
+       lc.moved_at as counted_at
+from keys k
+left join last_count lc on lc.item_id = k.item_id and lc.warehouse_id is not distinct from k.warehouse_id;
