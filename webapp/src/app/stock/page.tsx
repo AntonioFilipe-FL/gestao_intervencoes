@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { sql } from '@/lib/db'
 import { requireUser } from '@/lib/auth'
-import { getInstalledConflicts, getMovements, getStockItems, getStockTotals } from '@/actions/stock'
+import { getInstalledConflicts, getInternalUseMismatches, getMovements, getStockItems, getStockTotals } from '@/actions/stock'
+import { InternalUseNotice } from '@/components/stock/InternalUseNotice'
 import { AlertTriangle, FileSpreadsheet } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -107,6 +108,7 @@ export default async function StockPage({ searchParams }: Props) {
       </div>
       {/* detalhe (lista de IMEIs, movimentos, avisos) só para admin */}
       {isAdmin && (<>
+      <InternalUseNotice rows={await getInternalUseMismatches()} />
       {conflictOf(p.wh) > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 border border-fc-warning bg-fc-warning/10 px-4 py-3">
           <p className="flex items-center gap-2">

@@ -484,10 +484,10 @@ create unique index if not exists technicians_email_uq on technicians (lower(ema
 create or replace function gestao_interv.is_internal_account(p_account text) returns boolean language sql stable as $$
   select p_account is not null and exists (
     select 1 from gestao_interv.clients c where c.intranet_account_id = p_account
-      and (c.name ~* '(frotcom lusitana|^demopt$)' or c.intranet_short_name ~* '(frotcom lusitana|^demopt$)')
+      and (c.name ~* '(frotcom lusitana|^demopt$|^testing$)' or c.intranet_short_name ~* '(frotcom lusitana|^demopt$|^testing$)')
     union all
     select 1 from gestao_interv.intranet_pending p where p.intranet_account_id = p_account
-      and (p.name ~* '(frotcom lusitana|^demopt$)' or p.full_name ~* '(frotcom lusitana|^demopt$)'))
+      and (p.name ~* '(frotcom lusitana|^demopt$|^testing$)' or p.full_name ~* '(frotcom lusitana|^demopt$|^testing$)'))
 $$;
 
 -- Correções manuais do stock (“Dar saída” pela Intranet): deixam de contar quando, depois delas,
@@ -661,3 +661,13 @@ select k.item_id, k.warehouse_id,
        lc.moved_at as counted_at
 from keys k
 left join last_count lc on lc.item_id = k.item_id and lc.warehouse_id is not distinct from k.warehouse_id;
+
+-- Contas de USO INTERNO (demonstração/testes): os IMEIs nelas devem estar no armazém "Uso Interno"
+create or replace function gestao_interv.is_internal_use_account(p_account text) returns boolean language sql stable as $$
+  select p_account is not null and exists (
+    select 1 from gestao_interv.clients c where c.intranet_account_id = p_account
+      and (c.name ~* '^(demopt|testing)$' or c.intranet_short_name ~* '^(demopt|testing)$')
+    union all
+    select 1 from gestao_interv.intranet_pending p where p.intranet_account_id = p_account
+      and (p.name ~* '^(demopt|testing)$' or p.full_name ~* '^(demopt|testing)$'))
+$$;

@@ -217,3 +217,45 @@ export async function removeInstalledFromStock(input: { warehouseId?: string; im
     return { ok: false as const, error: (e as Error).message }
   }
 }
+
+/** IMEIs nas contas de uso interno da Intranet (demopt, testing) que na app não estão no armazém "Uso Interno" */
+export async function getInternalUseMismatches() {
+  await requireAdmin()
+  return sql<{ imei: string; plate: string | null; account: string | null; warehouse: string | null; modality: string | null }[]>`
+    select d.imei, d.license_plate as plate, coalesce(dc.intranet_short_name, dc.name, p.name) as account, w.name as warehouse, c.modality
+    from devices d
+    left join clients dc on dc.id = d.client_id
+    left join intranet_pending p on p.intranet_account_id = d.intranet_account_id
+    left join stock_current c on c.imei = d.imei
+    left join warehouses w on w.id = c.warehouse_id
+    where d.active and d.imei ~ '^[0-9]{15}$' and gestao_interv.is_internal_use_account(d.intranet_account_id)
+      and (w.id is null or w.name !~* '^uso interno')
+    order by account, d.imei`
+}
+
+/** Passa para o armazém "Uso Interno" os IMEIs das contas demopt/testing (todos ou os indicados) */
+export async function moveToInternalUse(imeis?: string[]) {
+  try {
+    const user = await requireAdmin()
+    const [uso] = await sql<{ id: string }[]>`select id from warehouses where active and name ~* '^uso interno' order by name limit 1`
+    if (!uso) throw new Error('Não existe um armazém "Uso Interno".')
+    const all = await getInternalUseMismatches()
+    const list = imeis?.length ? all.filter((r) => imeis.includes(r.imei)) : all
+    if (!list.length) throw new Error('Não há IMEIs para passar para o Uso Interno.')
+    const cur = await sql<{ imei: string; warehouse_id: string | null; equipment_id: string | null }[]>`
+      select imei, warehouse_id, equipment_id from stock_current where imei = any(${list.map((l) => l.imei)})`
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Lisbon' })
+    await sql`insert into stock_movements ${sql(list.map((r) => {
+      const c = cur.find((x) => x.imei === r.imei)
+      return {
+        imei: r.imei, equipment_id: c?.equipment_id ?? null, kind: c?.warehouse_id ? 'transferencia' : 'rececao', is_correction: true,
+        from_warehouse_id: c?.warehouse_id ?? null, to_warehouse_id: uso.id, modality: r.modality, moved_at: today, created_by: user.email,
+        notes: `Uso interno (Intranet: ${r.account ?? '—'}${r.plate ? ` · ${r.plate}` : ''})`,
+      }
+    }))}`
+    revalidatePath('/stock')
+    return { ok: true as const, n: list.length }
+  } catch (e) {
+    return { ok: false as const, error: (e as Error).message }
+  }
+}
