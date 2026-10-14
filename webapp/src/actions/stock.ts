@@ -128,28 +128,62 @@ export async function registerReception(input: {
 }
 
 /** Transferência entre armazéns (mantém a modalidade, ou muda-a se escolhida) */
+/** Onde estão hoje os IMEIs colados (para a transferência com origem automática) */
+export async function locateImeis(text: string) {
+  await requireUser()
+  const imeis = parseImeis(text)
+  if (!imeis.length) return { origins: [] as { id: string; name: string; n: number }[], missing: [] as string[], total: 0 }
+  const rows = await sql<{ imei: string; id: string | null; name: string | null }[]>`
+    select c.imei, c.warehouse_id as id, w.name from stock_current c left join warehouses w on w.id = c.warehouse_id
+    where c.imei = any(${imeis}) and c.warehouse_id is not null`
+  const by = new Map<string, { id: string; name: string; n: number }>()
+  for (const r of rows) {
+    const o = by.get(r.id!) ?? { id: r.id!, name: r.name ?? '—', n: 0 }
+    o.n++; by.set(r.id!, o)
+  }
+  const found = new Set(rows.map((r) => r.imei))
+  return { origins: [...by.values()].sort((x, y) => y.n - x.n), missing: imeis.filter((i) => !found.has(i)), total: imeis.length }
+}
+
+/**
+ * Transferência para UM destino. A origem pode ser:
+ *  - um armazém (fromWarehouseId) → todos os IMEIs têm de lá estar;
+ *  - automática (fromWarehouseIds = armazéns escolhidos) → cada IMEI sai do armazém onde está;
+ *    os que estão noutros armazéns ou fora do stock são ignorados e reportados.
+ */
 export async function registerTransfer(input: {
-  fromWarehouseId: string; toWarehouseId: string; imeis: string; date: string; modality?: string; notes?: string
+  fromWarehouseId?: string; fromWarehouseIds?: string[]; toWarehouseId: string; imeis: string; date: string; modality?: string; notes?: string
 }): Promise<Result> {
   try {
     const user = await requireAdmin()
-    if (!input.fromWarehouseId || !input.toWarehouseId) throw new Error('Escolha os armazéns de origem e de destino.')
-    if (input.fromWarehouseId === input.toWarehouseId) throw new Error('O armazém de origem e o de destino são iguais.')
+    if (!input.toWarehouseId) throw new Error('Escolha o armazém de destino.')
+    const auto = !input.fromWarehouseId
+    const origins = auto ? (input.fromWarehouseIds ?? []) : [input.fromWarehouseId!]
+    if (!origins.length) throw new Error('Escolha pelo menos um armazém de origem.')
+    if (!auto && input.fromWarehouseId === input.toWarehouseId) throw new Error('O armazém de origem e o de destino são iguais.')
     const imeis = parseImeis(input.imeis)
     if (!imeis.length) throw new Error('Indique pelo menos um IMEI.')
     const current = await sql<{ imei: string; warehouse_id: string | null }[]>`
       select imei, warehouse_id from stock_current where imei = any(${imeis})`
-    const notThere = imeis.filter((i) => current.find((c) => c.imei === i)?.warehouse_id !== input.fromWarehouseId)
-    if (notThere.length)
+    const whOf = new Map(current.map((c) => [c.imei, c.warehouse_id]))
+    const notThere = imeis.filter((i) => !origins.includes(whOf.get(i) ?? ''))
+    if (!auto && notThere.length)
       throw new Error(`${notThere.length} IMEI(s) não estão em stock no armazém de origem: ${notThere.slice(0, 8).join(', ')}${notThere.length > 8 ? '…' : ''}`)
+    const already = imeis.filter((i) => whOf.get(i) === input.toWarehouseId)
+    const todo = imeis.filter((i) => origins.includes(whOf.get(i) ?? '') && whOf.get(i) !== input.toWarehouseId)
+    if (!todo.length) throw new Error('Nenhum IMEI a transferir (não estão nos armazéns de origem escolhidos ou já estão no destino).')
     const mod = input.modality === 'Venda' || input.modality === 'Aluguer' ? input.modality : null
-    const rows = imeis.map((imei) => ({
-      imei, equipment_id: null, kind: 'transferencia', from_warehouse_id: input.fromWarehouseId, to_warehouse_id: input.toWarehouseId,
+    const rows = todo.map((imei) => ({
+      imei, equipment_id: null, kind: 'transferencia', from_warehouse_id: whOf.get(imei)!, to_warehouse_id: input.toWarehouseId,
       modality: mod, moved_at: input.date || new Date().toISOString().slice(0, 10), notes: input.notes || null, created_by: user.email,
     }))
     await sql`insert into stock_movements ${sql(rows)}`
     revalidatePath('/stock')
-    return { ok: true, n: rows.length, warnings: [] }
+    const warnings: string[] = []
+    if (already.length) warnings.push(`${already.length} já estavam no destino.`)
+    const skipped = notThere.filter((i) => !already.includes(i))
+    if (skipped.length) warnings.push(`${skipped.length} ignorado(s) (fora dos armazéns escolhidos ou sem stock): ${skipped.slice(0, 8).join(', ')}${skipped.length > 8 ? '…' : ''}`)
+    return { ok: true, n: rows.length, warnings }
   } catch (e) {
     return { ok: false, error: (e as Error).message }
   }
