@@ -480,14 +480,14 @@ end $$;
 alter table technicians add column if not exists email text;
 create unique index if not exists technicians_email_uq on technicians (lower(email)) where email is not null;
 
--- Contas internas da Frotcom (ex.: "Frotcom Lusitana", "Frotcom Lusitana - Transit"): os IMEIs lá não contam como instalados
+-- Contas internas da Frotcom (ex.: "Frotcom Lusitana", "Frotcom Lusitana - Transit", e a conta de demonstração "demopt"): os IMEIs lá não contam como instalados
 create or replace function gestao_interv.is_internal_account(p_account text) returns boolean language sql stable as $$
   select p_account is not null and exists (
     select 1 from gestao_interv.clients c where c.intranet_account_id = p_account
-      and (c.name ilike '%frotcom lusitana%' or c.intranet_short_name ilike '%frotcom lusitana%')
+      and (c.name ~* '(frotcom lusitana|^demopt$)' or c.intranet_short_name ~* '(frotcom lusitana|^demopt$)')
     union all
     select 1 from gestao_interv.intranet_pending p where p.intranet_account_id = p_account
-      and (p.name ilike '%frotcom lusitana%' or p.full_name ilike '%frotcom lusitana%'))
+      and (p.name ~* '(frotcom lusitana|^demopt$)' or p.full_name ~* '(frotcom lusitana|^demopt$)'))
 $$;
 
 -- Correções manuais do stock (“Dar saída” pela Intranet): deixam de contar quando, depois delas,
