@@ -19,10 +19,19 @@ export type Movement = {
   superseded_at: string | null
 }
 
+/** Nome do equipamento da app a partir do hardware da Intranet (null se não houver correspondência) */
+async function equipmentNamer() {
+  const [equipment, mappings] = await Promise.all([
+    sql<{ id: string; name: string }[]>`select id, name from equipment_list where active`,
+    sql<{ hardware: string; equipment_id: string }[]>`select hardware, equipment_id from hardware_map`,
+  ])
+  return (hw: string | null) => matchEquipment(hw, equipment, mappings)?.item.name ?? null
+}
+
 /** Totais por armazém e por modelo (só o que está atualmente em stock) */
 export async function getStockTotals() {
   await requireUser()
-  const [byWarehouse, byModel] = await Promise.all([
+  const [byWarehouse, rows] = await Promise.all([
     sql<WarehouseTotal[]>`
       select w.id as warehouse_id, w.name as warehouse, (w.type = 'mobilizado') as mobilized,
              count(*) filter (where c.modality = 'Venda')::int as venda,
@@ -31,16 +40,23 @@ export async function getStockTotals() {
              count(*)::int as total
       from stock_current c join warehouses w on w.id = c.warehouse_id
       group by w.id, w.name, w.type order by (w.type = 'mobilizado'), w.name`,
-    sql<ModelTotal[]>`
-      select c.warehouse_id, coalesce(e.name, '(sem equipamento)') as equipment,
-             count(*) filter (where c.modality = 'Venda')::int as venda,
-             count(*) filter (where c.modality = 'Aluguer')::int as aluguer,
-             count(*) filter (where c.modality is null)::int as sem,
-             count(*)::int as total
+    sql<{ warehouse_id: string; equipment: string | null; hardware: string | null; modality: string | null }[]>`
+      select c.warehouse_id, e.name as equipment, d.model as hardware, c.modality
       from stock_current c left join equipment_list e on e.id = c.equipment_id
-      where c.warehouse_id is not null
-      group by c.warehouse_id, e.name order by count(*) desc`,
+      left join devices d on d.imei = c.imei
+      where c.warehouse_id is not null`,
   ])
+  // sem equipamento no movimento → usa o hardware da Intranet (correspondência com a lista de Equipamentos)
+  const eqName = await equipmentNamer()
+  const acc = new Map<string, ModelTotal>()
+  for (const r of rows) {
+    const name = r.equipment ?? eqName(r.hardware) ?? r.hardware ?? '(sem equipamento)'
+    const k = r.warehouse_id + '|' + name
+    const t = acc.get(k) ?? { warehouse_id: r.warehouse_id, equipment: name, venda: 0, aluguer: 0, sem: 0, total: 0 }
+    if (r.modality === 'Venda') t.venda++; else if (r.modality === 'Aluguer') t.aluguer++; else t.sem++
+    t.total++; acc.set(k, t)
+  }
+  const byModel = [...acc.values()].sort((a, b) => b.total - a.total)
   return { byWarehouse, byModel }
 }
 
@@ -48,7 +64,8 @@ export async function getStockTotals() {
 export async function getStockItems(f: { warehouseId?: string; modality?: string; q?: string; installed?: boolean }) {
   await requireAdmin()
   const q = (f.q ?? '').replace(/\s/g, '')
-  return sql<StockItem[]>`
+  const eqName = await equipmentNamer()
+  const items = await sql<StockItem[]>`
     select c.imei, c.warehouse_id, w.name as warehouse, e.name as equipment, c.modality, c.moved_at::text, c.kind, d.model as hardware,
            case when d.active and nullif(btrim(d.license_plate), '') is not null and not gestao_interv.is_internal_account(d.intranet_account_id) then d.license_plate end as installed_plate,
            case when d.active and nullif(btrim(d.license_plate), '') is not null and not gestao_interv.is_internal_account(d.intranet_account_id) then dc.name end as installed_client
@@ -61,9 +78,10 @@ export async function getStockItems(f: { warehouseId?: string; modality?: string
       ${f.warehouseId ? sql`and c.warehouse_id = ${f.warehouseId}` : sql``}
       ${f.modality === 'Venda' || f.modality === 'Aluguer' ? sql`and c.modality = ${f.modality}` : f.modality === 'sem' ? sql`and c.modality is null` : sql``}
       ${f.installed ? sql`and d.active and nullif(btrim(d.license_plate), '') is not null and not gestao_interv.is_internal_account(d.intranet_account_id)` : sql``}
-      ${q ? sql`and (c.imei like ${'%' + q + '%'} or e.name ilike ${'%' + q + '%'})` : sql``}
+      ${q ? sql`and (c.imei like ${'%' + q + '%'} or e.name ilike ${'%' + q + '%'} or d.model ilike ${'%' + q + '%'})` : sql``}
     order by w.name, e.name nulls last, c.imei
     limit 500`
+  return items.map((it) => (it.equipment ? it : { ...it, equipment: eqName(it.hardware) }))
 }
 
 /** Últimos movimentos (opcionalmente de um IMEI) */
