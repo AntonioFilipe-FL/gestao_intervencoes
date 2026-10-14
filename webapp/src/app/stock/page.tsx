@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { buttonVariants } from '@/components/ui/button'
 import { StockActions } from '@/components/stock/StockActions'
+import { StockAdjust } from '@/components/stock/StockAdjust'
 import { MovementDelete } from '@/components/stock/MovementDelete'
 import { RemoveInstalled } from '@/components/stock/RemoveInstalled'
 import { cn } from '@/lib/utils'
@@ -74,6 +75,7 @@ export default async function StockPage({ searchParams }: Props) {
               <FileSpreadsheet /> Exportar Excel{selectedWhName ? ` (${selectedWhName})` : ''}
             </a>
             <StockActions warehouses={warehouses} originWarehouses={allWarehouses} equipment={equipment} />
+            <StockAdjust warehouses={warehouses} />
           </>
         )}
       />

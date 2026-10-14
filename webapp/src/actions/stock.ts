@@ -342,3 +342,89 @@ export async function getMovementBatches(f: { from?: string; to?: string; wh?: s
     order by m.created_at desc
     limit 200`
 }
+
+/* ---------------- Acerto de stock ---------------- */
+
+/** Contagem de um armazém: compara os IMEIs contados com o que a app tem lá */
+export async function previewStockCount(input: { warehouseId: string; imeis: string }) {
+  await requireAdmin()
+  if (!input.warehouseId) throw new Error('Escolha o armazém.')
+  const counted = parseImeis(input.imeis)
+  const [inWh, elsewhere] = await Promise.all([
+    sql<{ imei: string; equipment: string | null }[]>`
+      select c.imei, coalesce(e.name, d.model) as equipment from stock_current c
+      left join equipment_list e on e.id = c.equipment_id left join devices d on d.imei = c.imei
+      where c.warehouse_id = ${input.warehouseId} order by c.imei`,
+    sql<{ imei: string; warehouse: string }[]>`
+      select c.imei, w.name as warehouse from stock_current c join warehouses w on w.id = c.warehouse_id
+      where c.imei = any(${counted}) and c.warehouse_id <> ${input.warehouseId}`,
+  ])
+  const set = new Set(counted), whSet = new Set(inWh.map((r) => r.imei))
+  const where = new Map(elsewhere.map((r) => [r.imei, r.warehouse]))
+  return {
+    ok: inWh.filter((r) => set.has(r.imei)).length,
+    missing: inWh.filter((r) => !set.has(r.imei)),
+    extra: counted.filter((i) => !whSet.has(i)).map((imei) => ({ imei, from: where.get(imei) ?? null })),
+  }
+}
+
+/** Aplica a contagem: os que faltam saem do stock (ajuste); os que sobram entram no armazém (transferência de onde estavam, ou receção) */
+export async function applyStockCount(input: { warehouseId: string; imeis: string; date: string; modality?: string; notes?: string }): Promise<Result> {
+  try {
+    const user = await requireAdmin()
+    const p = await previewStockCount(input)
+    if (!p.missing.length && !p.extra.length) throw new Error('A contagem bate certo — não há nada a acertar.')
+    const date = input.date || new Date().toISOString().slice(0, 10)
+    const notes = ['Acerto de stock (contagem)', input.notes].filter(Boolean).join(' · ')
+    const mod = input.modality === 'Venda' || input.modality === 'Aluguer' ? input.modality : null
+    const extraImeis = p.extra.map((e) => e.imei)
+    const [cur, devices, equipment, mappings] = await Promise.all([
+      sql<{ imei: string; warehouse_id: string; modality: string | null; equipment_id: string | null }[]>`
+        select imei, warehouse_id, modality, equipment_id from stock_current where imei = any(${extraImeis}) and warehouse_id is not null`,
+      sql<{ imei: string; model: string | null }[]>`select imei, model from devices where imei = any(${extraImeis})`,
+      sql<{ id: string; name: string }[]>`select id, name from equipment_list where active`,
+      sql<{ hardware: string; equipment_id: string }[]>`select hardware, equipment_id from hardware_map`,
+    ])
+    const curOf = new Map(cur.map((c) => [c.imei, c]))
+    const base = { moved_at: date, notes, created_by: user.email, is_correction: true }
+    const rows = [
+      ...p.missing.map((m) => ({ ...base, imei: m.imei, equipment_id: null, kind: 'ajuste', from_warehouse_id: input.warehouseId, to_warehouse_id: null, modality: null })),
+      ...extraImeis.map((imei) => {
+        const c = curOf.get(imei)
+        return c
+          ? { ...base, imei, equipment_id: null, kind: 'transferencia', from_warehouse_id: c.warehouse_id, to_warehouse_id: input.warehouseId, modality: mod }
+          : { ...base, imei, kind: 'rececao', from_warehouse_id: null, to_warehouse_id: input.warehouseId, modality: mod,
+              equipment_id: matchEquipment(devices.find((d) => d.imei === imei)?.model, equipment, mappings)?.item.id ?? null }
+      }),
+    ]
+    await sql`insert into stock_movements ${sql(rows)}`
+    revalidatePath('/stock')
+    return { ok: true, n: rows.length, warnings: [`Saíram ${p.missing.length}, entraram ${p.extra.length}.`] }
+  } catch (e) {
+    return { ok: false, error: (e as Error).message }
+  }
+}
+
+/** Retira IMEIs do stock (perdido, avariado, abatido…) — movimento "Ajuste" a partir do armazém onde estão */
+export async function removeImeisFromStock(input: { imeis: string; reason: string; date: string; notes?: string }): Promise<Result> {
+  try {
+    const user = await requireAdmin()
+    if (!input.reason) throw new Error('Indique o motivo.')
+    const imeis = parseImeis(input.imeis)
+    if (!imeis.length) throw new Error('Indique pelo menos um IMEI.')
+    const cur = await sql<{ imei: string; warehouse_id: string }[]>`
+      select imei, warehouse_id from stock_current where imei = any(${imeis}) and warehouse_id is not null`
+    if (!cur.length) throw new Error('Nenhum destes IMEIs está em stock.')
+    const notes = [`Acerto de stock: ${input.reason}`, input.notes].filter(Boolean).join(' · ')
+    const rows = cur.map((c) => ({
+      imei: c.imei, equipment_id: null, kind: 'ajuste', from_warehouse_id: c.warehouse_id, to_warehouse_id: null, modality: null,
+      moved_at: input.date || new Date().toISOString().slice(0, 10), notes, created_by: user.email, is_correction: true,
+    }))
+    await sql`insert into stock_movements ${sql(rows)}`
+    revalidatePath('/stock')
+    const out = imeis.filter((i) => !cur.some((c) => c.imei === i))
+    return { ok: true, n: rows.length, warnings: out.length ? [`${out.length} não estavam em stock: ${out.slice(0, 8).join(', ')}${out.length > 8 ? '…' : ''}`] : [] }
+  } catch (e) {
+    return { ok: false, error: (e as Error).message }
+  }
+}
