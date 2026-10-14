@@ -85,7 +85,7 @@ export async function autoReceiveNewDevices(): Promise<number> {
   if (!a1) throw new Error('Não existe um armazém "A1 …" para a receção automática.')
   const rows = await sql<{ imei: string; model: string | null; shipped_on: string }[]>`
     select d.imei, d.model, d.shipped_on::text from devices d
-    where d.active and d.shipped_on >= ${cfg.value}::date and d.imei ~ '^[0-9]{15}$'
+    where d.active and d.shipped_on >= ${cfg.value}::date and d.imei ~ '^[0-9]{15}$' and d.imei !~ '^80{6}'
       and (exists (select 1 from clients c where c.intranet_account_id = d.intranet_account_id and lower(btrim(coalesce(c.intranet_short_name, c.name))) = 'frotcom lusitana')
         or exists (select 1 from intranet_pending p where p.intranet_account_id = d.intranet_account_id and lower(btrim(p.name)) = 'frotcom lusitana'))
       and not exists (select 1 from stock_movements m where m.imei = d.imei)

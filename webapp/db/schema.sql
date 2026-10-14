@@ -372,7 +372,8 @@ $$;
 
 -- IMEI normalizado: sem espaços; 14 dígitos a começar por 1 = IMEI a que o Excel tirou o 0 inicial → repõe o 0
 create or replace function gestao_interv.imei_norm(v text) returns text language sql immutable as $$
-  select case when btrim(v) ~ '^1[0-9]{13}$' then '0' || btrim(v) else nullif(btrim(v), '') end
+  -- números fictícios da Intranet (80000000000xxxx, equipamentos virtuais) não são IMEIs reais → ignorados
+  select case when btrim(v) ~ '^80{6}' then null when btrim(v) ~ '^1[0-9]{13}$' then '0' || btrim(v) else nullif(btrim(v), '') end
 $$;
 -- corrige movimentos manuais já gravados com o 0 em falta (idempotente)
 update gestao_interv.stock_movements set imei = '0' || imei where imei ~ '^1[0-9]{13}$';
@@ -506,7 +507,7 @@ select distinct on (m.imei)
        coalesce(m.modality, (select m3.modality from stock_movements m3 where m3.imei = m.imei and m3.modality is not null
                              order by m3.moved_at desc, m3.seq desc limit 1)) as modality
 from stock_movements m
-where m.superseded_at is null
+where m.superseded_at is null and m.imei !~ '^80{6}'
 order by m.imei, m.moved_at desc, m.seq desc;
 
 /** Marca como substituídas as correções dos IMEIs de uma intervenção (chamado ao registar/editar/importar) */

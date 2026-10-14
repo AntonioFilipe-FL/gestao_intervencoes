@@ -96,7 +96,7 @@ export async function registerReception(input: {
     if (!input.warehouseId) throw new Error('Escolha o armazém.')
     if (input.modality !== 'Venda' && input.modality !== 'Aluguer') throw new Error('Escolha Venda ou Aluguer.')
     const imeis = parseImeis(input.imeis)
-    const bad = imeis.filter((i) => !/^\d{15}$/.test(i))
+    const bad = imeis.filter((i) => !/^\d{15}$/.test(i) || /^80{6}/.test(i))
     if (bad.length) throw new Error(`IMEI(s) inválido(s): ${bad.slice(0, 5).join(', ')}${bad.length > 5 ? '…' : ''}`)
     if (!imeis.length) throw new Error('Indique pelo menos um IMEI.')
 
@@ -228,7 +228,7 @@ export async function getInternalUseMismatches() {
     left join intranet_pending p on p.intranet_account_id = d.intranet_account_id
     left join stock_current c on c.imei = d.imei
     left join warehouses w on w.id = c.warehouse_id
-    where d.active and d.imei ~ '^[0-9]{15}$' and gestao_interv.is_internal_use_account(d.intranet_account_id)
+    where d.active and d.imei ~ '^[0-9]{15}$' and d.imei !~ '^80{6}' and gestao_interv.is_internal_use_account(d.intranet_account_id)
       and (w.id is null or w.name !~* '^uso interno')
     order by account, d.imei`
 }
