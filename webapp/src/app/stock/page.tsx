@@ -150,7 +150,7 @@ export default async function StockPage({ searchParams }: Props) {
                 <TableHeader><TableRow>
                   <TableHead>Equipamento</TableHead>
                   {cols.map((c) => <TableHead key={c.warehouse_id} className="text-right">{c.warehouse}</TableHead>)}
-                  <TableHead className="text-right" title="Total em stock (sem o Mobilizado)">Total em stock</TableHead>
+                  <TableHead className="text-right" title="Total em stock (sem o Mobilizado)">Total</TableHead>
                   {mobCols.map((c) => <TableHead key={c.warehouse_id} className="border-l border-fc-dark-20 text-right">{c.warehouse}</TableHead>)}
                 </TableRow></TableHeader>
                 <TableBody>
