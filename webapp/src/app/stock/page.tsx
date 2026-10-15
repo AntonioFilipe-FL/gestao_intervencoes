@@ -137,10 +137,11 @@ export default async function StockPage({ searchParams }: Props) {
 
       {/* Matriz equipamento × armazém (todos os armazéns) */}
       {!p.wh && byModel.length > 0 && (() => {
-        const cols = byWarehouse
+        const cols = byWarehouse.filter((c) => !c.mobilized)
+        const mobCols = byWarehouse.filter((c) => c.mobilized)
         const eqs = [...new Set(byModel.map((m) => m.equipment))].sort((x, y) => x.localeCompare(y, 'pt'))
         const cell = new Map(byModel.map((m) => [`${m.equipment}|${m.warehouse_id}`, m]))
-        const rowTotal = (e: string) => cols.filter((c) => !c.mobilized).reduce((a, c) => a + (cell.get(`${e}|${c.warehouse_id}`)?.total ?? 0), 0)
+        const rowTotal = (e: string) => cols.reduce((a, c) => a + (cell.get(`${e}|${c.warehouse_id}`)?.total ?? 0), 0)
         return (
           <Card>
             <CardHeader><CardTitle>Por equipamento e armazém</CardTitle></CardHeader>
@@ -149,7 +150,8 @@ export default async function StockPage({ searchParams }: Props) {
                 <TableHeader><TableRow>
                   <TableHead>Equipamento</TableHead>
                   {cols.map((c) => <TableHead key={c.warehouse_id} className="text-right">{c.warehouse}</TableHead>)}
-                  <TableHead className="text-right" title="Total em stock (sem o Mobilizado)">Total</TableHead>
+                  <TableHead className="text-right" title="Total em stock (sem o Mobilizado)">Total em stock</TableHead>
+                  {mobCols.map((c) => <TableHead key={c.warehouse_id} className="border-l border-fc-dark-20 text-right">{c.warehouse}</TableHead>)}
                 </TableRow></TableHeader>
                 <TableBody>
                   {eqs.map((e) => (
@@ -165,12 +167,22 @@ export default async function StockPage({ searchParams }: Props) {
                         )
                       })}
                       <TableCell className="text-right font-bold tabular-nums">{n(rowTotal(e))}</TableCell>
+                      {mobCols.map((c) => {
+                        const m = cell.get(`${e}|${c.warehouse_id}`)
+                        return (
+                          <TableCell key={c.warehouse_id} className={cn('border-l border-fc-dark-20 text-right tabular-nums', !m && 'text-fc-dark-40', c.mobilized && 'text-fc-dark-60')}
+                            title={m ? `Venda ${m.venda} · Aluguer ${m.aluguer} · Sem modalidade ${m.sem}` : undefined}>
+                            {m ? <Link href={`${href({ wh: c.warehouse_id, q: e.startsWith('(') ? undefined : e })}#imeis`} className="text-fc-light-100 hover:text-fc-light-60">{n(m.total)}</Link> : '—'}
+                          </TableCell>
+                        )
+                      })}
                     </TableRow>
                   ))}
                   <TableRow className="bg-fc-grey-80 font-bold">
                     <TableCell>Total</TableCell>
                     {cols.map((c) => <TableCell key={c.warehouse_id} className="text-right tabular-nums">{n(c.total)}</TableCell>)}
                     <TableCell className="text-right tabular-nums">{n(total.total)}</TableCell>
+                    {mobCols.map((c) => <TableCell key={c.warehouse_id} className="border-l border-fc-dark-20 text-right tabular-nums">{n(c.total)}</TableCell>)}
                   </TableRow>
                 </TableBody>
               </Table>
