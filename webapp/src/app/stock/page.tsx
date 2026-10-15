@@ -135,8 +135,52 @@ export default async function StockPage({ searchParams }: Props) {
         </CardContent></Card>
       )}
 
-      {/* Por modelo */}
-      {modelAgg.length > 0 && (
+      {/* Matriz equipamento × armazém (todos os armazéns) */}
+      {!p.wh && byModel.length > 0 && (() => {
+        const cols = byWarehouse
+        const eqs = [...new Set(byModel.map((m) => m.equipment))].sort((x, y) => x.localeCompare(y, 'pt'))
+        const cell = new Map(byModel.map((m) => [`${m.equipment}|${m.warehouse_id}`, m]))
+        const rowTotal = (e: string) => cols.filter((c) => !c.mobilized).reduce((a, c) => a + (cell.get(`${e}|${c.warehouse_id}`)?.total ?? 0), 0)
+        return (
+          <Card>
+            <CardHeader><CardTitle>Por equipamento e armazém</CardTitle></CardHeader>
+            <CardContent className="overflow-x-auto p-0">
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>Equipamento</TableHead>
+                  {cols.map((c) => <TableHead key={c.warehouse_id} className="text-right">{c.warehouse}</TableHead>)}
+                  <TableHead className="text-right" title="Total em stock (sem o Mobilizado)">Total</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {eqs.map((e) => (
+                    <TableRow key={e}>
+                      <TableCell>{e}</TableCell>
+                      {cols.map((c) => {
+                        const m = cell.get(`${e}|${c.warehouse_id}`)
+                        return (
+                          <TableCell key={c.warehouse_id} className={cn('text-right tabular-nums', !m && 'text-fc-dark-40', c.mobilized && 'text-fc-dark-60')}
+                            title={m ? `Venda ${m.venda} · Aluguer ${m.aluguer} · Sem modalidade ${m.sem}` : undefined}>
+                            {m ? <Link href={`${href({ wh: c.warehouse_id, q: e.startsWith('(') ? undefined : e })}#imeis`} className="text-fc-light-100 hover:text-fc-light-60">{n(m.total)}</Link> : '—'}
+                          </TableCell>
+                        )
+                      })}
+                      <TableCell className="text-right font-bold tabular-nums">{n(rowTotal(e))}</TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="bg-fc-grey-80 font-bold">
+                    <TableCell>Total</TableCell>
+                    {cols.map((c) => <TableCell key={c.warehouse_id} className="text-right tabular-nums">{n(c.total)}</TableCell>)}
+                    <TableCell className="text-right tabular-nums">{n(total.total)}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )
+      })()}
+
+      {/* Por modelo (armazém escolhido) */}
+      {p.wh && modelAgg.length > 0 && (
         <Card>
           <CardHeader><CardTitle>Por equipamento {selectedWh ? `· ${selectedWh.warehouse}` : '· todos os armazéns'}</CardTitle></CardHeader>
           <Table>
