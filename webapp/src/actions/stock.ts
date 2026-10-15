@@ -449,7 +449,14 @@ export async function replaceRmaImeis(input: { pairs: string; toWarehouseId?: st
     const curOf = new Map(cur.map((c) => [c.imei, c]))
     const missing = olds.filter((o) => !curOf.has(o))
     if (missing.length) throw new Error(`IMEI(s) antigo(s) que não estão em stock: ${missing.slice(0, 8).join(', ')}`)
-    const already = news.filter((n) => curOf.has(n))
+    // o IMEI novo pode já ter entrado sozinho pela receção automática da Intranet (Shipped on atualizado na substituição):
+    // nesse caso essa receção automática é anulada e substituída por esta
+    const autoRec = await sql<{ id: string; imei: string }[]>`
+      select m.id, m.imei from stock_movements m
+      where m.imei = any(${news}) and m.superseded_at is null and m.created_by = 'auto:rececao-intranet'
+        and not exists (select 1 from stock_movements o where o.imei = m.imei and o.superseded_at is null and o.id <> m.id)`
+    const autoSet = new Set(autoRec.map((r) => r.imei))
+    const already = news.filter((n) => curOf.has(n) && !autoSet.has(n))
     if (already.length) throw new Error(`IMEI(s) novo(s) que já estão em stock: ${already.slice(0, 8).join(', ')}`)
     const [devices, equipment, mappings] = await Promise.all([
       sql<{ imei: string; model: string | null }[]>`select imei, model from devices where imei = any(${news})`,
@@ -468,11 +475,33 @@ export async function replaceRmaImeis(input: { pairs: string; toWarehouseId?: st
           moved_at: date, notes: `Substituição RMA do ${o}${extra}`, created_by: user.email, is_correction: true },
       ]
     })
-    await sql`insert into stock_movements ${sql(rows)}`
+    await sql.begin(async (tx) => {
+      if (autoRec.length) await tx`update stock_movements set superseded_at = now() where id = any(${autoRec.map((r) => r.id)})`
+      await tx`insert into stock_movements ${tx(rows)}`
+    })
     revalidatePath('/stock')
+    const warnings: string[] = []
     const unknown = news.filter((n) => !devices.some((d) => d.imei === n))
-    return { ok: true, n: pairs.length, warnings: unknown.length ? [`${unknown.length} IMEI(s) novo(s) ainda não existem na Intranet (sem equipamento): ${unknown.slice(0, 5).join(', ')}`] : [] }
+    if (autoRec.length) warnings.push(`${autoRec.length} IMEI(s) novo(s) tinham entrado pela receção automática (A1) — essa entrada foi anulada.`)
+    if (unknown.length) warnings.push(`${unknown.length} IMEI(s) novo(s) ainda não existem na Intranet (sem equipamento): ${unknown.slice(0, 5).join(', ')}`)
+    return { ok: true, n: pairs.length, warnings }
   } catch (e) {
     return { ok: false, error: (e as Error).message }
   }
+}
+
+/** IMEIs recentes na conta Intranet "Frotcom Lusitana - RMA" que ainda não estão em stock (candidatos a IMEI de substituição) */
+export async function getRecentRmaAccountDevices() {
+  await requireAdmin()
+  const rows = await sql<{ imei: string; model: string | null; shipped_on: string | null }[]>`
+    select d.imei, d.model, d.shipped_on::text from devices d
+    where d.active and d.imei ~ '^[0-9]{15}$'
+      and (exists (select 1 from clients c where c.intranet_account_id = d.intranet_account_id
+                   and lower(coalesce(c.intranet_short_name, c.name)) ~ '^frotcom lusitana\s*-\s*rma')
+        or exists (select 1 from intranet_pending p where p.intranet_account_id = d.intranet_account_id
+                   and lower(p.name) ~ '^frotcom lusitana\s*-\s*rma'))
+      and not exists (select 1 from stock_current s where s.imei = d.imei and s.warehouse_id is not null)
+    order by d.shipped_on desc nulls last, d.imei
+    limit 60`
+  return rows.map((r) => ({ imei: r.imei, model: r.model, shipped_on: r.shipped_on }))
 }
