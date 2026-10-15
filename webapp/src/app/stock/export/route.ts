@@ -1,3 +1,4 @@
+import { equipmentNamer } from '@/lib/equipment-namer'
 import ExcelJS from 'exceljs'
 import { sql } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
@@ -27,6 +28,7 @@ export async function GET(request: Request) {
     }
   }
   const lastSync = await getLastSync()
+  const eqName = await equipmentNamer()
 
   const rows = await sql<{
     warehouse: string; imei: string; equipment: string | null; hardware: string | null; modality: string | null
@@ -95,7 +97,7 @@ export async function GET(request: Request) {
     ]
     for (const r of list) {
       const row = ws.addRow({
-        imei: r.imei, eq: r.equipment ?? '', hw: r.hardware ?? '', mod: r.modality ?? '',
+        imei: r.imei, eq: eqName(r.hardware) ?? r.equipment ?? '', hw: r.hardware ?? '', mod: r.modality ?? '',
         since: new Date(`${r.moved_at.slice(0, 10)}T00:00:00Z`), kind: KIND[r.kind] ?? r.kind,
         state: r.installed ? 'Instalado (segundo a Intranet)' : 'Em stock', plate: r.plate ?? '', client: r.client ?? '',
       })

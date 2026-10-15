@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { sql } from '@/lib/db'
 import { requireAdmin, requireUser } from '@/lib/auth'
 import { matchEquipment } from '@/lib/hardware'
+import { equipmentNamer } from '@/lib/equipment-namer'
 
 export type WarehouseTotal = { warehouse_id: string; warehouse: string; venda: number; aluguer: number; sem: number; total: number; mobilized: boolean }
 export type ModelTotal = { warehouse_id: string; equipment: string; venda: number; aluguer: number; sem: number; total: number }
@@ -17,15 +18,6 @@ export type Movement = {
   id: string; imei: string; kind: string; moved_at: string; from_wh: string | null; to_wh: string | null
   equipment: string | null; modality: string | null; intervention_id: string | null; notes: string | null; created_by: string | null
   superseded_at: string | null
-}
-
-/** Nome do equipamento da app a partir do hardware da Intranet (null se não houver correspondência) */
-async function equipmentNamer() {
-  const [equipment, mappings] = await Promise.all([
-    sql<{ id: string; name: string }[]>`select id, name from equipment_list where active`,
-    sql<{ hardware: string; equipment_id: string }[]>`select hardware, equipment_id from hardware_map`,
-  ])
-  return (hw: string | null) => matchEquipment(hw, equipment, mappings)?.item.name ?? null
 }
 
 /** Totais por armazém e por modelo (só o que está atualmente em stock) */
@@ -46,11 +38,11 @@ export async function getStockTotals() {
       left join devices d on d.imei = c.imei
       where c.warehouse_id is not null`,
   ])
-  // sem equipamento no movimento → usa o hardware da Intranet (correspondência com a lista de Equipamentos)
+  // o equipamento é sempre o do hardware da Intranet para o IMEI (corrige entradas com o hardware errado); se não houver correspondência, o registado
   const eqName = await equipmentNamer()
   const acc = new Map<string, ModelTotal>()
   for (const r of rows) {
-    const name = r.equipment ?? eqName(r.hardware) ?? r.hardware ?? '(sem equipamento)'
+    const name = eqName(r.hardware) ?? r.equipment ?? r.hardware ?? '(sem equipamento)'
     const k = r.warehouse_id + '|' + name
     const t = acc.get(k) ?? { warehouse_id: r.warehouse_id, equipment: name, venda: 0, aluguer: 0, sem: 0, total: 0 }
     if (r.modality === 'Venda') t.venda++; else if (r.modality === 'Aluguer') t.aluguer++; else t.sem++
@@ -64,6 +56,8 @@ export async function getStockTotals() {
 export async function getStockItems(f: { warehouseId?: string; modality?: string; q?: string; installed?: boolean }) {
   await requireAdmin()
   const q = (f.q ?? '').replace(/\s/g, '')
+  const text = (f.q ?? '').trim()
+  const isImei = /^\d+$/.test(q)
   const eqName = await equipmentNamer()
   const items = await sql<StockItem[]>`
     select c.imei, c.warehouse_id, w.name as warehouse, e.name as equipment, c.modality, c.moved_at::text, c.kind, d.model as hardware,
@@ -78,10 +72,17 @@ export async function getStockItems(f: { warehouseId?: string; modality?: string
       ${f.warehouseId ? sql`and c.warehouse_id = ${f.warehouseId}` : sql``}
       ${f.modality === 'Venda' || f.modality === 'Aluguer' ? sql`and c.modality = ${f.modality}` : f.modality === 'sem' ? sql`and c.modality is null` : sql``}
       ${f.installed ? sql`and d.active and nullif(btrim(d.license_plate), '') is not null and not gestao_interv.is_internal_account(d.intranet_account_id)` : sql``}
-      ${q ? sql`and (c.imei like ${'%' + q + '%'} or e.name ilike ${'%' + q + '%'} or d.model ilike ${'%' + q + '%'})` : sql``}
+      ${isImei ? sql`and c.imei like ${'%' + q + '%'}` : sql``}
     order by w.name, e.name nulls last, c.imei
-    limit 500`
-  return items.map((it) => (it.equipment ? it : { ...it, equipment: eqName(it.hardware) }))
+    ${isImei || !text ? sql`limit 500` : sql``}`
+  // pesquisa por equipamento: compara com o nome mostrado (o da app ou o obtido pelo hardware da Intranet) e com o hardware
+  const fold = (v: string | null | undefined) => (v ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const t = fold(text)
+  const mapped = items.map((it) => ({ ...it, equipment: eqName(it.hardware) ?? it.equipment }))
+  if (isImei || !t) return mapped.slice(0, 500)
+  // nome exato de um equipamento (ex.: vindo da tabela por armazém) → só esse; senão, contém
+  const exact = mapped.filter((it) => fold(it.equipment) === t)
+  return (exact.length ? exact : mapped.filter((it) => fold(it.equipment).includes(t) || fold(it.hardware).includes(t))).slice(0, 500)
 }
 
 /** Últimos movimentos (opcionalmente de um IMEI) */
@@ -352,7 +353,7 @@ export async function previewStockCount(input: { warehouseId: string; imeis: str
   const counted = parseImeis(input.imeis)
   const [inWh, elsewhere] = await Promise.all([
     sql<{ imei: string; equipment: string | null }[]>`
-      select c.imei, coalesce(e.name, d.model) as equipment from stock_current c
+      select c.imei, coalesce(d.model, e.name) as equipment from stock_current c
       left join equipment_list e on e.id = c.equipment_id left join devices d on d.imei = c.imei
       where c.warehouse_id = ${input.warehouseId} order by c.imei`,
     sql<{ imei: string; warehouse: string }[]>`
