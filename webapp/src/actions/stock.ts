@@ -490,19 +490,23 @@ export async function replaceRmaImeis(input: { pairs: string; toWarehouseId?: st
   }
 }
 
-/** IMEIs da conta Intranet "Frotcom Lusitana - RMA" com Shipped on nos últimos 30 dias e sem nenhuma entrada na app (candidatos a IMEI de substituição) */
+/** Contas internas de onde podem vir os IMEIs de substituição de RMA */
+const RMA_SOURCE_ACCOUNTS = '^frotcom lusitana - (rma|storage service|installation|refurbished)$'
+
+/** IMEIs das contas Frotcom Lusitana - RMA / Storage Service / Installation / Refurbished com Shipped on nos últimos 30 dias
+ *  e sem nenhuma entrada na app (candidatos a IMEI de substituição) */
 export async function getRecentRmaAccountDevices() {
   await requireAdmin()
-  const rows = await sql<{ imei: string; model: string | null; shipped_on: string | null }[]>`
-    select d.imei, d.model, d.shipped_on::text from devices d
+  const rows = await sql<{ imei: string; model: string | null; shipped_on: string | null; account: string | null }[]>`
+    select d.imei, d.model, d.shipped_on::text, coalesce(c.intranet_short_name, c.name, p.name) as account
+    from devices d
+    left join clients c on c.intranet_account_id = d.intranet_account_id
+    left join intranet_pending p on p.intranet_account_id = d.intranet_account_id
     where d.active and d.imei ~ '^[0-9]{15}$'
-      and d.shipped_on >= current_date - 30
-      and (exists (select 1 from clients c where c.intranet_account_id = d.intranet_account_id
-                   and coalesce(c.intranet_short_name, c.name) ilike 'frotcom lusitana%rma%')
-        or exists (select 1 from intranet_pending p where p.intranet_account_id = d.intranet_account_id
-                   and p.name ilike 'frotcom lusitana%rma%'))
+      and d.shipped_on >= current_date - 30 and d.shipped_on <= current_date + 1
+      and btrim(coalesce(c.intranet_short_name, c.name, p.name)) ~* ${RMA_SOURCE_ACCOUNTS}
       and not exists (select 1 from stock_movements m where m.imei = d.imei and m.superseded_at is null)
     order by d.shipped_on desc, d.imei
     limit 100`
-  return rows.map((r) => ({ imei: r.imei, model: r.model, shipped_on: r.shipped_on }))
+  return rows.map((r) => ({ imei: r.imei, model: r.model, shipped_on: r.shipped_on, account: r.account?.replace(/^frotcom lusitana - /i, '') ?? null }))
 }

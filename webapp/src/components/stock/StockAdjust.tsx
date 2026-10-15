@@ -104,19 +104,19 @@ export function StockAdjust({ warehouses }: { warehouses: Opt[] }) {
                 <p className="fc-small text-fc-dark-60">Cada IMEI novo substitui o antigo da mesma linha (1.º com 1.º, 2.º com 2.º…).</p>
                 {rmaDevs && rmaDevs.length > 0 && (
                   <div className="border border-fc-dark-20 px-3 py-2">
-                    <p className="fc-small font-semibold">Conta Frotcom Lusitana - RMA · Shipped on nos últimos 30 dias, ainda sem entrada — clique para juntar aos novos:</p>
+                    <p className="fc-small font-semibold">Contas Frotcom Lusitana - RMA / Storage Service / Installation / Refurbished · Shipped on nos últimos 30 dias, ainda sem entrada — clique para juntar aos novos:</p>
                     <div className="mt-1 flex max-h-32 flex-wrap gap-1.5 overflow-y-auto">
                       {rmaDevs.filter((d) => !newList.includes(d.imei)).map((d) => (
                         <button key={d.imei} type="button" onClick={() => addNew(d.imei)}
                           className="border border-fc-dark-20 px-2 py-0.5 font-mono text-[11px] hover:bg-fc-light-100/10"
-                          title={[d.model, d.shipped_on && `Shipped on ${d.shipped_on.split('-').reverse().join('/')}`].filter(Boolean).join(' · ')}>
-                          {d.imei}<span className="ml-1 font-sans text-fc-dark-60">{d.model ?? ''}{d.shipped_on ? ` · ${d.shipped_on.slice(8, 10)}/${d.shipped_on.slice(5, 7)}` : ''}</span>
+                          title={[d.account && `Conta: Frotcom Lusitana - ${d.account}`, d.model, d.shipped_on && `Shipped on ${d.shipped_on.split('-').reverse().join('/')}`].filter(Boolean).join(' · ')}>
+                          {d.imei}<span className="ml-1 font-sans text-fc-dark-60">{d.account ? `${d.account} · ` : ''}{d.model ?? ''}{d.shipped_on ? ` · ${d.shipped_on.slice(8, 10)}/${d.shipped_on.slice(5, 7)}` : ''}</span>
                         </button>
                       ))}
                     </div>
                   </div>
                 )}
-                {rmaDevs && rmaDevs.length === 0 && <p className="fc-small text-fc-dark-60">Sem IMEIs na conta Frotcom Lusitana - RMA com Shipped on nos últimos 30 dias e ainda sem entrada.</p>}
+                {rmaDevs && rmaDevs.length === 0 && <p className="fc-small text-fc-dark-60">Sem IMEIs nas contas Frotcom Lusitana - RMA / Storage Service / Installation / Refurbished com Shipped on nos últimos 30 dias e ainda sem entrada.</p>}
                 {oldList.length !== newList.length && newList.length > 0 && (
                   <p className="fc-small text-[#b31d25]">O número de IMEIs antigos ({oldList.length}) e novos ({newList.length}) tem de ser igual.</p>
                 )}
