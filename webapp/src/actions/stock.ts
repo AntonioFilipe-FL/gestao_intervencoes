@@ -490,18 +490,19 @@ export async function replaceRmaImeis(input: { pairs: string; toWarehouseId?: st
   }
 }
 
-/** IMEIs recentes na conta Intranet "Frotcom Lusitana - RMA" que ainda não estão em stock (candidatos a IMEI de substituição) */
+/** IMEIs da conta Intranet "Frotcom Lusitana - RMA" com Shipped on nos últimos 30 dias e sem nenhuma entrada na app (candidatos a IMEI de substituição) */
 export async function getRecentRmaAccountDevices() {
   await requireAdmin()
   const rows = await sql<{ imei: string; model: string | null; shipped_on: string | null }[]>`
     select d.imei, d.model, d.shipped_on::text from devices d
     where d.active and d.imei ~ '^[0-9]{15}$'
+      and d.shipped_on >= current_date - 30
       and (exists (select 1 from clients c where c.intranet_account_id = d.intranet_account_id
-                   and lower(coalesce(c.intranet_short_name, c.name)) ~ '^frotcom lusitana\s*-\s*rma')
+                   and coalesce(c.intranet_short_name, c.name) ilike 'frotcom lusitana%rma%')
         or exists (select 1 from intranet_pending p where p.intranet_account_id = d.intranet_account_id
-                   and lower(p.name) ~ '^frotcom lusitana\s*-\s*rma'))
-      and not exists (select 1 from stock_current s where s.imei = d.imei and s.warehouse_id is not null)
-    order by d.shipped_on desc nulls last, d.imei
-    limit 60`
+                   and p.name ilike 'frotcom lusitana%rma%'))
+      and not exists (select 1 from stock_movements m where m.imei = d.imei and m.superseded_at is null)
+    order by d.shipped_on desc, d.imei
+    limit 100`
   return rows.map((r) => ({ imei: r.imei, model: r.model, shipped_on: r.shipped_on }))
 }

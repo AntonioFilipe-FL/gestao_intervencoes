@@ -58,7 +58,7 @@ export function StockAdjust({ warehouses }: { warehouses: Opt[] }) {
 
   const tab = (k: typeof mode, label: string) => (
     <button type="button" onClick={() => { setMode(k); setPrev(null); setMsg(null) }}
-      className={`px-3 py-1.5 fc-small font-semibold ${mode === k ? 'bg-fc-dark text-white' : 'border border-fc-dark-20'}`}>{label}</button>
+      className={`px-3 py-1.5 fc-small font-semibold ${mode === k ? 'bg-fc-dark-100 text-white' : 'border border-fc-dark-20'}`}>{label}</button>
   )
 
   return (
@@ -104,7 +104,7 @@ export function StockAdjust({ warehouses }: { warehouses: Opt[] }) {
                 <p className="fc-small text-fc-dark-60">Cada IMEI novo substitui o antigo da mesma linha (1.º com 1.º, 2.º com 2.º…).</p>
                 {rmaDevs && rmaDevs.length > 0 && (
                   <div className="border border-fc-dark-20 px-3 py-2">
-                    <p className="fc-small font-semibold">Recentes na conta Frotcom Lusitana - RMA (fora do stock) — clique para juntar aos novos:</p>
+                    <p className="fc-small font-semibold">Conta Frotcom Lusitana - RMA · Shipped on nos últimos 30 dias, ainda sem entrada — clique para juntar aos novos:</p>
                     <div className="mt-1 flex max-h-32 flex-wrap gap-1.5 overflow-y-auto">
                       {rmaDevs.filter((d) => !newList.includes(d.imei)).map((d) => (
                         <button key={d.imei} type="button" onClick={() => addNew(d.imei)}
@@ -116,7 +116,7 @@ export function StockAdjust({ warehouses }: { warehouses: Opt[] }) {
                     </div>
                   </div>
                 )}
-                {rmaDevs && rmaDevs.length === 0 && <p className="fc-small text-fc-dark-60">Sem IMEIs recentes na conta Frotcom Lusitana - RMA fora do stock.</p>}
+                {rmaDevs && rmaDevs.length === 0 && <p className="fc-small text-fc-dark-60">Sem IMEIs na conta Frotcom Lusitana - RMA com Shipped on nos últimos 30 dias e ainda sem entrada.</p>}
                 {oldList.length !== newList.length && newList.length > 0 && (
                   <p className="fc-small text-[#b31d25]">O número de IMEIs antigos ({oldList.length}) e novos ({newList.length}) tem de ser igual.</p>
                 )}
