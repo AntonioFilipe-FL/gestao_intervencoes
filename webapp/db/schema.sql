@@ -458,7 +458,7 @@ from c where not is_transfer and entry_wh is not null and has_return_eq
 union all
 -- Desinstalação sem armazém de entrada nem IMEI retomado (ex.: registos importados só com o IMEI):
 --   Aluguer → o IMEI sai do Mobilizado e entra no armazém do técnico que fez a intervenção;
---   Venda → o equipamento é do cliente, não entra no nosso stock (sem movimento)
+--   Venda → o equipamento é do cliente, não entra no nosso stock (ver a regra seguinte)
 select c.id, c.im, c.equipment_id, 'intervencao_entrada', null, tw.id, 'Aluguer', c.intervention_date, coalesce(c.updated_by, c.created_by), c.created_at, 1
 from c
 join gestao_interv.intervention_types it on it.id = c.intervention_type_id and it.name ilike '%desinstala%'
@@ -467,6 +467,15 @@ join lateral (select w.id from gestao_interv.warehouses w
               where lower(btrim(w.name)) = lower(btrim(t.name)) and w.type <> 'mobilizado' limit 1) tw on true
 where not c.is_transfer and c.entry_wh is null and c.rt is null
   and gestao_interv.modality_of(c.venda_aluguer) = 'Aluguer'
+  and c.im ~ '^[0-9]{15}$'
+union all
+-- Desinstalação de Venda sem armazém de entrada: o equipamento é do cliente → não pode continuar no nosso stock.
+-- Se a app ainda o tinha num armazém (instalação nunca registada), sai do stock nesta data.
+select c.id, c.im, c.equipment_id, 'intervencao_saida', null, null, 'Venda', c.intervention_date, coalesce(c.updated_by, c.created_by), c.created_at, 3
+from c
+join gestao_interv.intervention_types it on it.id = c.intervention_type_id and it.name ilike '%desinstala%'
+where not c.is_transfer and c.entry_wh is null and c.rt is null
+  and gestao_interv.modality_of(c.venda_aluguer) = 'Venda'
   and c.im ~ '^[0-9]{15}$';
 
 create or replace function gestao_interv.sync_intervention_stock(p_id uuid) returns void language plpgsql as $$
