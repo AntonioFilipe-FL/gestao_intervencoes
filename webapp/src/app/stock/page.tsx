@@ -259,7 +259,7 @@ export default async function StockPage({ searchParams }: Props) {
                   <TableCell className="font-mono text-[12px]">{m.imei}</TableCell>
                   <TableCell>{m.equipment ?? '—'}</TableCell>
                   <TableCell>{m.from_wh ?? '—'}</TableCell>
-                  <TableCell>{m.to_wh ?? (m.kind === 'intervencao_saida' || m.kind === 'ajuste' ? 'Instalado' : '—')}</TableCell>
+                  <TableCell>{m.to_wh ?? (m.kind === 'ajuste' && m.notes?.startsWith('Acerto de stock') ? 'Fora do stock' : m.kind === 'intervencao_saida' || m.kind === 'ajuste' ? 'Instalado' : '—')}</TableCell>
                   <TableCell>{m.modality ?? '—'}</TableCell>
                   <TableCell className="text-fc-dark-60">
                     {m.intervention_id ? (
