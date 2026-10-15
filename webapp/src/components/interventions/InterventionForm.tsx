@@ -130,6 +130,10 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
   const interventionDate = watch('intervention_date')
   const [plateImeis, setPlateImeis] = useState<PlateImeis | null>(null)
   // intervenções desta viatura com data posterior (registo de uma intervenção antiga em falta)
+  // tipos de logística: permitem vários IMEIs no mesmo registo
+  const typeName = referenceData.interventionTypes?.find((t) => t.id === watch('intervention_type_id'))?.name ?? ''
+  const isLogisticType = /entrega de material|entrada de material|envio de material|envio rma|entrada de rma|recolha de material/i.test(typeName)
+  const extraCount = new Set(String(watch('extra_imeis') ?? '').split(/[\s,;]+/).filter(Boolean)).size
   const [laterInfo, setLaterInfo] = useState<{ later: LaterIntervention[]; imeiAtDate: string | null } | null>(null)
   useEffect(() => {
     const p = (plate ?? '').replace(/[^A-Za-z0-9]/g, '')
@@ -398,6 +402,16 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
               )}
             />
           </div>
+          {isLogisticType && (
+            <div className="space-y-1.5 md:col-span-2">
+              <Label htmlFor="extra_imeis">
+                IMEIs adicionais {extraCount > 0 && <span className="normal-case text-fc-dark-60">({extraCount} + o IMEI acima)</span>}
+              </Label>
+              <Textarea id="extra_imeis" rows={4} {...register('extra_imeis')} className="font-mono text-[12px]"
+                placeholder="Outros IMEIs entregues/movimentados neste registo — um por linha (pode colar uma coluna do Excel). Movimentam o stock tal como o IMEI acima." />
+              {errors.extra_imeis && <p className="fc-small text-fc-danger">{errors.extra_imeis.message}</p>}
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="intranet_account">Conta Intranet</Label>
             <Input id="intranet_account" list="intranet-accounts" {...register('intranet_account')} placeholder="Automático ao escolher o IMEI (ex.: Conta do cliente)" />

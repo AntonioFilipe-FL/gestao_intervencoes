@@ -30,6 +30,11 @@ export const interventionSchema = z.object({
   license_plate: text,
   imei: z.union([z.string().trim().regex(/^\d{15}$/, 'O IMEI deve ter 15 dígitos'), z.literal('')]).optional(),
   equipment_id: optionalId,
+  /** logística (ex.: Entrega de Material): mais IMEIs movimentados com o mesmo registo, um por linha */
+  extra_imeis: z.string().trim().optional().refine(
+    (v) => !v || v.split(/[\s,;]+/).filter(Boolean).every((x) => /^\d{14,15}$/.test(x)),
+    'Os IMEIs adicionais devem ter 15 dígitos (um por linha)'
+  ),
   warranty_rental: text,
 
   // Intranet

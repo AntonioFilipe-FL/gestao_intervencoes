@@ -387,20 +387,30 @@ update gestao_interv.stock_movements set imei = '0' || imei where imei ~ '^1[0-9
  *  - armazém de entrada → entra o IMEI retomado (ou o IMEI, se for diferente do gasto) (ex.: desinstalação, troca)
  */
 -- no mesmo dia: primeiro as entradas (desinstalação), depois transferências, por fim as saídas (instalação)
+alter table gestao_interv.interventions add column if not exists extra_imeis text;
 create or replace view gestao_interv.intervention_stock_moves as
 with b as (
+  -- uma linha por IMEI: o IMEI da intervenção + os "IMEIs adicionais" (logística com vários equipamentos, ex.: Entrega de Material)
   select i.*,
-         gestao_interv.imei_norm(i.imei) as im,
-         gestao_interv.imei_norm(i.spent_equipment_imei) as sp,
-         gestao_interv.imei_norm(i.return_equipment_imei) as rt,
+         case when xx.xv is null then gestao_interv.imei_norm(i.imei) else xx.xv end as im,
+         case when xx.xv is null then gestao_interv.imei_norm(i.spent_equipment_imei) else xx.xv end as sp,
+         case when xx.xv is null then gestao_interv.imei_norm(i.return_equipment_imei) end as rt,
          -- armazém de entrada efetivo: o indicado; se faltar e houver equipamento retirado da viatura (IMEI retomado),
          -- entra no stock Frotcom da modalidade: Aluguer → "A2 - …", Venda → "A1 - …" (ex.: upgrade sem armazém de entrada)
          coalesce(i.stock_entry_warehouse_id,
-           case when gestao_interv.imei_norm(i.return_equipment_imei) is not null then
+           case when xx.xv is null and gestao_interv.imei_norm(i.return_equipment_imei) is not null then
              (select w.id from gestao_interv.warehouses w
                where w.active and w.name ilike (case when gestao_interv.modality_of(coalesce(i.return_modality, i.venda_aluguer)) = 'Venda' then 'A1 %' else 'A2 %' end)
                order by w.name limit 1) end) as entry_wh
   from gestao_interv.interventions i
+  cross join lateral (
+    select null::text as xv
+    union all
+    select distinct gestao_interv.imei_norm(x) from regexp_split_to_table(coalesce(i.extra_imeis, ''), '[\s,;]+') x
+    where gestao_interv.imei_norm(x) is not null
+      and gestao_interv.imei_norm(x) is distinct from gestao_interv.imei_norm(i.imei)
+      and gestao_interv.imei_norm(x) is distinct from gestao_interv.imei_norm(i.spent_equipment_imei)
+  ) xx
 ), c as (
   select b.*,
          -- tipos de logística: o IMEI da intervenção é o próprio material movimentado (entra/sai tal como está)

@@ -103,6 +103,9 @@ export default async function InterventionDetailsPage({ params }: Props) {
               <DetailItem label="Tipo de Intervenção" value={intervention.intervention_type?.name} />
               <DetailItem label="Matrícula" value={intervention.license_plate} />
               <DetailItem label="IMEI" value={intervention.imei} />
+              {(intervention as { extra_imeis?: string | null }).extra_imeis && (
+                <DetailItem label="IMEIs adicionais" value={String((intervention as { extra_imeis?: string | null }).extra_imeis).split(/[\s,;]+/).filter(Boolean).join(', ')} />
+              )}
               <DetailItem label="Conta Intranet" value={intervention.intranet_account} />
               <DetailItem label="Matrícula Intranet" value={intervention.intranet_license_plate} />
             </CardContent>
