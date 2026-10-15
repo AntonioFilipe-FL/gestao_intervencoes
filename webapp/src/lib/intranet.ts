@@ -103,6 +103,40 @@ export async function autoReceiveNewDevices(): Promise<number> {
     notes: `Receção automática (Intranet · Shipped on ${r.shipped_on.split('-').reverse().join('/')})`, created_by: 'auto:rececao-intranet',
   }))
   for (let i = 0; i < ins.length; i += 500) await sql`insert into stock_movements ${sql(ins.slice(i, i + 500))}`
+  // acessórios do kit de cada equipamento recebido (chegam juntamente com o equipamento) → entram também no A1
+  const byAccessory: Record<string, number> = {}
+  try {
+    const perEq = new Map<string, Map<string, number>>() // shipped_on → equipment_id → nº
+    for (const r of ins) if (r.equipment_id) {
+      const m = perEq.get(r.moved_at) ?? new Map<string, number>()
+      m.set(r.equipment_id, (m.get(r.equipment_id) ?? 0) + 1); perEq.set(r.moved_at, m)
+    }
+    const eqIds = [...new Set(ins.map((r) => r.equipment_id).filter(Boolean))] as string[]
+    const kit = eqIds.length ? await sql<{ equipment_id: string; item_id: string; item: string; quantity: number }[]>`
+      select k.equipment_id, m.item_id, si.name as item, k.quantity
+      from equipment_kit_items k
+      join accessory_stock_map m on m.accessory_id = k.accessory_id
+      join accessory_stock_items si on si.id = m.item_id
+      where k.equipment_id = any(${eqIds})` : []
+    const acc: { item_id: string; warehouse_id: string; kind: string; quantity: number; moved_at: string; notes: string; created_by: string }[] = []
+    for (const [day, m] of perEq) {
+      const qty = new Map<string, { q: number; name: string }>()
+      for (const k of kit) {
+        const n = m.get(k.equipment_id)
+        if (!n) continue
+        const cur = qty.get(k.item_id) ?? { q: 0, name: k.item }
+        cur.q += n * k.quantity; qty.set(k.item_id, cur)
+      }
+      for (const [item_id, { q, name }] of qty) {
+        acc.push({ item_id, warehouse_id: a1.id, kind: 'rececao', quantity: q, moved_at: day,
+          notes: `Receção automática: kit dos equipamentos (Shipped on ${day.split('-').reverse().join('/')})`, created_by: 'auto:rececao-intranet' })
+        byAccessory[name] = (byAccessory[name] ?? 0) + q
+      }
+    }
+    if (acc.length) await sql`insert into accessory_movements ${sql(acc)}`
+  } catch (e) {
+    console.error('Receção automática: falhou a entrada dos acessórios do kit:', e)
+  }
   await markRun()
   // registo do lote para o aviso (pop-up) aos utilizadores — guarda os últimos 30 lotes
   const byEquipment: Record<string, number> = {}
@@ -111,7 +145,7 @@ export async function autoReceiveNewDevices(): Promise<number> {
     byEquipment[name] = (byEquipment[name] ?? 0) + 1
   }
   const [prev] = await sql<{ value: string }[]>`select value from app_settings where key = 'auto_reception_batches'`
-  const batches = [...(prev ? JSON.parse(prev.value) : []), { id: Date.now(), at: new Date().toISOString(), n: ins.length, byEquipment }].slice(-30)
+  const batches = [...(prev ? JSON.parse(prev.value) : []), { id: Date.now(), at: new Date().toISOString(), n: ins.length, byEquipment, byAccessory }].slice(-30)
   await sql`insert into app_settings (key, value, updated_by) values ('auto_reception_batches', ${JSON.stringify(batches)}, 'sistema')
             on conflict (key) do update set value = excluded.value, updated_at = now()`
   return ins.length

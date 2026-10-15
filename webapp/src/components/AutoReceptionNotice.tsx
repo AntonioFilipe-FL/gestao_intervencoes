@@ -7,7 +7,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { getUnseenAutoReceptions, markAutoReceptionsSeen } from '@/actions/auto-reception'
 
-type Info = { lastId: number; n: number; byEquipment: Record<string, number> }
+type Info = { lastId: number; n: number; byEquipment: Record<string, number>; byAccessory: Record<string, number> }
 
 /** Pop-up: "Foram recebidos X equipamentos e adicionados automaticamente ao stock (A1)" — uma vez por utilizador e lote */
 export function AutoReceptionNotice() {
@@ -16,6 +16,7 @@ export function AutoReceptionNotice() {
   if (!info) return null
   const close = () => { void markAutoReceptionsSeen(info.lastId); setInfo(null) }
   const list = Object.entries(info.byEquipment).sort((a, b) => b[1] - a[1])
+  const accList = Object.entries(info.byAccessory ?? {}).sort((a, b) => b[1] - a[1])
   return (
     <Dialog open onOpenChange={(o) => !o && close()}>
       <DialogContent className="sm:max-w-md">
@@ -34,6 +35,18 @@ export function AutoReceptionNotice() {
               </li>
             ))}
           </ul>
+          {accList.length > 0 && (
+            <>
+              <p className="fc-small font-semibold">Acessórios do kit (também no A1):</p>
+              <ul className="border border-fc-dark-20">
+                {accList.map(([name, n]) => (
+                  <li key={name} className="flex justify-between border-t border-fc-dark-10 px-3 py-1 first:border-t-0">
+                    <span>{name}</span><b className="tabular-nums">{n.toLocaleString('pt-PT')}</b>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
           <p className="fc-small text-fc-dark-60">Faça a distribuição pelos armazéns com uma Transferência, no Stock.</p>
         </div>
         <DialogFooter>

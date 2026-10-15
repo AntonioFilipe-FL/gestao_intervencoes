@@ -3,7 +3,7 @@
 import { sql } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
 
-type Batch = { id: number; at: string; n: number; byEquipment: Record<string, number> }
+type Batch = { id: number; at: string; n: number; byEquipment: Record<string, number>; byAccessory?: Record<string, number> }
 
 /** Lotes de receção automática ainda não vistos por este utilizador (para o pop-up) */
 export async function getUnseenAutoReceptions() {
@@ -18,7 +18,9 @@ export async function getUnseenAutoReceptions() {
   if (!unseen.length) return null
   const byEquipment: Record<string, number> = {}
   for (const x of unseen) for (const [k, v] of Object.entries(x.byEquipment)) byEquipment[k] = (byEquipment[k] ?? 0) + v
-  return { lastId: unseen[unseen.length - 1].id, n: unseen.reduce((a, x) => a + x.n, 0), byEquipment }
+  const byAccessory: Record<string, number> = {}
+  for (const x of unseen) for (const [k, v] of Object.entries(x.byAccessory ?? {})) byAccessory[k] = (byAccessory[k] ?? 0) + v
+  return { lastId: unseen[unseen.length - 1].id, n: unseen.reduce((a, x) => a + x.n, 0), byEquipment, byAccessory }
 }
 
 export async function markAutoReceptionsSeen(lastId: number) {
