@@ -429,3 +429,50 @@ export async function removeImeisFromStock(input: { imeis: string; reason: strin
     return { ok: false, error: (e as Error).message }
   }
 }
+
+/**
+ * Substituição em RMA: o IMEI avariado sai do stock e o IMEI de substituição entra
+ * (no armazém escolhido, ou no mesmo onde estava o antigo), com a mesma modalidade.
+ * Linhas "IMEI_antigo IMEI_novo" (separados por espaço, tab, ; ou ,).
+ */
+export async function replaceRmaImeis(input: { pairs: string; toWarehouseId?: string; date: string; notes?: string }): Promise<Result> {
+  try {
+    const user = await requireAdmin()
+    const norm = (v: string) => (/^1\d{13}$/.test(v) ? '0' + v : v)
+    const pairs = input.pairs.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => l.split(/[\s,;]+/).filter(Boolean).map(norm))
+    const bad = pairs.filter((p) => p.length !== 2 || !p.every((x) => /^\d{15}$/.test(x)) || p[0] === p[1])
+    if (!pairs.length) throw new Error('Indique pelo menos uma linha "IMEI antigo  IMEI novo".')
+    if (bad.length) throw new Error(`Linha(s) inválida(s): ${bad.slice(0, 3).map((p) => p.join(' ')).join(' | ')} — cada linha deve ter o IMEI antigo e o novo (15 dígitos).`)
+    const olds = pairs.map((p) => p[0]), news = pairs.map((p) => p[1])
+    const cur = await sql<{ imei: string; warehouse_id: string; modality: string | null }[]>`
+      select imei, warehouse_id, modality from stock_current where imei = any(${[...olds, ...news]}) and warehouse_id is not null`
+    const curOf = new Map(cur.map((c) => [c.imei, c]))
+    const missing = olds.filter((o) => !curOf.has(o))
+    if (missing.length) throw new Error(`IMEI(s) antigo(s) que não estão em stock: ${missing.slice(0, 8).join(', ')}`)
+    const already = news.filter((n) => curOf.has(n))
+    if (already.length) throw new Error(`IMEI(s) novo(s) que já estão em stock: ${already.slice(0, 8).join(', ')}`)
+    const [devices, equipment, mappings] = await Promise.all([
+      sql<{ imei: string; model: string | null }[]>`select imei, model from devices where imei = any(${news})`,
+      sql<{ id: string; name: string }[]>`select id, name from equipment_list where active`,
+      sql<{ hardware: string; equipment_id: string }[]>`select hardware, equipment_id from hardware_map`,
+    ])
+    const date = input.date || new Date().toISOString().slice(0, 10)
+    const extra = input.notes ? ` · ${input.notes}` : ''
+    const rows = pairs.flatMap(([o, n]) => {
+      const c = curOf.get(o)!
+      return [
+        { imei: o, equipment_id: null, kind: 'ajuste', from_warehouse_id: c.warehouse_id, to_warehouse_id: null, modality: null,
+          moved_at: date, notes: `Acerto de stock: substituído em RMA por ${n}${extra}`, created_by: user.email, is_correction: true },
+        { imei: n, equipment_id: matchEquipment(devices.find((d) => d.imei === n)?.model, equipment, mappings)?.item.id ?? null,
+          kind: 'rececao', from_warehouse_id: null, to_warehouse_id: input.toWarehouseId || c.warehouse_id, modality: c.modality,
+          moved_at: date, notes: `Substituição RMA do ${o}${extra}`, created_by: user.email, is_correction: true },
+      ]
+    })
+    await sql`insert into stock_movements ${sql(rows)}`
+    revalidatePath('/stock')
+    const unknown = news.filter((n) => !devices.some((d) => d.imei === n))
+    return { ok: true, n: pairs.length, warnings: unknown.length ? [`${unknown.length} IMEI(s) novo(s) ainda não existem na Intranet (sem equipamento): ${unknown.slice(0, 5).join(', ')}`] : [] }
+  } catch (e) {
+    return { ok: false, error: (e as Error).message }
+  }
+}

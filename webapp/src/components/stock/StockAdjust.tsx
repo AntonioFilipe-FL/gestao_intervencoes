@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { SearchableSelect } from '@/components/ui/searchable-select'
-import { applyStockCount, previewStockCount, removeImeisFromStock } from '@/actions/stock'
+import { applyStockCount, previewStockCount, removeImeisFromStock, replaceRmaImeis } from '@/actions/stock'
 
 type Opt = { id: string; name: string }
 type Preview = Awaited<ReturnType<typeof previewStockCount>>
@@ -23,7 +23,7 @@ export function StockAdjust({ warehouses }: { warehouses: Opt[] }) {
   const router = useRouter()
   const [busy, start] = useTransition()
   const [open, setOpen] = useState(false)
-  const [mode, setMode] = useState<'contagem' | 'retirar'>('contagem')
+  const [mode, setMode] = useState<'contagem' | 'retirar' | 'rma'>('contagem')
   const [f, setF] = useState({ wh: '', imeis: '', date: today(), modality: '', reason: '', notes: '' })
   const [prev, setPrev] = useState<Preview | null>(null)
   const [msg, setMsg] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null)
@@ -40,9 +40,11 @@ export function StockAdjust({ warehouses }: { warehouses: Opt[] }) {
   const apply = () => start(async () => {
     const r = mode === 'contagem'
       ? await applyStockCount({ warehouseId: f.wh, imeis: f.imeis, date: f.date, modality: f.modality, notes: f.notes })
-      : await removeImeisFromStock({ imeis: f.imeis, reason: f.reason, date: f.date, notes: f.notes })
+      : mode === 'rma'
+        ? await replaceRmaImeis({ pairs: f.imeis, toWarehouseId: f.wh, date: f.date, notes: f.notes })
+        : await removeImeisFromStock({ imeis: f.imeis, reason: f.reason, date: f.date, notes: f.notes })
     if (!r.ok) return setMsg({ tone: 'err', text: r.error })
-    setMsg({ tone: 'ok', text: [`${r.n} movimento(s) de acerto registados.`, ...r.warnings].join(' ') })
+    setMsg({ tone: 'ok', text: [`${r.n} ${mode === 'rma' ? 'substituição(ões)' : 'movimento(s) de acerto'} registados.`, ...r.warnings].join(' ') })
     setPrev(null); setF((x) => ({ ...x, imeis: '' }))
     router.refresh()
   })
@@ -59,11 +61,13 @@ export function StockAdjust({ warehouses }: { warehouses: Opt[] }) {
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader><DialogTitle>Acerto de stock</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
-            <div className="flex gap-2">{tab('contagem', 'Contagem do armazém')}{tab('retirar', 'Retirar IMEIs do stock')}</div>
+            <div className="flex gap-2">{tab('contagem', 'Contagem do armazém')}{tab('retirar', 'Retirar IMEIs do stock')}{tab('rma', 'Substituição RMA')}</div>
             <p className="fc-small text-fc-dark-60">
               {mode === 'contagem'
                 ? 'Cole todos os IMEIs que estão fisicamente no armazém. Os que a app tem lá e não foram contados saem do stock; os contados que não estavam lá entram (vindos do armazém onde estavam, ou como receção).'
-                : 'Os IMEIs saem do stock do armazém onde estão, com o motivo indicado (fica no histórico como Ajuste).'}
+                : mode === 'rma'
+                  ? 'Uma linha por substituição: IMEI antigo e IMEI novo (ex.: 864696061230876 864696061259164). O antigo sai do stock e o novo entra com a mesma modalidade, no armazém escolhido ou, se não escolher, no mesmo onde estava o antigo (ex.: RMA).'
+                  : 'Os IMEIs saem do stock do armazém onde estão, com o motivo indicado (fica no histórico como Ajuste).'}
             </p>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {mode === 'contagem' ? (
@@ -71,14 +75,16 @@ export function StockAdjust({ warehouses }: { warehouses: Opt[] }) {
                   <div className="space-y-1.5"><Label>Armazém *</Label><SearchableSelect options={whOpts} value={f.wh} onChange={set('wh')} placeholder="Armazém contado" /></div>
                   <div className="space-y-1.5"><Label>Modalidade dos que entram</Label><SearchableSelect options={MOD} value={f.modality} onChange={set('modality')} placeholder="Mantém / sem modalidade" /></div>
                 </>
+              ) : mode === 'rma' ? (
+                <div className="space-y-1.5"><Label>Armazém do IMEI novo</Label><SearchableSelect options={whOpts} value={f.wh} onChange={set('wh')} placeholder="O mesmo do IMEI antigo" /></div>
               ) : (
                 <div className="space-y-1.5"><Label>Motivo *</Label><SearchableSelect options={REASONS} value={f.reason} onChange={set('reason')} placeholder="Escolha" /></div>
               )}
               <div className="space-y-1.5"><Label>Data</Label><Input type="date" value={f.date} onChange={(e) => set('date')(e.target.value)} /></div>
             </div>
             <div className="space-y-1.5">
-              <Label>IMEIs {mode === 'contagem' ? 'contados' : 'a retirar'} * {n > 0 && <span className="normal-case text-fc-dark-60">({n})</span>}</Label>
-              <Textarea rows={6} value={f.imeis} onChange={(e) => set('imeis')(e.target.value)} placeholder="Um IMEI por linha (pode colar uma coluna do Excel)" className="font-mono text-[12px]" />
+              <Label>{mode === 'rma' ? 'IMEI antigo  →  IMEI novo' : `IMEIs ${mode === 'contagem' ? 'contados' : 'a retirar'}`} * {mode !== 'rma' && n > 0 && <span className="normal-case text-fc-dark-60">({n})</span>}</Label>
+              <Textarea rows={6} value={f.imeis} onChange={(e) => set('imeis')(e.target.value)} placeholder={mode === 'rma' ? '864696061230876 864696061259164' : 'Um IMEI por linha (pode colar uma coluna do Excel)'} className="font-mono text-[12px]" />
             </div>
             <div className="space-y-1.5"><Label>Observações</Label><Input value={f.notes} onChange={(e) => set('notes')(e.target.value)} placeholder="Ex.: inventário de outubro" /></div>
 
@@ -103,6 +109,8 @@ export function StockAdjust({ warehouses }: { warehouses: Opt[] }) {
               prev
                 ? <Button disabled={busy || (!prev.missing.length && !prev.extra.length)} onClick={apply}>{busy ? 'A aplicar…' : 'Aplicar acerto'}</Button>
                 : <Button disabled={busy || !f.wh} onClick={check}>{busy ? 'A comparar…' : 'Comparar'}</Button>
+            ) : mode === 'rma' ? (
+              <Button disabled={busy || !f.imeis.trim()} onClick={apply}>{busy ? 'A registar…' : 'Registar substituição'}</Button>
             ) : (
               <Button disabled={busy || n === 0 || !f.reason} onClick={apply}>{busy ? 'A registar…' : `Retirar ${n || ''} IMEI(s)`}</Button>
             )}
