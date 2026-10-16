@@ -35,6 +35,13 @@ export async function getAccessoryMovements(itemId: string, warehouseId?: string
       from accessory_intervention_moves a left join warehouses w on w.id = a.warehouse_id
       join interventions i on i.id = a.intervention_id left join clients c on c.id = i.client_id
       where a.item_id = ${itemId} ${warehouseId ? sql`and a.warehouse_id = ${warehouseId}` : sql``}
+      union all
+      -- kit que acompanha uma transferência de equipamentos
+      select null, k.moved_at::text, 'transferencia', w.name, k.quantity,
+             concat('Kit de equipamento transferido ', case when k.quantity < 0 then 'para ' else 'de ' end, ow.name) as origin,
+             k.intervention_id, null, false, k.created_at
+      from accessory_kit_transfer_moves k left join warehouses w on w.id = k.warehouse_id left join warehouses ow on ow.id = k.other_wh
+      where k.item_id = ${itemId} ${warehouseId ? sql`and k.warehouse_id = ${warehouseId}` : sql``}
     ) x order by date desc, created_at desc limit 300`
 }
 

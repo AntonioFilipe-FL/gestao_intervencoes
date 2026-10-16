@@ -688,12 +688,50 @@ where not exists (select 1 from gestao_interv.intervention_accessories ia
                   join gestao_interv.equipment_kit_items k2 on k2.accessory_id = ia.accessory_id and k2.equipment_id = sm.equipment_id
                   where ia.intervention_id = i.id);
 
+-- Transferências de equipamento (manuais ou de intervenções) levam os acessórios do kit do equipamento:
+-- sai do armazém de origem e entra no de destino (n.º de IMEIs × quantidade do kit).
+-- Origem num armazém inativo (ex.: "Stock Frotcom") → conta como A1 (Venda) / A2 (Aluguer), onde estão os kits retroativos.
+-- Não se aplica a transferências de/para o Mobilizado, nem quando a intervenção regista acessórios desse kit.
+create or replace view gestao_interv.accessory_kit_transfer_moves as
+with t as (
+  select m.id, m.imei, m.moved_at, m.created_at, m.intervention_id, m.to_warehouse_id as to_wh,
+         case when fw.active then m.from_warehouse_id
+              else (select w.id from gestao_interv.warehouses w where w.active
+                      and w.name ilike (case when coalesce(m.modality, 'Venda') = 'Aluguer' then 'A2 %' else 'A1 %' end)
+                    order by w.name limit 1) end as from_wh,
+         coalesce(m.equipment_id, (select m2.equipment_id from gestao_interv.stock_movements m2
+                                   where m2.imei = m.imei and m2.equipment_id is not null and m2.moved_at <= m.moved_at
+                                   order by m2.moved_at desc, m2.seq desc limit 1)) as equipment_id
+  from gestao_interv.stock_movements m
+  join gestao_interv.warehouses fw on fw.id = m.from_warehouse_id
+  join gestao_interv.warehouses tw on tw.id = m.to_warehouse_id
+  where m.kind = 'transferencia' and m.superseded_at is null
+    and fw.type <> 'mobilizado' and tw.type <> 'mobilizado' and tw.active
+), g as (
+  select t.from_wh, t.to_wh, t.equipment_id, t.moved_at, t.intervention_id, min(t.created_at) as created_at, count(*)::int as n
+  from t where t.equipment_id is not null and t.from_wh is not null and t.from_wh <> t.to_wh
+    and (t.intervention_id is null or not exists (
+          select 1 from gestao_interv.intervention_accessories ia
+          join gestao_interv.equipment_kit_items k2 on k2.accessory_id = ia.accessory_id and k2.equipment_id = t.equipment_id
+          where ia.intervention_id = t.intervention_id))
+  group by 1, 2, 3, 4, 5
+)
+select km.item_id, g.from_wh as warehouse_id, -(g.n * k.quantity)::int as quantity, g.moved_at, g.created_at, g.intervention_id, g.to_wh as other_wh
+from g join gestao_interv.equipment_kit_items k on k.equipment_id = g.equipment_id
+join gestao_interv.accessory_stock_map km on km.accessory_id = k.accessory_id
+union all
+select km.item_id, g.to_wh, (g.n * k.quantity)::int, g.moved_at, g.created_at, g.intervention_id, g.from_wh
+from g join gestao_interv.equipment_kit_items k on k.equipment_id = g.equipment_id
+join gestao_interv.accessory_stock_map km on km.accessory_id = k.accessory_id;
+
 -- stock atual por item e armazém
 create or replace view gestao_interv.accessory_stock as
 with all_moves as (
   select item_id, warehouse_id, 'intervencao'::text as kind, quantity, moved_at, created_at from gestao_interv.accessory_intervention_moves
   union all
   select item_id, warehouse_id, kind, quantity, moved_at, created_at from gestao_interv.accessory_movements
+  union all
+  select item_id, warehouse_id, 'kit_transferencia'::text, quantity, moved_at, created_at from gestao_interv.accessory_kit_transfer_moves
 ), last_count as (
   select distinct on (item_id, warehouse_id) item_id, warehouse_id, quantity, moved_at, created_at
   from gestao_interv.accessory_movements where kind = 'contagem'
