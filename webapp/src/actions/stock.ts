@@ -240,8 +240,12 @@ export async function removeInstalledFromStock(input: { warehouseId?: string; im
   try {
     const user = await requireAdmin()
     const imeis = (input.imeis ?? []).filter((i) => /^\d{15}$/.test(i))
-    const rows = await sql<{ imei: string; warehouse_id: string; equipment_id: string | null; modality: string | null; plate: string; client: string | null }[]>`
-      select c.imei, c.warehouse_id, c.equipment_id, c.modality, d.license_plate as plate, coalesce(dc.name, p.name) as client
+    const rows = await sql<{ imei: string; warehouse_id: string; equipment_id: string | null; modality: string | null; client_modality: string | null; plate: string; client: string | null }[]>`
+      select c.imei, c.warehouse_id, c.equipment_id, c.modality, d.license_plate as plate, coalesce(dc.name, p.name) as client,
+             -- modalidade da conta onde está instalado (cliente da BD ligado à conta da Intranet)
+             gestao_interv.modality_of(coalesce(dc.venda_aluguer,
+               (select x.venda_aluguer from clients x where x.intranet_account_id = d.intranet_account_id
+                  and gestao_interv.modality_of(x.venda_aluguer) is not null limit 1))) as client_modality
       from stock_current c
       join devices d on d.imei = c.imei
       left join clients dc on dc.id = d.client_id
@@ -257,13 +261,18 @@ export async function removeInstalledFromStock(input: { warehouseId?: string; im
     const [mob] = await sql<{ id: string }[]>`select gestao_interv.mobilized_wh() as id`
     const list = rows.filter((r) => r.warehouse_id !== to && !(to === null && r.warehouse_id === mob?.id))
     if (!list.length) throw new Error('Os IMEIs já estão nesse armazém.')
-    await sql`insert into stock_movements ${sql(list.map((r) => ({
-      imei: r.imei, equipment_id: r.equipment_id, kind: to ? 'transferencia' : 'ajuste', is_correction: true, from_warehouse_id: r.warehouse_id,
-      // instalado: Aluguer fica no armazém Mobilizado (continua a ser da Frotcom); Venda sai do stock
-      to_warehouse_id: to ?? (r.modality === 'Aluguer' ? mob?.id ?? null : null),
-      modality: r.modality, moved_at: today, created_by: user.email,
-      notes: `${to ? 'Transferido (Intranet mostra' : 'Instalado segundo a Intranet:'} ${r.plate}${r.client ? ` · ${r.client}` : ''}${to ? ')' : ''}`,
-    })))}`
+    await sql`insert into stock_movements ${sql(list.map((r) => {
+      // instalado: usa a modalidade da conta do cliente (se definida); senão, a do stock.
+      // Aluguer → fica no armazém Mobilizado (continua a ser da Frotcom); Venda → sai do stock
+      const mod = to ? r.modality : (r.client_modality ?? r.modality)
+      return {
+        imei: r.imei, equipment_id: r.equipment_id, kind: to ? 'transferencia' : mod === 'Aluguer' && mob ? 'transferencia' : 'ajuste', is_correction: true,
+        from_warehouse_id: r.warehouse_id,
+        to_warehouse_id: to ?? (mod === 'Aluguer' ? mob?.id ?? null : null),
+        modality: mod, moved_at: today, created_by: user.email,
+        notes: `${to ? 'Transferido (Intranet mostra' : 'Instalado segundo a Intranet:'} ${r.plate}${r.client ? ` · ${r.client}` : ''}${to ? ')' : ''}${!to && mod !== r.modality ? ` · modalidade da conta: ${mod}` : ''}`,
+      }
+    }))}`
     revalidatePath('/stock')
     return { ok: true as const, n: list.length }
   } catch (e) {
