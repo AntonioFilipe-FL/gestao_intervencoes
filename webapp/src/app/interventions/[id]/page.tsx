@@ -102,6 +102,7 @@ export default async function InterventionDetailsPage({ params }: Props) {
               <DetailItem label="Data da Intervenção" value={fmtDate(intervention.intervention_date)} />
               <DetailItem label="Tipo de Intervenção" value={intervention.intervention_type?.name} />
               <DetailItem label="Matrícula" value={intervention.license_plate} />
+              <DetailItem label="Equipamento" value={(intervention as { equipment?: { name: string | null } | null }).equipment?.name ?? null} />
               <DetailItem label="IMEI" value={intervention.imei} />
               {(intervention as { extra_imeis?: string | null }).extra_imeis && (
                 <DetailItem label="IMEIs adicionais" value={String((intervention as { extra_imeis?: string | null }).extra_imeis).split(/[\s,;]+/).filter(Boolean).join(', ')} />

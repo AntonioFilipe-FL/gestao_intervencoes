@@ -669,7 +669,24 @@ from gestao_interv.intervention_accessories ia
 join gestao_interv.accessory_stock_map m on m.accessory_id = ia.accessory_id
 join gestao_interv.interventions i on i.id = ia.intervention_id
 left join gestao_interv.technicians t on t.id = i.technician_id
-left join lateral (select w.id from gestao_interv.warehouses w where lower(btrim(w.name)) = lower(btrim(t.name)) and w.type <> 'mobilizado' limit 1) tw on true;
+left join lateral (select w.id from gestao_interv.warehouses w where lower(btrim(w.name)) = lower(btrim(t.name)) and w.type <> 'mobilizado' limit 1) tw on true
+union all
+-- Kit automático nas Entregas/Entradas de Material (a partir de 01/10/2026; as anteriores foram tratadas pelo
+-- script backfill-kit-accessories): por cada equipamento que entra em stock, entram os acessórios do seu kit
+-- — só quando a intervenção não regista nenhum acessório desse kit (se o técnico registar, vale o registado)
+select km.item_id, sm.to_warehouse_id, (sm.n * k.quantity)::int, 'kit'::text, i.id, i.intervention_date, i.created_at
+from (select m.intervention_id, m.equipment_id, m.to_warehouse_id, count(*)::int as n
+      from gestao_interv.stock_movements m
+      where m.kind = 'intervencao_entrada' and m.superseded_at is null and m.equipment_id is not null and m.to_warehouse_id is not null
+      group by 1, 2, 3) sm
+join gestao_interv.interventions i on i.id = sm.intervention_id and i.intervention_date >= date '2026-10-01'
+join gestao_interv.intervention_types it on it.id = i.intervention_type_id
+  and lower(btrim(it.name)) in ('entrega de material', 'entrada de material', 'entrega de material try and buy')
+join gestao_interv.equipment_kit_items k on k.equipment_id = sm.equipment_id
+join gestao_interv.accessory_stock_map km on km.accessory_id = k.accessory_id
+where not exists (select 1 from gestao_interv.intervention_accessories ia
+                  join gestao_interv.equipment_kit_items k2 on k2.accessory_id = ia.accessory_id and k2.equipment_id = sm.equipment_id
+                  where ia.intervention_id = i.id);
 
 -- stock atual por item e armazém
 create or replace view gestao_interv.accessory_stock as
