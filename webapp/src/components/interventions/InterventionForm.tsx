@@ -79,6 +79,12 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
   const kitOf = (equipmentId: string) =>
     (referenceData.equipmentKits ?? []).filter((k) => k.equipment_id === equipmentId && activeAccessories.has(k.accessory_id))
   const applyKit = (field: 'accessories_spent' | 'accessories_returned', prevEquipment: string, nextEquipment: string) => {
+    // Assistência (inclui troca de equipamento): os acessórios ficam na viatura — não se acrescenta o kit
+    const tName = referenceData.interventionTypes?.find((t) => t.id === getValues('intervention_type_id'))?.name ?? ''
+    if (/assist/i.test(tName)) {
+      setKitNote((n) => ({ ...n, [field === 'accessories_spent' ? 'spent' : 'returned']: undefined }))
+      return
+    }
     const prevKit = prevEquipment ? kitOf(prevEquipment) : []
     const nextKit = nextEquipment ? kitOf(nextEquipment) : []
     let lines = (getValues(field) ?? []).filter(

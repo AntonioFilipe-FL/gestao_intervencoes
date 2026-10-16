@@ -688,10 +688,9 @@ where not exists (select 1 from gestao_interv.intervention_accessories ia
                   join gestao_interv.equipment_kit_items k2 on k2.accessory_id = ia.accessory_id and k2.equipment_id = sm.equipment_id
                   where ia.intervention_id = i.id);
 
--- Transferências de equipamento (manuais ou de intervenções) levam os acessórios do kit do equipamento:
--- sai do armazém de origem e entra no de destino (n.º de IMEIs × quantidade do kit).
--- Origem num armazém inativo (ex.: "Stock Frotcom") → conta como A1 (Venda) / A2 (Aluguer), onde estão os kits retroativos.
--- Não se aplica a transferências de/para o Mobilizado, nem quando a intervenção regista acessórios desse kit.
+-- Transferências de equipamento do A1/A2 para o armazém de um técnico (manuais ou de intervenções) levam os acessórios
+-- do kit: saem do A1/A2 e entram no técnico (n.º de IMEIs × quantidade do kit). A partir de 16/10/2026.
+-- Não se aplica quando a intervenção regista acessórios desse kit.
 create or replace view gestao_interv.accessory_kit_transfer_moves as
 with t as (
   select m.id, m.imei, m.moved_at, m.created_at, m.intervention_id, m.to_warehouse_id as to_wh,
@@ -707,6 +706,11 @@ with t as (
   join gestao_interv.warehouses tw on tw.id = m.to_warehouse_id
   where m.kind = 'transferencia' and m.superseded_at is null
     and fw.type <> 'mobilizado' and tw.type <> 'mobilizado' and tw.active
+    -- só a partir de 16/10/2026 (o histórico anterior acerta-se com contagens) e só do stock central (A1/A2)
+    -- para o armazém de um técnico (armazém com o nome de um técnico)
+    and m.moved_at >= date '2026-10-16'
+    and (fw.name ilike 'A1 %' or fw.name ilike 'A2 %')
+    and exists (select 1 from gestao_interv.technicians tt where lower(btrim(tt.name)) = lower(btrim(tw.name)))
 ), g as (
   select t.from_wh, t.to_wh, t.equipment_id, t.moved_at, t.intervention_id, min(t.created_at) as created_at, count(*)::int as n
   from t where t.equipment_id is not null and t.from_wh is not null and t.from_wh <> t.to_wh
