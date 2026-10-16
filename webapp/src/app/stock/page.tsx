@@ -3,7 +3,7 @@ import { sql } from '@/lib/db'
 import { requireUser } from '@/lib/auth'
 import { getInstalledConflicts, getInternalUseMismatches, getMovements, getStockItems, getStockTotals } from '@/actions/stock'
 import { InternalUseNotice } from '@/components/stock/InternalUseNotice'
-import { AlertTriangle, FileSpreadsheet } from 'lucide-react'
+import { AlertTriangle, ChevronRight, FileSpreadsheet } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -18,7 +18,7 @@ import { RemoveInstalled } from '@/components/stock/RemoveInstalled'
 import { cn } from '@/lib/utils'
 
 interface Props {
-  searchParams: Promise<{ wh?: string; mod?: string; q?: string; imei?: string; inst?: string }>
+  searchParams: Promise<{ wh?: string; mod?: string; q?: string; imei?: string; inst?: string; open?: string }>
 }
 
 const fmtDate = (d: string) => d.slice(0, 10).split('-').reverse().join('/')
@@ -64,7 +64,7 @@ export default async function StockPage({ searchParams }: Props) {
   ).sort((a, b) => b.total - a.total)
 
   return (
-    <div className="mx-auto max-w-screen-2xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[1920px] space-y-5 px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
         title="Stock material"
         subtitle={isAdmin ? 'Equipamentos em stock por IMEI. Receções e transferências registam-se aqui; as intervenções descontam (IMEI gasto) e acrescentam (IMEI retomado) automaticamente.' : 'Equipamentos em stock por armazém.'}
@@ -150,7 +150,7 @@ export default async function StockPage({ searchParams }: Props) {
                 <TableHeader><TableRow>
                   <TableHead>Equipamento</TableHead>
                   {cols.map((c) => <TableHead key={c.warehouse_id} className="text-right">{c.warehouse}</TableHead>)}
-                  <TableHead className="text-right" title="Total em stock (sem o Mobilizado)">Total</TableHead>
+                  <TableHead className="text-right" title="Total em stock (sem o Mobilizado)">Total em stock</TableHead>
                   {mobCols.map((c) => <TableHead key={c.warehouse_id} className="border-l border-fc-dark-20 text-right">{c.warehouse}</TableHead>)}
                 </TableRow></TableHeader>
                 <TableBody>
@@ -162,7 +162,7 @@ export default async function StockPage({ searchParams }: Props) {
                         return (
                           <TableCell key={c.warehouse_id} className={cn('text-right tabular-nums', !m && 'text-fc-dark-40', c.mobilized && 'text-fc-dark-60')}
                             title={m ? `Venda ${m.venda} · Aluguer ${m.aluguer} · Sem modalidade ${m.sem}` : undefined}>
-                            {m ? <Link href={`${href({ wh: c.warehouse_id, q: e.startsWith('(') ? undefined : e })}#imeis`} className="text-fc-light-100 hover:text-fc-light-60">{n(m.total)}</Link> : '—'}
+                            {m ? <Link href={`${href({ wh: c.warehouse_id, q: e.startsWith('(') ? undefined : e, open: 'imeis' })}#imeis`} className="text-fc-light-100 hover:text-fc-light-60">{n(m.total)}</Link> : '—'}
                           </TableCell>
                         )
                       })}
@@ -172,7 +172,7 @@ export default async function StockPage({ searchParams }: Props) {
                         return (
                           <TableCell key={c.warehouse_id} className={cn('border-l border-fc-dark-20 text-right tabular-nums', !m && 'text-fc-dark-40', c.mobilized && 'text-fc-dark-60')}
                             title={m ? `Venda ${m.venda} · Aluguer ${m.aluguer} · Sem modalidade ${m.sem}` : undefined}>
-                            {m ? <Link href={`${href({ wh: c.warehouse_id, q: e.startsWith('(') ? undefined : e })}#imeis`} className="text-fc-light-100 hover:text-fc-light-60">{n(m.total)}</Link> : '—'}
+                            {m ? <Link href={`${href({ wh: c.warehouse_id, q: e.startsWith('(') ? undefined : e, open: 'imeis' })}#imeis`} className="text-fc-light-100 hover:text-fc-light-60">{n(m.total)}</Link> : '—'}
                           </TableCell>
                         )
                       })}
@@ -217,16 +217,20 @@ export default async function StockPage({ searchParams }: Props) {
 
       {/* IMEIs em stock */}
       <Card id="imeis" className="scroll-mt-4">
+        <details className="group" open={!!(p.q || p.mod || p.inst || p.open === 'imeis')}>
+        <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
         <CardHeader className="flex flex-row flex-wrap items-center gap-3">
-          <CardTitle>IMEIs em stock {selectedWh ? `· ${selectedWh.warehouse}` : ''}</CardTitle>
+          <CardTitle><ChevronRight className="mr-1 inline size-4 align-[-3px] transition-transform group-open:rotate-90" />IMEIs em stock {selectedWh ? `· ${selectedWh.warehouse}` : ''}</CardTitle>
           {p.inst === '1' && (
-            <Link href={`${href({ inst: undefined })}#imeis`} className="inline-flex items-center gap-1 bg-fc-warning/20 px-2 py-0.5 fc-small text-[#8a5a00] hover:bg-fc-warning/30" title="Retirar este filtro">
+            <Link href={`${href({ inst: undefined, open: 'imeis' })}#imeis`} className="inline-flex items-center gap-1 bg-fc-warning/20 px-2 py-0.5 fc-small text-[#8a5a00] hover:bg-fc-warning/30" title="Retirar este filtro">
               Filtro ativo: só instalados na Intranet ✕
             </Link>
           )}
         </CardHeader>
+        </summary>
         <CardContent className="pb-3">
           <form action="/stock#imeis" className="flex flex-wrap items-end gap-3">
+            <input type="hidden" name="open" value="imeis" />
             {p.wh && <input type="hidden" name="wh" value={p.wh} />}
             {p.inst && <input type="hidden" name="inst" value={p.inst} />}
             {p.imei && <input type="hidden" name="imei" value={p.imei} />}
@@ -241,7 +245,7 @@ export default async function StockPage({ searchParams }: Props) {
               </select>
             </div>
             <button className={buttonVariants({ variant: 'secondary' })}>Filtrar</button>
-            {(p.q || p.mod || p.inst) && <Link href={`${href({ q: undefined, mod: undefined, inst: undefined })}#imeis`} className={buttonVariants({ variant: 'inverse' })}>Limpar</Link>}
+            {(p.q || p.mod || p.inst) && <Link href={`${href({ q: undefined, mod: undefined, inst: undefined, open: 'imeis' })}#imeis`} className={buttonVariants({ variant: 'inverse' })}>Limpar</Link>}
           </form>
         </CardContent>
         {items.length === 0 ? (
@@ -279,14 +283,17 @@ export default async function StockPage({ searchParams }: Props) {
           </Table>
         )}
         {items.length === 500 && <p className="fc-small px-5 py-2 text-fc-dark-60">A mostrar os primeiros 500 — use os filtros.</p>}
+        </details>
       </Card>
 
       {/* Movimentos */}
       <Card id="movimentos" className="scroll-mt-4">
-        <CardHeader><CardTitle>{p.imei ? `Movimentos do IMEI ${p.imei}` : 'Últimos movimentos'}</CardTitle></CardHeader>
+        <details className="group" open={!!(p.imei || p.open === 'movimentos')}>
+        <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden"><CardHeader><CardTitle><ChevronRight className="mr-1 inline size-4 align-[-3px] transition-transform group-open:rotate-90" />{p.imei ? `Movimentos do IMEI ${p.imei}` : 'Últimos movimentos'}</CardTitle></CardHeader></summary>
         <CardContent className="pb-3">
           {/* mantém o armazém e os filtros escolhidos */}
           <form action="/stock#movimentos" className="flex items-end gap-3">
+            <input type="hidden" name="open" value="movimentos" />
             {p.wh && <input type="hidden" name="wh" value={p.wh} />}
             {p.mod && <input type="hidden" name="mod" value={p.mod} />}
             {p.q && <input type="hidden" name="q" value={p.q} />}
@@ -296,7 +303,7 @@ export default async function StockPage({ searchParams }: Props) {
               <Input id="imei" name="imei" defaultValue={p.imei} placeholder="IMEI" className="w-64 font-mono" />
             </div>
             <button className={buttonVariants({ variant: 'secondary' })}>Ver</button>
-            {p.imei && <Link href={`${href({ imei: undefined })}#movimentos`} className={buttonVariants({ variant: 'inverse' })}>Todos</Link>}
+            {p.imei && <Link href={`${href({ imei: undefined, open: 'movimentos' })}#movimentos`} className={buttonVariants({ variant: 'inverse' })}>Todos</Link>}
           </form>
         </CardContent>
         {movements.length === 0 ? (
@@ -334,6 +341,7 @@ export default async function StockPage({ searchParams }: Props) {
             </TableBody>
           </Table>
         )}
+        </details>
       </Card>
       </>)}
     </div>

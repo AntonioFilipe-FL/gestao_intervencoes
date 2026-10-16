@@ -16,7 +16,7 @@ export function Navbar({ user }: { user: CurrentUser }) {
     <header>
       {/* Barra superior */}
       <div className="bg-fc-dark-100 text-white">
-        <div className="mx-auto flex h-12 max-w-screen-2xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex h-12 max-w-[1920px] items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center">
             <Link href="/interventions" className="flex shrink-0 items-center gap-3">
               <span className="h-6 w-1.5 bg-fc-red" aria-hidden />

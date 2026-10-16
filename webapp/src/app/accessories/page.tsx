@@ -45,7 +45,7 @@ export default async function AccessoriesStockPage({ searchParams }: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-screen-2xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[1920px] space-y-5 px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
         title="Stock de acessórios"
         subtitle="Quantidades por armazém: última contagem + receções, transferências e acessórios gastos/retomados nas intervenções"

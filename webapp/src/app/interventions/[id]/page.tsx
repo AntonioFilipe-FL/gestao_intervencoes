@@ -61,7 +61,7 @@ export default async function InterventionDetailsPage({ params }: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-screen-2xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[1920px] space-y-5 px-4 py-6 sm:px-6 lg:px-8">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
           <Link href="/interventions" className={buttonVariants({ variant: 'inverse', size: 'icon' })} aria-label="Voltar">

@@ -27,7 +27,7 @@ export default async function TransfersHistoryPage({ searchParams }: Props) {
   const sel = 'h-[26px] w-full rounded-[2px] border border-fc-dark-40 bg-fc-grey-80 px-2 text-[13px]'
 
   return (
-    <div className="mx-auto max-w-screen-2xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[1920px] space-y-5 px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
         title="Histórico de transferências"
         subtitle="Movimentos registados à mão no Stock, agrupados por lote (o mesmo registo, com a mesma origem e destino)"
