@@ -763,3 +763,13 @@ create or replace function gestao_interv.is_internal_use_account(p_account text)
     select 1 from gestao_interv.intranet_pending p where p.intranet_account_id = p_account
       and (p.name ~* '^(demopt|testing)$' or p.full_name ~* '^(demopt|testing)$'))
 $$;
+
+-- Stock mínimo por equipamento e armazém (alerta na tabela "Por equipamento e armazém")
+create table if not exists gestao_interv.stock_minimums (
+  equipment_id uuid not null references gestao_interv.equipment_list(id) on delete cascade,
+  warehouse_id uuid not null references gestao_interv.warehouses(id) on delete cascade,
+  min_qty      int  not null check (min_qty >= 0),
+  updated_by   text,
+  updated_at   timestamptz not null default now(),
+  primary key (equipment_id, warehouse_id)
+);

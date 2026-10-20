@@ -24,9 +24,19 @@ if (!CLIENTE || !['Venda', 'Aluguer'].includes(PARA ?? '') || !isDate(DESDE) || 
 const sql = postgres(process.env.DATABASE_URL!, { onnotice: () => {}, connection: { search_path: 'gestao_interv' } })
 
 async function main() {
-  const clients = await sql<{ id: string; name: string; venda_aluguer: string | null }[]>`
+  let clients = await sql<{ id: string; name: string; venda_aluguer: string | null }[]>`
     select id, name, venda_aluguer from clients where lower(btrim(name)) = lower(btrim(${CLIENTE!}))`
-  if (!clients.length) throw new Error(`Cliente "${CLIENTE}" não encontrado (nome exato como aparece na app).`)
+  if (!clients.length) {
+    // sem nome exato: procura por parte do nome (ignora espaços e maiúsculas)
+    const k = CLIENTE!.toLowerCase().replace(/[^a-z0-9]/g, '')
+    clients = await sql<{ id: string; name: string; venda_aluguer: string | null }[]>`
+      select id, name, venda_aluguer from clients
+      where regexp_replace(lower(name), '[^a-z0-9]', '', 'g') like ${'%' + k + '%'}
+         or regexp_replace(lower(coalesce(intranet_short_name, '')), '[^a-z0-9]', '', 'g') like ${'%' + k + '%'}`
+    if (!clients.length) throw new Error(`Cliente "${CLIENTE}" não encontrado.`)
+    if (clients.length > 1 && !argv.includes('--todos'))
+      throw new Error(`Vários clientes correspondem a "${CLIENTE}": ${clients.map((c) => c.name).join(' | ')}. Use o nome exato, ou --todos para os incluir a todos.`)
+  }
   console.log(`Cliente(s): ${clients.map((c) => `${c.name} [${c.venda_aluguer ?? 'sem modalidade'}]`).join(', ')}`)
 
   const rows = await sql<{ id: string; data: string; tipo: string | null; matricula: string | null; atual: string | null }[]>`

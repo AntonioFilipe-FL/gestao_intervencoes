@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { sql } from '@/lib/db'
 import { requireUser } from '@/lib/auth'
-import { getInstalledConflicts, getInternalUseMismatches, getMovements, getStockItems, getStockTotals } from '@/actions/stock'
+import { getInstalledConflicts, getInternalUseMismatches, getMovements, getStockItems, getStockMinimums, getStockTotals } from '@/actions/stock'
 import { InternalUseNotice } from '@/components/stock/InternalUseNotice'
 import { AlertTriangle, ChevronRight, FileSpreadsheet } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { buttonVariants } from '@/components/ui/button'
 import { StockActions } from '@/components/stock/StockActions'
 import { StockAdjust } from '@/components/stock/StockAdjust'
+import { StockMinimums } from '@/components/stock/StockMinimums'
 import { MovementDelete } from '@/components/stock/MovementDelete'
 import { RemoveInstalled } from '@/components/stock/RemoveInstalled'
 import { cn } from '@/lib/utils'
@@ -35,13 +36,14 @@ export default async function StockPage({ searchParams }: Props) {
   const p = await searchParams
   const user = await requireUser()
   const isAdmin = user.role === 'admin'
-  const [{ byWarehouse, byModel }, items, movements, allWarehouses, equipment, conflicts] = await Promise.all([
+  const [{ byWarehouse, byModel }, items, movements, allWarehouses, equipment, conflicts, minimums] = await Promise.all([
     getStockTotals(),
     isAdmin ? getStockItems({ warehouseId: p.wh, modality: p.mod, q: p.q, installed: p.inst === '1' }) : Promise.resolve([]),
     isAdmin ? getMovements(p.imei) : Promise.resolve([]),
     sql<{ id: string; name: string; type: string }[]>`select id, name, type from warehouses where active order by name`,
     sql<{ id: string; name: string }[]>`select id, name from equipment_list where active order by name`,
     getInstalledConflicts(),
+    getStockMinimums(),
   ])
   const warehouses = allWarehouses.filter((w) => w.type !== 'mobilizado')
   const mobilizedIds = new Set(allWarehouses.filter((w) => w.type === 'mobilizado').map((w) => w.id))
@@ -76,6 +78,7 @@ export default async function StockPage({ searchParams }: Props) {
             </a>
             <StockActions warehouses={warehouses} originWarehouses={allWarehouses} equipment={equipment} />
             <StockAdjust warehouses={warehouses} />
+            <StockMinimums warehouses={warehouses} equipment={equipment} minimums={minimums} />
           </>
         )}
       />
@@ -139,7 +142,14 @@ export default async function StockPage({ searchParams }: Props) {
       {!p.wh && byModel.length > 0 && (() => {
         const cols = byWarehouse.filter((c) => !c.mobilized)
         const mobCols = byWarehouse.filter((c) => c.mobilized)
-        const eqs = [...new Set(byModel.map((m) => m.equipment))].sort((x, y) => x.localeCompare(y, 'pt'))
+        const eqs = [...new Set([...byModel.map((m) => m.equipment), ...minimums.filter((m) => cols.some((c) => c.warehouse_id === m.warehouse_id)).map((m) => m.equipment)])].sort((x, y) => x.localeCompare(y, 'pt'))
+        const minOf = new Map(minimums.map((m) => [`${m.equipment}|${m.warehouse_id}`, m.min_qty]))
+        // ● vermelho: igual ou abaixo do mínimo · ● amarelo: até 20% acima do mínimo
+        const level = (e: string, wh: string, q: number) => {
+          const mn = minOf.get(`${e}|${wh}`)
+          if (mn === undefined) return null
+          return q <= mn ? 'red' : q <= mn * 1.2 ? 'yellow' : null
+        }
         const cell = new Map(byModel.map((m) => [`${m.equipment}|${m.warehouse_id}`, m]))
         const rowTotal = (e: string) => cols.reduce((a, c) => a + (cell.get(`${e}|${c.warehouse_id}`)?.total ?? 0), 0)
         return (
@@ -159,10 +169,13 @@ export default async function StockPage({ searchParams }: Props) {
                       <TableCell>{e}</TableCell>
                       {cols.map((c) => {
                         const m = cell.get(`${e}|${c.warehouse_id}`)
+                        const lv = level(e, c.warehouse_id, m?.total ?? 0)
+                        const mn = minOf.get(`${e}|${c.warehouse_id}`)
                         return (
                           <TableCell key={c.warehouse_id} className={cn('text-right tabular-nums', !m && 'text-fc-dark-40', c.mobilized && 'text-fc-dark-60')}
-                            title={m ? `Venda ${m.venda} · Aluguer ${m.aluguer} · Sem modalidade ${m.sem}` : undefined}>
-                            {m ? <Link href={`${href({ wh: c.warehouse_id, q: e.startsWith('(') ? undefined : e, open: 'imeis' })}#imeis`} className="text-fc-light-100 hover:text-fc-light-60">{n(m.total)}</Link> : '—'}
+                            title={[m ? `Venda ${m.venda} · Aluguer ${m.aluguer} · Sem modalidade ${m.sem}` : null, mn !== undefined ? `Mínimo: ${mn}` : null].filter(Boolean).join(' · ') || undefined}>
+                            {lv && <span className={cn('mr-1 inline-block size-2 rounded-full align-middle', lv === 'red' ? 'bg-[#d0312d]' : 'bg-[#f2b600]')} />}
+                            {!m && lv ? <span className="font-bold text-[#b31d25]">0</span> : m ? <Link href={`${href({ wh: c.warehouse_id, q: e.startsWith('(') ? undefined : e, open: 'imeis' })}#imeis`} className="text-fc-light-100 hover:text-fc-light-60">{n(m.total)}</Link> : '—'}
                           </TableCell>
                         )
                       })}

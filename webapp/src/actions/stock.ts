@@ -519,3 +519,34 @@ export async function getRecentRmaAccountDevices() {
     limit 100`
   return rows.map((r) => ({ imei: r.imei, model: r.model, shipped_on: r.shipped_on, account: r.account?.replace(/^frotcom lusitana - /i, '') ?? null }))
 }
+
+/* ---------------- Stock mínimo ---------------- */
+
+export async function getStockMinimums() {
+  await requireUser()
+  return sql<{ equipment_id: string; equipment: string; warehouse_id: string; warehouse: string; min_qty: number }[]>`
+    select m.equipment_id, e.name as equipment, m.warehouse_id, w.name as warehouse, m.min_qty
+    from stock_minimums m join equipment_list e on e.id = m.equipment_id join warehouses w on w.id = m.warehouse_id
+    order by e.name, w.name`
+}
+
+/** Define (ou remove, com min vazio) o stock mínimo de um equipamento num armazém */
+export async function setStockMinimum(input: { equipmentId: string; warehouseId: string; min: string }) {
+  try {
+    const user = await requireAdmin()
+    if (!input.equipmentId || !input.warehouseId) throw new Error('Escolha o equipamento e o armazém.')
+    if (input.min.trim() === '') {
+      await sql`delete from stock_minimums where equipment_id = ${input.equipmentId} and warehouse_id = ${input.warehouseId}`
+    } else {
+      const n = Number(input.min)
+      if (!Number.isInteger(n) || n < 0) throw new Error('O stock mínimo tem de ser um número inteiro ≥ 0.')
+      await sql`insert into stock_minimums (equipment_id, warehouse_id, min_qty, updated_by)
+                values (${input.equipmentId}, ${input.warehouseId}, ${n}, ${user.email})
+                on conflict (equipment_id, warehouse_id) do update set min_qty = excluded.min_qty, updated_by = excluded.updated_by, updated_at = now()`
+    }
+    revalidatePath('/stock')
+    return { ok: true as const }
+  } catch (e) {
+    return { ok: false as const, error: (e as Error).message }
+  }
+}
