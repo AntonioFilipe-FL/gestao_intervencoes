@@ -49,7 +49,9 @@ export default async function StockPage({ searchParams }: Props) {
   const mobilizedIds = new Set(allWarehouses.filter((w) => w.type === 'mobilizado').map((w) => w.id))
   const conflictOf = (wh?: string) => conflicts.filter((c) => !wh || c.warehouse_id === wh).reduce((a, c) => a + c.n, 0)
 
-  const total = byWarehouse.filter((w) => !w.mobilized).reduce((a, w) => ({ venda: a.venda + w.venda, aluguer: a.aluguer + w.aluguer, sem: a.sem + w.sem, total: a.total + w.total }), { venda: 0, aluguer: 0, sem: 0, total: 0 })
+  // fora do total em stock: Mobilizado (instalado em clientes), Abate e Trash Bin
+  const outOfStock = (w: { warehouse: string; mobilized: boolean }) => w.mobilized || /^(abate|trash bin)$/i.test(w.warehouse.trim())
+  const total = byWarehouse.filter((w) => !outOfStock(w)).reduce((a, w) => ({ venda: a.venda + w.venda, aluguer: a.aluguer + w.aluguer, sem: a.sem + w.sem, total: a.total + w.total }), { venda: 0, aluguer: 0, sem: 0, total: 0 })
   const href = (q: Record<string, string | undefined>) => {
     const s = new URLSearchParams(Object.entries({ wh: p.wh, mod: p.mod, q: p.q, inst: p.inst, imei: p.imei, ...q }).filter(([, v]) => v) as [string, string][])
     return `/stock${s.size ? `?${s}` : ''}`
@@ -140,8 +142,8 @@ export default async function StockPage({ searchParams }: Props) {
 
       {/* Matriz equipamento × armazém (todos os armazéns) */}
       {!p.wh && byModel.length > 0 && (() => {
-        const cols = byWarehouse.filter((c) => !c.mobilized)
-        const mobCols = byWarehouse.filter((c) => c.mobilized)
+        const cols = byWarehouse.filter((c) => !outOfStock(c))
+        const mobCols = [...byWarehouse.filter((c) => c.mobilized), ...byWarehouse.filter((c) => !c.mobilized && outOfStock(c))]
         const eqs = [...new Set([...byModel.map((m) => m.equipment), ...minimums.filter((m) => cols.some((c) => c.warehouse_id === m.warehouse_id)).map((m) => m.equipment)])].sort((x, y) => x.localeCompare(y, 'pt'))
         const minOf = new Map(minimums.map((m) => [`${m.equipment}|${m.warehouse_id}`, m.min_qty]))
         // ● vermelho: igual ou abaixo do mínimo · ● amarelo: até 20% acima do mínimo
@@ -160,7 +162,7 @@ export default async function StockPage({ searchParams }: Props) {
                 <TableHeader><TableRow>
                   <TableHead>Equipamento</TableHead>
                   {cols.map((c) => <TableHead key={c.warehouse_id} className="text-right">{c.warehouse}</TableHead>)}
-                  <TableHead className="text-right" title="Total em stock (sem o Mobilizado)">Total em stock</TableHead>
+                  <TableHead className="text-right" title="Total em stock (sem Mobilizado, Abate e Trash Bin)">Total em stock</TableHead>
                   {mobCols.map((c) => <TableHead key={c.warehouse_id} className="border-l border-fc-dark-20 text-right">{c.warehouse}</TableHead>)}
                 </TableRow></TableHeader>
                 <TableBody>
