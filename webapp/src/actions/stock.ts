@@ -151,14 +151,14 @@ export async function registerReception(input: {
 export async function locateImeis(text: string) {
   await requireUser()
   const imeis = parseImeis(text)
-  if (!imeis.length) return { origins: [] as { id: string; name: string; n: number }[], missing: [] as string[], total: 0 }
+  if (!imeis.length) return { origins: [] as { id: string; name: string; n: number; imeis: string[] }[], missing: [] as string[], total: 0 }
   const rows = await sql<{ imei: string; id: string | null; name: string | null }[]>`
     select c.imei, c.warehouse_id as id, w.name from stock_current c left join warehouses w on w.id = c.warehouse_id
     where c.imei = any(${imeis}) and c.warehouse_id is not null`
-  const by = new Map<string, { id: string; name: string; n: number }>()
+  const by = new Map<string, { id: string; name: string; n: number; imeis: string[] }>()
   for (const r of rows) {
-    const o = by.get(r.id!) ?? { id: r.id!, name: r.name ?? '—', n: 0 }
-    o.n++; by.set(r.id!, o)
+    const o = by.get(r.id!) ?? { id: r.id!, name: r.name ?? '—', n: 0, imeis: [] }
+    o.n++; o.imeis.push(r.imei); by.set(r.id!, o)
   }
   const found = new Set(rows.map((r) => r.imei))
   return { origins: [...by.values()].sort((x, y) => y.n - x.n), missing: imeis.filter((i) => !found.has(i)), total: imeis.length }

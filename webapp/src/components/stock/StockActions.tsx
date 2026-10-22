@@ -30,6 +30,7 @@ export function StockActions({ warehouses, originWarehouses, equipment }: { ware
   const fromOpts = [{ value: AUTO, label: 'Automático (onde estão os IMEIs)' }, ...(originWarehouses ?? warehouses).map((w) => ({ value: w.id, label: w.name }))]
   const [loc, setLoc] = useState<Loc | null>(null)
   const [picked, setPicked] = useState<string[]>([])
+  const [shown, setShown] = useState<string | null>(null)
   const eqOpts = equipment.map((e) => ({ value: e.id, label: e.name }))
   const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }))
 
@@ -122,10 +123,23 @@ export function StockActions({ warehouses, originWarehouses, equipment }: { ware
               <div className="space-y-1 border border-fc-dark-20 px-3 py-2">
                 <p className="fc-small font-semibold">Onde estão os {loc.total} IMEI(s):</p>
                 {loc.origins.map((o) => (
-                  <label key={o.id} className="flex items-center gap-2 fc-small">
-                    <input type="checkbox" disabled={o.id === f.to} checked={picked.includes(o.id) && o.id !== f.to} onChange={() => toggle(o.id)} />
-                    <span>{o.name}</span><span className="text-fc-dark-60">— {o.n}{o.id === f.to ? ' (já no destino)' : ''}</span>
-                  </label>
+                  <div key={o.id}>
+                    <div className="flex items-center gap-2 fc-small">
+                      <input type="checkbox" disabled={o.id === f.to} checked={picked.includes(o.id) && o.id !== f.to} onChange={() => toggle(o.id)} />
+                      <span>{o.name}</span><span className="text-fc-dark-60">— {o.n}{o.id === f.to ? ' (já no destino)' : ''}</span>
+                      <button type="button" className="ml-auto text-fc-light-100 hover:text-fc-light-60" onClick={() => setShown((s) => (s === o.id ? null : o.id))}>
+                        {shown === o.id ? 'esconder IMEIs' : 'ver IMEIs'}
+                      </button>
+                    </div>
+                    {shown === o.id && (
+                      <div className="mt-1 mb-2 ml-6">
+                        <p className="max-h-32 overflow-y-auto border border-fc-dark-10 bg-fc-grey-80 px-2 py-1 font-mono text-[11px] leading-5">{o.imeis.join('  ·  ')}</p>
+                        <button type="button" className="fc-small text-fc-light-100 hover:text-fc-light-60" onClick={() => void navigator.clipboard?.writeText(o.imeis.join('\n'))}>
+                          copiar ({o.imeis.length})
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 ))}
                 {loc.missing.length > 0 && (
                   <p className="fc-small text-[#b31d25]">Sem stock / não encontrados ({loc.missing.length}): {loc.missing.slice(0, 10).join(', ')}{loc.missing.length > 10 ? '…' : ''}</p>
