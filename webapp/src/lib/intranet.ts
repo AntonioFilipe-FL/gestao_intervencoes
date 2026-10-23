@@ -316,6 +316,7 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
             model: ((h) => (h && !/^\d+$/.test(h) ? h : null))(pick(d, ['hardware', 'hardwareName'])),
             license_plate: pick(d, ['licensePlate', 'vehicleLicensePlate', 'vehicle.licensePlate', 'plate', 'vehiclePlate']),
             shipped_on: toDate(pick(d, ['shippedOn', 'shipped_on', 'ShippedOn', 'shippedDate', 'shippingDate', 'shipDate', 'dateShipped'])),
+            gsm_operator: pick(d, ['gsmOperator', 'GsmOperator', 'gsm_operator']),
           }
         })
         .filter((d): d is typeof d & { imei: string } => !!d.imei && /^\d{8,20}$/.test(d.imei))
@@ -330,11 +331,12 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
         await sql.begin(async tx => {
           for (let i = 0; i < unique.length; i += 500) {
             const batch = unique.slice(i, i + 500)
-            await tx`insert into devices ${tx(batch, 'imei', 'intranet_device_id', 'intranet_account_id', 'client_id', 'model', 'license_plate', 'shipped_on')}
+            await tx`insert into devices ${tx(batch, 'imei', 'intranet_device_id', 'intranet_account_id', 'client_id', 'model', 'license_plate', 'shipped_on', 'gsm_operator')}
                      on conflict (imei) do update set intranet_device_id = excluded.intranet_device_id,
                        intranet_account_id = excluded.intranet_account_id, client_id = excluded.client_id,
                        model = excluded.model, license_plate = excluded.license_plate,
-                       shipped_on = coalesce(excluded.shipped_on, devices.shipped_on), active = true, synced_at = now()`
+                       shipped_on = coalesce(excluded.shipped_on, devices.shipped_on),
+                       gsm_operator = coalesce(excluded.gsm_operator, devices.gsm_operator), active = true, synced_at = now()`
           }
           await tx`update devices set active = false where not (imei = any(${unique.map(u => u.imei)}))`
 
@@ -757,6 +759,41 @@ export async function updateIntranetDevices(items: IntranetDeviceUpdate[]): Prom
       if (transferError) problems.unshift(transferError)
       out.push(problems.length ? { imei: it.imei, ok: false, before, plate, error: problems.join(' · ') } : { imei: it.imei, ok: true, before, plate })
     }
+    return out
+  } finally {
+    await logout(token)
+  }
+}
+
+/**
+ * Operador GSM (gsmOperator) de cada IMEI, lido nos detalhes de cada equipamento na Intranet e guardado em devices.gsm_operator.
+ * Só leitura na Intranet. Usado na pré-visualização das matrículas XX_Ay_ZZZ_12345.
+ */
+export async function fetchGsmOperators(imeis: string[]): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>()
+  if (!imeis.length || !intranetConfigured()) return out
+  const token = await login()
+  try {
+    const known = await sql<{ imei: string; vid: string | null }[]>`select imei, intranet_device_id as vid from devices where imei = any(${imeis})`
+    const vidOf = new Map(known.filter((k) => k.vid).map((k) => [k.imei, k.vid!]))
+    if (imeis.some((i) => !vidOf.has(i))) {
+      for (const d of asList(await getJson('/api/devices', token))) {
+        const imei = pick(d, ['imei', 'IMEI', 'Imei']); const vid = pick(d, ['vehicleId', 'VehicleId', 'vehicle.id', 'id'])
+        if (imei && vid && imeis.includes(imei)) vidOf.set(imei, vid)
+      }
+    }
+    const queue = imeis.filter((i) => vidOf.has(i))
+    const worker = async () => {
+      for (let imei = queue.shift(); imei; imei = queue.shift()) {
+        try {
+          const det = await getJson(`/api/devices/details/${encodeURIComponent(vidOf.get(imei)!)}`, token) as Json
+          const g = pick(det, ['gsmOperator', 'GsmOperator'])
+          out.set(imei, g)
+          await sql`update devices set gsm_operator = ${g}, intranet_device_id = coalesce(intranet_device_id, ${vidOf.get(imei)!}) where imei = ${imei}`
+        } catch { /* ignora este */ }
+      }
+    }
+    await Promise.all(Array.from({ length: 8 }, worker))
     return out
   } finally {
     await logout(token)

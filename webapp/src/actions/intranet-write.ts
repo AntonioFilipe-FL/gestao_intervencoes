@@ -2,7 +2,7 @@
 
 import { sql } from '@/lib/db'
 import { requireAdmin, requireSuperAdmin } from '@/lib/auth'
-import { updateIntranetDevices } from '@/lib/intranet'
+import { fetchGsmOperators, updateIntranetDevices } from '@/lib/intranet'
 
 export type PlateRow = {
   imei: string; warehouse: string | null; modality: string | null; current: string | null; account: string | null
@@ -24,8 +24,8 @@ export async function previewIntranetPlates(input: { warehouseIds: string[]; ime
 async function previewCore(input: { warehouseIds: string[]; imeis: string }): Promise<PlateRow[]> {
   const list = [...new Set(input.imeis.split(/[\s,;]+/).map((x) => x.trim()).filter((x) => /^\d{14,15}$/.test(x)).map((x) => (x.length === 14 ? '0' + x : x)))]
   if (!input.warehouseIds.length && !list.length) return [] as PlateRow[]
-  const rows = await sql<{ imei: string; warehouse: string | null; modality: string | null; current: string | null; account: string | null; in_intranet: boolean }[]>`
-    select coalesce(c.imei, d.imei) as imei, w.name as warehouse, c.modality, nullif(btrim(d.license_plate), '') as current,
+  const rows = await sql<{ imei: string; warehouse: string | null; modality: string | null; current: string | null; account: string | null; in_intranet: boolean; gsm: string | null }[]>`
+    select coalesce(c.imei, d.imei) as imei, w.name as warehouse, c.modality, nullif(btrim(d.license_plate), '') as current, d.gsm_operator as gsm,
            coalesce(dc.intranet_short_name, dc.name, p.name) as account, (d.imei is not null) as in_intranet
     from stock_current c
     join warehouses w on w.id = c.warehouse_id
@@ -35,6 +35,12 @@ async function previewCore(input: { warehouseIds: string[]; imeis: string }): Pr
     where (${input.warehouseIds.length ? sql`c.warehouse_id = any(${input.warehouseIds})` : sql`false`}
            or ${list.length ? sql`c.imei = any(${list})` : sql`false`})
     order by w.name, c.imei`
+  // operador GSM ainda desconhecido → vai buscá-lo aos detalhes de cada equipamento na Intranet (só leitura)
+  const noGsm = rows.filter((r) => r.in_intranet && !r.gsm).map((r) => r.imei).slice(0, 400)
+  if (noGsm.length) {
+    const got = await fetchGsmOperators(noGsm).catch(() => new Map<string, string | null>())
+    for (const r of rows) if (got.has(r.imei)) r.gsm = got.get(r.imei) ?? null
+  }
   const seen = new Set(rows.map((r) => r.imei))
   const out: PlateRow[] = rows.map((r) => {
     let issue: string | null = null
@@ -43,7 +49,7 @@ async function previewCore(input: { warehouseIds: string[]; imeis: string }): Pr
     else if (/mobilizado/i.test(r.warehouse ?? '')) issue = 'Instalado num cliente (Mobilizado)'
     // XX_Ay_ZZZ_12345 — ZZZ = operador do cartão (NOS/VDF), confirmado na Intranet no momento de enviar;
     // na pré-visualização usa o que estiver na matrícula atual (ou ??? se não se souber)
-    const op = opFromText(r.current) ?? '???'
+    const op = opFromText(r.gsm) ?? opFromText(r.current) ?? '???'
     const target = issue ? null : `${prefixOf(r.warehouse!)}_A${r.modality === 'Venda' ? 1 : 2}_${op}_${r.imei.slice(-5)}`
     if (!issue && target === r.current) issue = 'Já está certo'
     return { imei: r.imei, warehouse: r.warehouse, modality: r.modality, current: r.current, account: r.account, target, issue }

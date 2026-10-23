@@ -799,3 +799,6 @@ create table if not exists gestao_interv.intranet_write_log (
   created_by  text,
   created_at  timestamptz not null default now()
 );
+
+-- Operador GSM do cartão (gsmOperator da Intranet): PT-Optimus → NOS, PT-Vodafone → VDF
+alter table gestao_interv.devices add column if not exists gsm_operator text;
