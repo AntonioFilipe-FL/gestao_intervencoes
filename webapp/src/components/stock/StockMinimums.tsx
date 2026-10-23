@@ -14,7 +14,7 @@ type Opt = { id: string; name: string }
 type Min = { equipment_id: string; equipment: string; warehouse_id: string; warehouse: string; min_qty: number }
 
 /** Botão "Stock mínimo": define o mínimo por equipamento e armazém (só admin) */
-export function StockMinimums({ warehouses, equipment, minimums }: { warehouses: Opt[]; equipment: Opt[]; minimums: Min[] }) {
+export function StockMinimums({ warehouses, equipment, minimums, margin = 20 }: { warehouses: Opt[]; equipment: Opt[]; minimums: Min[]; margin?: number }) {
   const router = useRouter()
   const [busy, start] = useTransition()
   const [open, setOpen] = useState(false)
@@ -39,7 +39,7 @@ export function StockMinimums({ warehouses, equipment, minimums }: { warehouses:
           <div className="space-y-3 py-2">
             <p className="fc-small text-fc-dark-60">
               Na tabela &ldquo;Por equipamento e armazém&rdquo;: <span className="text-[#b31d25]">●</span> igual ou abaixo do mínimo ·{' '}
-              <span className="text-[#c98a00]">●</span> até 20% acima do mínimo. Deixe vazio para remover.
+              <span className="text-[#c98a00]">●</span> até {margin}% acima do mínimo. Deixe vazio para remover.
             </p>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_120px]">
               <div className="space-y-1.5"><Label>Equipamento *</Label>

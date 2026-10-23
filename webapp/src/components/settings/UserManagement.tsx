@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { getUserRoles, updateUserRole, deleteUserProfile } from '@/actions/users'
+import { getUserRoles, updateUserRole, deleteUserProfile, promoteSuperAdmin } from '@/actions/users'
 import {
   Select,
   SelectContent,
@@ -117,11 +117,18 @@ export function UserManagement() {
                 <TableRow key={user.email}>
                   <TableCell className="font-medium">{user.email}</TableCell>
                   <TableCell>
-                    <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
-                      {user.role}
+                    <Badge variant={user.role === 'admin' || user.is_superadmin ? 'default' : 'secondary'}>
+                      {user.is_superadmin ? 'super admin' : user.role}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right flex justify-end gap-2">
+                    {user.is_superadmin ? <span className="fc-small text-fc-dark-60">protegido</span> : <>
+                    <Button variant="inverse" size="sm" title="Dá todos os acessos, incluindo gerir utilizadores. Só se retira por script."
+                      onClick={async () => {
+                        if (!confirm(`Tornar ${user.email} super admin? Fica com todos os acessos e só pode ser retirado por script.`)) return
+                        const r = await promoteSuperAdmin(user.email)
+                        if (!r.success) alert(r.error); else fetchUsers()
+                      }}>Tornar super admin</Button>
                     <Select
                       defaultValue={user.role}
                       onValueChange={(value) => value && handleRoleChange(user.email, value)}
@@ -143,6 +150,7 @@ export function UserManagement() {
                     >
                       <Trash2 />
                     </Button>
+                    </>}
                   </TableCell>
                 </TableRow>
               ))

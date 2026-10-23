@@ -3,10 +3,11 @@
 import { sql } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
 import { equipmentNamer } from '@/lib/equipment-namer'
+import { getStockMinMargin } from '@/lib/stock-settings'
 
 export type LowStock = { warehouse_id: string; warehouse: string; equipment: string; qty: number; min: number; level: 'red' | 'yellow' }
 
-/** Equipamentos/armazéns abaixo do stock mínimo (vermelho: ≤ mínimo; amarelo: até 20% acima) */
+/** Equipamentos/armazéns abaixo do stock mínimo (vermelho: ≤ mínimo; amarelo: até X% acima, definido pelo super admin) */
 export async function getLowStock(): Promise<LowStock[]> {
   const mins = await sql<{ equipment: string; warehouse_id: string; warehouse: string; min_qty: number }[]>`
     select e.name as equipment, m.warehouse_id, w.name as warehouse, m.min_qty
@@ -18,6 +19,7 @@ export async function getLowStock(): Promise<LowStock[]> {
     from stock_current c left join equipment_list e on e.id = c.equipment_id left join devices d on d.imei = c.imei
     where c.warehouse_id = any(${whs})`
   const eqName = await equipmentNamer()
+  const margin = (await getStockMinMargin()) / 100
   const count = new Map<string, number>()
   for (const r of rows) {
     const k = `${eqName(r.hardware) ?? r.equipment ?? ''}|${r.warehouse_id}`
@@ -26,7 +28,7 @@ export async function getLowStock(): Promise<LowStock[]> {
   const out: LowStock[] = []
   for (const m of mins) {
     const qty = count.get(`${m.equipment}|${m.warehouse_id}`) ?? 0
-    const level = qty <= m.min_qty ? 'red' : qty <= m.min_qty * 1.2 ? 'yellow' : null
+    const level = qty <= m.min_qty ? 'red' : qty <= m.min_qty * (1 + margin) ? 'yellow' : null
     if (level) out.push({ warehouse_id: m.warehouse_id, warehouse: m.warehouse, equipment: m.equipment, qty, min: m.min_qty, level })
   }
   return out.sort((a, b) => (a.level === b.level ? a.warehouse.localeCompare(b.warehouse, 'pt') || a.equipment.localeCompare(b.equipment, 'pt') : a.level === 'red' ? -1 : 1))

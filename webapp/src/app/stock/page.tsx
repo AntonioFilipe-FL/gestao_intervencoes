@@ -14,6 +14,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { StockActions } from '@/components/stock/StockActions'
 import { StockAdjust } from '@/components/stock/StockAdjust'
 import { StockMinimums } from '@/components/stock/StockMinimums'
+import { getStockMinMargin } from '@/lib/stock-settings'
 import { MovementDelete } from '@/components/stock/MovementDelete'
 import { RemoveInstalled } from '@/components/stock/RemoveInstalled'
 import { cn } from '@/lib/utils'
@@ -45,6 +46,7 @@ export default async function StockPage({ searchParams }: Props) {
     getInstalledConflicts(),
     getStockMinimums(),
   ])
+  const margin = await getStockMinMargin()
   const warehouses = allWarehouses.filter((w) => w.type !== 'mobilizado')
   const mobilizedIds = new Set(allWarehouses.filter((w) => w.type === 'mobilizado').map((w) => w.id))
   const conflictOf = (wh?: string) => conflicts.filter((c) => !wh || c.warehouse_id === wh).reduce((a, c) => a + c.n, 0)
@@ -80,7 +82,7 @@ export default async function StockPage({ searchParams }: Props) {
             </a>
             <StockActions warehouses={warehouses} originWarehouses={allWarehouses} equipment={equipment} />
             <StockAdjust warehouses={warehouses} />
-            <StockMinimums warehouses={warehouses} equipment={equipment} minimums={minimums} />
+            <StockMinimums warehouses={warehouses} equipment={equipment} minimums={minimums} margin={margin} />
           </>
         )}
       />
@@ -146,11 +148,11 @@ export default async function StockPage({ searchParams }: Props) {
         const mobCols = [...byWarehouse.filter((c) => c.mobilized), ...byWarehouse.filter((c) => !c.mobilized && outOfStock(c))]
         const eqs = [...new Set([...byModel.map((m) => m.equipment), ...minimums.filter((m) => cols.some((c) => c.warehouse_id === m.warehouse_id)).map((m) => m.equipment)])].sort((x, y) => x.localeCompare(y, 'pt'))
         const minOf = new Map(minimums.map((m) => [`${m.equipment}|${m.warehouse_id}`, m.min_qty]))
-        // ● vermelho: igual ou abaixo do mínimo · ● amarelo: até 20% acima do mínimo
+        // ● vermelho: igual ou abaixo do mínimo · ● amarelo: até `margin`% acima do mínimo
         const level = (e: string, wh: string, q: number) => {
           const mn = minOf.get(`${e}|${wh}`)
           if (mn === undefined) return null
-          return q <= mn ? 'red' : q <= mn * 1.2 ? 'yellow' : null
+          return q <= mn ? 'red' : q <= mn * (1 + margin / 100) ? 'yellow' : null
         }
         const cell = new Map(byModel.map((m) => [`${m.equipment}|${m.warehouse_id}`, m]))
         const rowTotal = (e: string) => cols.reduce((a, c) => a + (cell.get(`${e}|${c.warehouse_id}`)?.total ?? 0), 0)

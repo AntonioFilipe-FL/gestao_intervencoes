@@ -7,6 +7,9 @@ import { getReferenceData } from '@/services/database'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SettingsTable } from '@/components/settings/SettingsTable'
 import { isAdmin } from '@/actions/users'
+import { getCurrentUser } from '@/lib/auth'
+import { getStockMinMargin } from '@/lib/stock-settings'
+import { SuperAdminSettings } from '@/components/settings/SuperAdminSettings'
 import { UserManagement } from '@/components/settings/UserManagement'
 import { EmailSettings } from '@/components/settings/EmailSettings'
 import { IntranetSettings } from '@/components/settings/IntranetSettings'
@@ -23,6 +26,8 @@ export default async function SettingsPage({
   const data = await getReferenceData(false)
   const userIsAdmin = await isAdmin()
   if (!userIsAdmin) redirect('/interventions')
+  const me = await getCurrentUser()
+  const margin = me?.superadmin ? await getStockMinMargin() : 20
 
   return (
     <div className="mx-auto max-w-[1920px] space-y-5 px-4 py-6 sm:px-6 lg:px-8">
@@ -31,7 +36,7 @@ export default async function SettingsPage({
         <p className="fc-small text-fc-dark-60">Gerir tabelas de referência e listas de apoio.</p>
       </div>
 
-      <Tabs defaultValue={userIsAdmin && (params.tab === 'email' || params.tab === 'intranet') ? params.tab : 'technicians'} className="gap-0 border border-fc-dark-20 bg-white">
+      <Tabs defaultValue={userIsAdmin && (params.tab === 'email' || params.tab === 'intranet' || params.tab === 'superadmin') ? params.tab : 'technicians'} className="gap-0 border border-fc-dark-20 bg-white">
         <TabsList>
           <TabsTrigger value="technicians">Técnicos</TabsTrigger>
           <TabsTrigger value="clients">Clientes</TabsTrigger>
@@ -42,7 +47,7 @@ export default async function SettingsPage({
           <TabsTrigger value="motives">Motivos</TabsTrigger>
           <TabsTrigger value="warehouses">Armazéns</TabsTrigger>
           <TabsTrigger value="bundles">Bundles</TabsTrigger>
-          {userIsAdmin && (
+          {me?.superadmin && (
             <TabsTrigger value="users">Utilizadores</TabsTrigger>
           )}
           {userIsAdmin && (
@@ -51,9 +56,15 @@ export default async function SettingsPage({
           {userIsAdmin && (
             <TabsTrigger value="intranet">Intranet</TabsTrigger>
           )}
+          {me?.superadmin && <TabsTrigger value="superadmin">Super admin</TabsTrigger>}
         </TabsList>
 
         <div className="p-5">
+            {me?.superadmin && (
+              <TabsContent value="superadmin">
+                <SuperAdminSettings margin={margin} />
+              </TabsContent>
+            )}
             <TabsContent value="technicians">
               <SettingsTable title="Lista de Técnicos" table="technicians" items={data.technicians} extraColumns={[{ label: 'Email (login)', key: 'email' }]} />
             </TabsContent>
@@ -117,7 +128,7 @@ export default async function SettingsPage({
               <SettingsTable title="Lista de Bundles" table="bundles" items={data.bundles} />
             </TabsContent>
 
-            {userIsAdmin && (
+            {me?.superadmin && (
               <TabsContent value="users">
                 <UserManagement />
               </TabsContent>

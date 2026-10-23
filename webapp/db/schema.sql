@@ -773,3 +773,6 @@ create table if not exists gestao_interv.stock_minimums (
   updated_at   timestamptz not null default now(),
   primary key (equipment_id, warehouse_id)
 );
+
+-- Super admin (perfil reservado): acessos extra (definições avançadas, escrita na Intranet). Só se ativa por script.
+alter table gestao_interv.profiles add column if not exists is_superadmin boolean not null default false;
