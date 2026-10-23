@@ -689,15 +689,20 @@ export async function updateIntranetDevices(items: IntranetDeviceUpdate[]): Prom
       const plateKey = ['licensePlate', 'LicensePlate', 'vehicleLicensePlate'].find((k) => k in obj) ?? 'licensePlate'
       const before = { plate: pick(obj, [plateKey]), accountId: pick(obj, ['accountId', 'AccountId']) }
       // objeto completo do equipamento (a lista pode vir resumida); se não houver GET individual, usa o da lista
-      let full: Json = obj
+      let full: Json | null = null
       try { const one = await getJson(`/api/devices/${encodeURIComponent(vid)}`, token); if (one && typeof one === 'object' && !Array.isArray(one)) full = { ...obj, ...(one as Json) } } catch { /* sem GET individual */ }
+      // sem a leitura completa do equipamento não se envia nada (podia apagar MSISDN, operador GSM, PIN…)
+      if (!full) { out.push({ imei: it.imei, ok: false, error: 'não foi possível ler o equipamento completo na Intranet — nada alterado' }); continue }
+      const keep = (o: Json) => ({ msisdn: pick(o, ['msisdn', 'MSISDN', 'Msisdn']), gsm: pick(o, ['gsmOperator', 'GsmOperator', 'gsm_operator']), pin: pick(o, ['pin', 'PIN', 'Pin']) })
+      const kept = keep(full)
       const body: Json = { ...full, [plateKey]: it.plate }
-      // PIN: a Intranet exige 4 dígitos (opcionalmente com *), "*" ou "----". Se vier vazio/mascarado, envia "*" (mantém o atual).
+      // PIN: a Intranet exige 4 dígitos (opcionalmente com *), "*" ou "----". Se vier vazio/mascarado/inválido, envia "----".
       for (const k of Object.keys(body)) {
         if (k.toLowerCase() !== 'pin') continue
         const v = body[k] == null ? '' : String(body[k]).trim()
-        if (!/^(\*?\d{4}|\*|----)$/.test(v)) body[k] = '*'
+        if (!/^(\*?\d{4}|\*|----)$/.test(v)) body[k] = '----'
       }
+      if (!Object.keys(body).some((k) => k.toLowerCase() === 'pin')) body.pin = '----'
       if (it.accountId) {
         body.accountId = /^\d+$/.test(it.accountId) ? Number(it.accountId) : it.accountId
         if (it.accountName && 'accountName' in obj) body.accountName = it.accountName
@@ -707,6 +712,13 @@ export async function updateIntranetDevices(items: IntranetDeviceUpdate[]): Prom
       let res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json-patch+json' }, body: json, cache: 'no-store' })
       if (res.status === 415) res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: json, cache: 'no-store' })
       if (!res.ok) { out.push({ imei: it.imei, ok: false, before, error: `HTTP ${res.status} ${(await res.text()).slice(0, 200)}` }); continue }
+      // confirma que o MSISDN e o operador GSM não mudaram
+      try {
+        const after = await getJson(`/api/devices/${encodeURIComponent(vid)}`, token) as Json
+        const k2 = keep(after)
+        const changed = [k2.msisdn !== kept.msisdn && 'MSISDN', k2.gsm !== kept.gsm && 'operador GSM'].filter(Boolean)
+        if (changed.length) { out.push({ imei: it.imei, ok: false, before, error: `ATENÇÃO: ${changed.join(' e ')} mudou na Intranet (antes ${kept.msisdn ?? '—'} / ${kept.gsm ?? '—'}) — verifique` }); continue }
+      } catch { /* sem verificação possível */ }
       await sql`update devices set license_plate = ${it.plate}, intranet_device_id = coalesce(intranet_device_id, ${vid})
                 ${it.accountId ? sql`, intranet_account_id = ${it.accountId}` : sql``} where imei = ${it.imei}`
       out.push({ imei: it.imei, ok: true, before })
