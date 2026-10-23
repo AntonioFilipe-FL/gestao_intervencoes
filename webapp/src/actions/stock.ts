@@ -550,3 +550,32 @@ export async function setStockMinimum(input: { equipmentId: string; warehouseId:
     return { ok: false as const, error: (e as Error).message }
   }
 }
+
+/** Muda a modalidade (Venda/Aluguer) de IMEIs em stock, sem mudar de armazém */
+export async function changeModality(input: { imeis: string; modality: string; date: string; notes?: string }): Promise<Result> {
+  try {
+    const user = await requireAdmin()
+    if (input.modality !== 'Venda' && input.modality !== 'Aluguer') throw new Error('Escolha Venda ou Aluguer.')
+    const imeis = parseImeis(input.imeis)
+    if (!imeis.length) throw new Error('Indique pelo menos um IMEI.')
+    const cur = await sql<{ imei: string; warehouse_id: string; modality: string | null }[]>`
+      select imei, warehouse_id, modality from stock_current where imei = any(${imeis}) and warehouse_id is not null`
+    const todo = cur.filter((c) => c.modality !== input.modality)
+    if (!todo.length) throw new Error(cur.length ? `Os IMEIs já estão como ${input.modality}.` : 'Nenhum destes IMEIs está em stock.')
+    const date = input.date || new Date().toISOString().slice(0, 10)
+    await sql`insert into stock_movements ${sql(todo.map((c) => ({
+      imei: c.imei, equipment_id: null, kind: 'transferencia', from_warehouse_id: c.warehouse_id, to_warehouse_id: c.warehouse_id,
+      modality: input.modality, moved_at: date, is_correction: true, created_by: user.email,
+      notes: [`Mudança de modalidade: ${c.modality ?? 'sem modalidade'} → ${input.modality}`, input.notes].filter(Boolean).join(' · '),
+    })))}`
+    revalidatePath('/stock')
+    const warnings: string[] = []
+    const same = cur.length - todo.length
+    if (same) warnings.push(`${same} já estavam como ${input.modality}.`)
+    const out = imeis.filter((i) => !cur.some((c) => c.imei === i))
+    if (out.length) warnings.push(`${out.length} não estão em stock: ${out.slice(0, 8).join(', ')}${out.length > 8 ? '…' : ''}`)
+    return { ok: true, n: todo.length, warnings }
+  } catch (e) {
+    return { ok: false, error: (e as Error).message }
+  }
+}
