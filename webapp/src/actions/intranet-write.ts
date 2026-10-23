@@ -6,14 +6,28 @@ import { fetchGsmOperators, updateIntranetDevices } from '@/lib/intranet'
 
 export type PlateRow = {
   imei: string; warehouse: string | null; modality: string | null; current: string | null; account: string | null
-  target: string | null; issue: string | null
+  target: string | null; template?: string | null; issue: string | null
 }
 
 /** Prefixo do armazém na matrícula: A1/A2 → FL; restantes → nome do armazém (RL, RN, LS, CG, TC, PG, RMA…) */
 /** NOS / VDF a partir de um texto (operador GSM da Intranet ou matrícula atual) */
 const opFromText = (t: string | null | undefined) => (!t ? null : /vodafone|vdf/i.test(t) ? 'VDF' : /nos|optimus|zon/i.test(t) ? 'NOS' : null)
 
-const prefixOf = (wh: string) => (/^A[12]\b/i.test(wh.trim()) ? 'FL' : wh.trim().split(/\s|-/)[0].toUpperCase())
+/**
+ * Matrícula (limite de caracteres na Intranet):
+ *   armazém de 1–2 letras (RL, RN… e A1/A2 → FL): XX_Ay_ZZZ_12345
+ *   armazém de 3 ou + letras (RMA, ABATE…):      RMA_Ay_ZZZ12345
+ *   Abate (sem modalidade):                       ABATE_ZZZ12345
+ *   Trash Bin:                                    Trash_123456
+ */
+function plateTemplate(warehouse: string, modality: string | null, imei: string) {
+  if (/trash/i.test(warehouse)) return `Trash_${imei.slice(-6)}`
+  if (/^abate/i.test(warehouse.trim())) return `ABATE_{OP}${imei.slice(-5)}`
+  const xx = prefixOf(warehouse), y = modality === 'Venda' ? 1 : 2
+  return xx.length >= 3 ? `${xx}_A${y}_{OP}${imei.slice(-5)}` : `${xx}_A${y}_{OP}_${imei.slice(-5)}`
+}
+
+const prefixOf = (wh: string) => (/^A[12]\b/i.test(wh.trim()) ? 'FL' : wh.trim().split(/\s|-/)[0].replace(/[^A-Za-z0-9]/g, '').toUpperCase())
 
 /** Pré-visualização (não altera nada): matrícula nova XX_Ay_1234567 por IMEI */
 export async function previewIntranetPlates(input: { warehouseIds: string[]; imeis: string }) {
@@ -44,15 +58,18 @@ async function previewCore(input: { warehouseIds: string[]; imeis: string }): Pr
   const seen = new Set(rows.map((r) => r.imei))
   const out: PlateRow[] = rows.map((r) => {
     let issue: string | null = null
+    const trash = /trash|^\s*abate/i.test(r.warehouse ?? '') // não precisam de modalidade
     if (!r.in_intranet) issue = 'Não existe na Intranet'
-    else if (r.modality !== 'Venda' && r.modality !== 'Aluguer') issue = 'Sem modalidade (Venda/Aluguer)'
+    else if (!trash && r.modality !== 'Venda' && r.modality !== 'Aluguer') issue = 'Sem modalidade (Venda/Aluguer)'
     else if (/mobilizado/i.test(r.warehouse ?? '')) issue = 'Instalado num cliente (Mobilizado)'
-    // XX_Ay_ZZZ_12345 — ZZZ = operador do cartão (NOS/VDF), confirmado na Intranet no momento de enviar;
-    // na pré-visualização usa o que estiver na matrícula atual (ou ??? se não se souber)
+    else if (/equip\.?\s*pago|uso\s*interno/i.test(r.warehouse ?? '')) issue = 'Armazém sem atualização de matrícula (Equip. Pago / Uso Interno)'
+    // ZZZ = operador do cartão (NOS/VDF), confirmado na Intranet no momento de enviar ({OP});
+    // na pré-visualização usa o operador guardado / o da matrícula atual (ou ??? se não se souber)
     const op = opFromText(r.gsm) ?? opFromText(r.current) ?? '???'
-    const target = issue ? null : `${prefixOf(r.warehouse!)}_A${r.modality === 'Venda' ? 1 : 2}_${op}_${r.imei.slice(-5)}`
+    const template = issue ? null : plateTemplate(r.warehouse!, r.modality, r.imei)
+    const target = template ? template.replace('{OP}', op) : null
     if (!issue && target === r.current) issue = 'Já está certo'
-    return { imei: r.imei, warehouse: r.warehouse, modality: r.modality, current: r.current, account: r.account, target, issue }
+    return { imei: r.imei, warehouse: r.warehouse, modality: r.modality, current: r.current, account: r.account, target, template, issue }
   })
   // IMEIs indicados à mão aparecem primeiro
   out.sort((a, b) => Number(list.includes(b.imei)) - Number(list.includes(a.imei)))
@@ -110,7 +127,7 @@ async function applyCore(by: string, input: { imeis: string[]; accountId?: strin
   const [acc] = input.accountId ? await sql<{ name: string }[]>`
     select coalesce((select coalesce(intranet_short_name, name) from clients where intranet_account_id = ${input.accountId} limit 1),
                     (select name from intranet_pending where intranet_account_id = ${input.accountId} limit 1)) as name` : [undefined]
-  const res = await updateIntranetDevices(todo.map((r) => ({ imei: r.imei, plate: r.target!.replace(/_\?\?\?_|_(NOS|VDF)_/, '_{OP}_'), accountId: input.accountId || null, accountName: acc?.name ?? null })))
+  const res = await updateIntranetDevices(todo.map((r) => ({ imei: r.imei, plate: r.template ?? r.target!, accountId: input.accountId || null, accountName: acc?.name ?? null })))
   await sql`insert into intranet_write_log ${sql(res.map((r) => ({
     imei: r.imei, old_plate: r.before?.plate ?? null, new_plate: r.plate ?? todo.find((t) => t.imei === r.imei)?.target ?? null,
     old_account: r.before?.accountId ?? null, new_account: input.accountId || null, ok: r.ok, error: r.error ?? null, created_by: by,

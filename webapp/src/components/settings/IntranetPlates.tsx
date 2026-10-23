@@ -52,7 +52,7 @@ export function IntranetPlates({ warehouses }: { warehouses: Opt[] }) {
       <div>
         <h3 className="font-bold">Matrículas na Intranet</h3>
         <p className="fc-small text-fc-dark-60">
-          Matrícula nova: <b>XX_Ay_ZZZ_12345</b> — XX = armazém (A1/A2 → FL), y = 1 Venda / 2 Aluguer, ZZZ = operador do cartão (NOS/VDF, confirmado na Intranet ao enviar; ??? = ainda por confirmar), últimos 5 dígitos do IMEI.
+          Matrícula nova: <b>XX_Ay_ZZZ_12345</b> (armazéns com 3+ letras: <b>RMA_Ay_ZZZ12345</b>; Abate: <b>ABATE_ZZZ12345</b>; Trash Bin: <b>Trash_123456</b>) — XX = armazém (A1/A2 → FL), y = 1 Venda / 2 Aluguer, ZZZ = operador do cartão (NOS/VDF, confirmado na Intranet ao enviar; ??? = ainda por confirmar), últimos 5 dígitos do IMEI.
           Nada é alterado na Intranet sem carregar em &ldquo;Atualizar&rdquo;.
         </p>
       </div>
@@ -60,7 +60,7 @@ export function IntranetPlates({ warehouses }: { warehouses: Opt[] }) {
         <div className="space-y-1.5">
           <Label>Armazéns</Label>
           <div className="flex flex-wrap gap-x-4 gap-y-1">
-            {warehouses.map((w) => (
+            {warehouses.filter((w) => !/equip\.?\s*pago|uso\s*interno/i.test(w.name)).map((w) => (
               <label key={w.id} className="flex items-center gap-1.5 fc-small">
                 <input type="checkbox" checked={whs.includes(w.id)} onChange={() => setWhs((x) => (x.includes(w.id) ? x.filter((i) => i !== w.id) : [...x, w.id]))} />
                 {w.name}
