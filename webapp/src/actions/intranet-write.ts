@@ -60,7 +60,9 @@ export async function applyIntranetPlates(input: { imeis: string[]; accountId?: 
   try {
     const user = await requireSuperAdmin()
     const preview = await previewIntranetPlates({ warehouseIds: [], imeis: input.imeis.join('\n') })
+    // matrícula já certa: só se envia se for para mudar a conta
     const todo = preview.filter((r) => r.target && (!r.issue || (r.issue === 'Já está certo' && input.accountId)))
+    if (!todo.length && preview.some((r) => r.issue === 'Já está certo')) throw new Error('A matrícula já está certa — escolha uma conta Intranet de destino para transferir.')
     if (!todo.length) throw new Error('Nada a atualizar.')
     const [acc] = input.accountId ? await sql<{ name: string }[]>`
       select coalesce((select coalesce(intranet_short_name, name) from clients where intranet_account_id = ${input.accountId} limit 1),

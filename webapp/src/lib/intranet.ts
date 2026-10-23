@@ -716,25 +716,38 @@ export async function updateIntranetDevices(items: IntranetDeviceUpdate[]): Prom
         if (!/^(\*?\d{4}|\*|----)$/.test(v)) body[k] = '----'
       }
       if (!Object.keys(body).some((k) => k.toLowerCase() === 'pin')) body.pin = '----'
-      if (it.accountId) {
-        body.accountId = /^\d+$/.test(it.accountId) ? Number(it.accountId) : it.accountId
-        if (it.accountName && 'accountName' in obj) body.accountName = it.accountName
-      }
       const url = `${baseUrl()}/api/devices/${encodeURIComponent(vid)}?uniqueLicensePlate=false&api_key=${encodeURIComponent(token)}`
       const json = JSON.stringify(body)
       let res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json-patch+json' }, body: json, cache: 'no-store' })
       if (res.status === 415) res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: json, cache: 'no-store' })
       if (!res.ok) { out.push({ imei: it.imei, ok: false, before, error: `HTTP ${res.status} ${(await res.text()).slice(0, 200)}` }); continue }
-      // confirma que o MSISDN e o operador GSM não mudaram
-      try {
-        const after = await getJson(`/api/devices/details/${encodeURIComponent(vid)}`, token) as Json
+      // mudança de conta: pedido próprio (POST /api/devices/transfer), sem apagar dados (clearData: false)
+      let transferError: string | null = null
+      if (it.accountId && String(before.accountId ?? '') !== String(it.accountId)) {
+        const tr = await fetch(`${baseUrl()}/api/devices/transfer?api_key=${encodeURIComponent(token)}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+          body: JSON.stringify({ vehicleIds: [/^\d+$/.test(vid) ? Number(vid) : vid], destinationAccountId: String(it.accountId),
+            transferNotes: 'Transferido pela app Gestão de Intervenções', clearData: false }),
+        })
+        if (!tr.ok) transferError = `matrícula alterada, mas a transferência de conta falhou: HTTP ${tr.status} ${(await tr.text()).slice(0, 160)}`
+      }
+      // lê de novo o equipamento: confirma o que mudou mesmo (matrícula, conta) e que MSISDN/operador ficaram iguais
+      let after: Json | null = null
+      try { after = await getJson(`/api/devices/details/${encodeURIComponent(vid)}`, token) as Json } catch { /* sem verificação */ }
+      const plateNow = after ? pick(after, [plateKey]) : it.plate
+      const accNow = after ? pick(after, ['accountId', 'AccountId']) : (it.accountId ?? before.accountId)
+      await sql`update devices set license_plate = ${plateNow}, intranet_device_id = coalesce(intranet_device_id, ${vid})
+                ${accNow ? sql`, intranet_account_id = ${accNow}` : sql``} where imei = ${it.imei}`
+      const problems: string[] = []
+      if (after) {
         const k2 = keep(after)
-        const changed = [k2.msisdn !== kept.msisdn && 'MSISDN', k2.gsm !== kept.gsm && 'operador GSM'].filter(Boolean)
-        if (changed.length) { out.push({ imei: it.imei, ok: false, before, error: `ATENÇÃO: ${changed.join(' e ')} mudou na Intranet (antes ${kept.msisdn ?? '—'} / ${kept.gsm ?? '—'}) — verifique` }); continue }
-      } catch { /* sem verificação possível */ }
-      await sql`update devices set license_plate = ${it.plate}, intranet_device_id = coalesce(intranet_device_id, ${vid})
-                ${it.accountId ? sql`, intranet_account_id = ${it.accountId}` : sql``} where imei = ${it.imei}`
-      out.push({ imei: it.imei, ok: true, before })
+        if (k2.msisdn !== kept.msisdn) problems.push(`ATENÇÃO: MSISDN mudou (antes ${kept.msisdn ?? '—'})`)
+        if (k2.gsm !== kept.gsm) problems.push(`ATENÇÃO: operador GSM mudou (antes ${kept.gsm ?? '—'})`)
+        if (plateNow !== it.plate) problems.push('a matrícula não mudou')
+        if (!transferError && it.accountId && String(accNow) !== String(it.accountId)) problems.push('a matrícula mudou, mas a CONTA NÃO MUDOU')
+      }
+      if (transferError) problems.unshift(transferError)
+      out.push(problems.length ? { imei: it.imei, ok: false, before, error: problems.join(' · ') } : { imei: it.imei, ok: true, before })
     }
     return out
   } finally {

@@ -26,10 +26,11 @@ export function IntranetPlates({ warehouses }: { warehouses: Opt[] }) {
     setRows(r)
     // pré-seleciona só os IMEIs colados à mão (os dos armazéns ficam por marcar)
     const typed = new Set(imeis.split(/[\s,;]+/).map((x) => (x.trim().length === 14 ? '0' + x.trim() : x.trim())))
-    setSel(r.filter((x) => typed.has(x.imei) && x.target && !x.issue).map((x) => x.imei))
+    setSel(r.filter((x) => typed.has(x.imei) && x.target && (!x.issue || x.issue === 'Já está certo')).map((x) => x.imei))
     if (!accounts) setAccounts(await getIntranetAccounts())
   })
-  const eligible = (rows ?? []).filter((r) => r.target && (!r.issue || (r.issue === 'Já está certo' && account)))
+  // podem ser escolhidos: os que têm matrícula calculada (incluindo os que já estão certos — para mudar só a conta)
+  const eligible = (rows ?? []).filter((r) => r.target && (!r.issue || r.issue === 'Já está certo'))
   // só os IMEIs que o utilizador marcou
   const todo = eligible.filter((r) => sel.includes(r.imei))
   const toggleSel = (imei: string) => setSel((x) => (x.includes(imei) ? x.filter((i) => i !== imei) : [...x, imei]))
@@ -95,7 +96,7 @@ export function IntranetPlates({ warehouses }: { warehouses: Opt[] }) {
                     <td className="px-2 py-1 font-mono">{r.imei}</td><td className="px-2 py-1">{r.warehouse ?? '—'}</td><td className="px-2 py-1">{r.modality ?? '—'}</td>
                     <td className="px-2 py-1 font-mono">{r.current ?? '—'}</td><td className="px-2 py-1 font-mono font-bold">{r.target ?? '—'}</td>
                     <td className="px-2 py-1">{r.account ?? '—'}</td>
-                    <td className={`px-2 py-1 ${r.issue && r.issue !== 'Já está certo' ? 'text-[#b31d25]' : 'text-fc-dark-60'}`}>{r.issue ?? 'A atualizar'}</td>
+                    <td className={`px-2 py-1 ${r.issue && r.issue !== 'Já está certo' ? 'text-[#b31d25]' : 'text-fc-dark-60'}`}>{r.issue === 'Já está certo' ? (account ? 'Matrícula certa · muda a conta' : 'Matrícula certa') : r.issue ?? 'A atualizar'}</td>
                   </tr>
                 ))}
               </tbody>
