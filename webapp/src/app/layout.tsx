@@ -4,6 +4,7 @@ import "./globals.css";
 import { Navbar } from "@/components/navbar";
 import { getCurrentUser } from "@/lib/auth";
 import { AutoReceptionNotice } from "@/components/AutoReceptionNotice";
+import { LowStockNotice } from "@/components/LowStockNotice";
 
 // Tipografia do FROTCOM Styleguide: Lato (light, regular, bold)
 const lato = Lato({
@@ -30,6 +31,7 @@ export default async function RootLayout({
       <body className="flex min-h-full flex-col bg-fc-grey-100 text-fc-dark-100">
         {user && <Navbar user={user} />}
         {user?.role === "admin" && <AutoReceptionNotice />}
+        {user?.role === "admin" && <LowStockNotice />}
         <main className="flex-1">{children}</main>
       </body>
     </html>
