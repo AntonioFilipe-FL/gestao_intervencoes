@@ -659,3 +659,51 @@ export async function resolveClientId(value: string): Promise<string> {
   if (same) return same.id
   throw new Error('Não foi possível criar o cliente a partir da Intranet. Sincronize de novo e tente outra vez.')
 }
+
+// ---------------------------------------------------------------------------
+// Escrita na Intranet (só usada por ações de SUPER ADMIN — ver src/actions/intranet-write.ts)
+// ---------------------------------------------------------------------------
+
+export type IntranetDeviceUpdate = { imei: string; plate: string; accountId?: string | null; accountName?: string | null }
+export type IntranetUpdateResult = { imei: string; ok: boolean; error?: string; before?: { plate: string | null; accountId: string | null } }
+
+/**
+ * Altera matrícula (e opcionalmente a conta) de equipamentos na Intranet: PUT /api/devices/{vehicleId}.
+ * Lê o objeto atual de cada equipamento (lista /api/devices), muda SÓ a matrícula e a conta e envia o objeto completo de volta.
+ */
+export async function updateIntranetDevices(items: IntranetDeviceUpdate[]): Promise<IntranetUpdateResult[]> {
+  if (!items.length) return []
+  const token = await login()
+  try {
+    const raw = asList(await getJson('/api/devices', token))
+    const byImei = new Map<string, Json>()
+    for (const d of raw) {
+      const imei = pick(d, ['imei', 'IMEI', 'Imei', 'deviceImei'])
+      if (imei) byImei.set(imei, d)
+    }
+    const out: IntranetUpdateResult[] = []
+    for (const it of items) {
+      const obj = byImei.get(it.imei)
+      const vid = obj ? pick(obj, ['vehicleId', 'VehicleId', 'vehicle.id', 'id']) : null
+      if (!obj || !vid) { out.push({ imei: it.imei, ok: false, error: obj ? 'sem vehicleId na Intranet' : 'IMEI não encontrado na Intranet' }); continue }
+      const plateKey = ['licensePlate', 'LicensePlate', 'vehicleLicensePlate'].find((k) => k in obj) ?? 'licensePlate'
+      const before = { plate: pick(obj, [plateKey]), accountId: pick(obj, ['accountId', 'AccountId']) }
+      const body: Json = { ...obj, [plateKey]: it.plate }
+      if (it.accountId) {
+        body.accountId = /^\d+$/.test(it.accountId) ? Number(it.accountId) : it.accountId
+        if (it.accountName && 'accountName' in obj) body.accountName = it.accountName
+      }
+      const url = `${baseUrl()}/api/devices/${encodeURIComponent(vid)}?uniqueLicensePlate=false&api_key=${encodeURIComponent(token)}`
+      const json = JSON.stringify(body)
+      let res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json-patch+json' }, body: json, cache: 'no-store' })
+      if (res.status === 415) res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: json, cache: 'no-store' })
+      if (!res.ok) { out.push({ imei: it.imei, ok: false, before, error: `HTTP ${res.status} ${(await res.text()).slice(0, 200)}` }); continue }
+      await sql`update devices set license_plate = ${it.plate}, intranet_device_id = coalesce(intranet_device_id, ${vid})
+                ${it.accountId ? sql`, intranet_account_id = ${it.accountId}` : sql``} where imei = ${it.imei}`
+      out.push({ imei: it.imei, ok: true, before })
+    }
+    return out
+  } finally {
+    await logout(token)
+  }
+}

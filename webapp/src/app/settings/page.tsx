@@ -10,6 +10,8 @@ import { isAdmin } from '@/actions/users'
 import { getCurrentUser } from '@/lib/auth'
 import { getStockMinMargin } from '@/lib/stock-settings'
 import { SuperAdminSettings } from '@/components/settings/SuperAdminSettings'
+import { IntranetPlates } from '@/components/settings/IntranetPlates'
+import { sql } from '@/lib/db'
 import { UserManagement } from '@/components/settings/UserManagement'
 import { EmailSettings } from '@/components/settings/EmailSettings'
 import { IntranetSettings } from '@/components/settings/IntranetSettings'
@@ -62,7 +64,11 @@ export default async function SettingsPage({
         <div className="p-5">
             {me?.superadmin && (
               <TabsContent value="superadmin">
-                <SuperAdminSettings margin={margin} />
+                <div className="space-y-8">
+                  <SuperAdminSettings margin={margin} />
+                  <hr className="border-fc-dark-20" />
+                  <IntranetPlates warehouses={await sql<{ id: string; name: string }[]>`select id, name from warehouses where active and type <> 'mobilizado' order by name`} />
+                </div>
               </TabsContent>
             )}
             <TabsContent value="technicians">

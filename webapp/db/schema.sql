@@ -785,3 +785,17 @@ create table if not exists gestao_interv.stock_minimums (
 
 -- Super admin (perfil reservado): acessos extra (definições avançadas, escrita na Intranet). Só se ativa por script.
 alter table gestao_interv.profiles add column if not exists is_superadmin boolean not null default false;
+
+-- Registo das alterações feitas na Intranet pela app (super admin)
+create table if not exists gestao_interv.intranet_write_log (
+  id          uuid primary key default gen_random_uuid(),
+  imei        text not null,
+  old_plate   text,
+  new_plate   text,
+  old_account text,
+  new_account text,
+  ok          boolean not null,
+  error       text,
+  created_by  text,
+  created_at  timestamptz not null default now()
+);
