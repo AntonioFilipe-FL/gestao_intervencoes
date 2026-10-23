@@ -690,9 +690,22 @@ export async function updateIntranetDevices(items: IntranetDeviceUpdate[]): Prom
       const before = { plate: pick(obj, [plateKey]), accountId: pick(obj, ['accountId', 'AccountId']) }
       // objeto completo do equipamento (a lista pode vir resumida); se não houver GET individual, usa o da lista
       let full: Json | null = null
-      try { const one = await getJson(`/api/devices/${encodeURIComponent(vid)}`, token); if (one && typeof one === 'object' && !Array.isArray(one)) full = { ...obj, ...(one as Json) } } catch { /* sem GET individual */ }
+      const tries: string[] = []
+      for (const path of [`/api/devices/details/${encodeURIComponent(vid)}`]) {
+        try {
+          const one = await getJson(path, token)
+          const o = Array.isArray(one) ? (one as Json[]).find((x) => pick(x, ['imei', 'IMEI']) === it.imei) : asList(one).length ? asList(one).find((x) => pick(x, ['imei', 'IMEI']) === it.imei) : one
+          if (o && typeof o === 'object') { full = { ...obj, ...(o as Json) }; break }
+        } catch (e) { tries.push(`${path.split('?')[0]}: ${(e as Error).message.slice(0, 60)}`) }
+      }
+      // a lista geral serve se trouxer os campos sensíveis (MSISDN, operador GSM)
+      const has = (o: Json, ks: string[]) => ks.some((k) => k in o)
+      if (!full && has(obj, ['msisdn', 'MSISDN', 'Msisdn']) && has(obj, ['gsmOperator', 'GsmOperator'])) full = obj
       // sem a leitura completa do equipamento não se envia nada (podia apagar MSISDN, operador GSM, PIN…)
-      if (!full) { out.push({ imei: it.imei, ok: false, error: 'não foi possível ler o equipamento completo na Intranet — nada alterado' }); continue }
+      if (!full) {
+        out.push({ imei: it.imei, ok: false, error: `não foi possível ler o equipamento completo na Intranet — nada alterado. Campos da lista: ${Object.keys(obj).slice(0, 40).join(', ')}${tries.length ? ' · ' + tries.join(' | ') : ''}` })
+        continue
+      }
       const keep = (o: Json) => ({ msisdn: pick(o, ['msisdn', 'MSISDN', 'Msisdn']), gsm: pick(o, ['gsmOperator', 'GsmOperator', 'gsm_operator']), pin: pick(o, ['pin', 'PIN', 'Pin']) })
       const kept = keep(full)
       const body: Json = { ...full, [plateKey]: it.plate }
@@ -714,7 +727,7 @@ export async function updateIntranetDevices(items: IntranetDeviceUpdate[]): Prom
       if (!res.ok) { out.push({ imei: it.imei, ok: false, before, error: `HTTP ${res.status} ${(await res.text()).slice(0, 200)}` }); continue }
       // confirma que o MSISDN e o operador GSM não mudaram
       try {
-        const after = await getJson(`/api/devices/${encodeURIComponent(vid)}`, token) as Json
+        const after = await getJson(`/api/devices/details/${encodeURIComponent(vid)}`, token) as Json
         const k2 = keep(after)
         const changed = [k2.msisdn !== kept.msisdn && 'MSISDN', k2.gsm !== kept.gsm && 'operador GSM'].filter(Boolean)
         if (changed.length) { out.push({ imei: it.imei, ok: false, before, error: `ATENÇÃO: ${changed.join(' e ')} mudou na Intranet (antes ${kept.msisdn ?? '—'} / ${kept.gsm ?? '—'}) — verifique` }); continue }
