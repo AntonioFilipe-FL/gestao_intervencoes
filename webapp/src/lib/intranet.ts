@@ -665,7 +665,7 @@ export async function resolveClientId(value: string): Promise<string> {
 // ---------------------------------------------------------------------------
 
 export type IntranetDeviceUpdate = { imei: string; plate: string; accountId?: string | null; accountName?: string | null }
-export type IntranetUpdateResult = { imei: string; ok: boolean; error?: string; before?: { plate: string | null; accountId: string | null } }
+export type IntranetUpdateResult = { imei: string; ok: boolean; error?: string; plate?: string; before?: { plate: string | null; accountId: string | null } }
 
 /**
  * Altera matrícula (e opcionalmente a conta) de equipamentos na Intranet: PUT /api/devices/{vehicleId}.
@@ -708,7 +708,15 @@ export async function updateIntranetDevices(items: IntranetDeviceUpdate[]): Prom
       }
       const keep = (o: Json) => ({ msisdn: pick(o, ['msisdn', 'MSISDN', 'Msisdn']), gsm: pick(o, ['gsmOperator', 'GsmOperator', 'gsm_operator']), pin: pick(o, ['pin', 'PIN', 'Pin']) })
       const kept = keep(full)
-      const body: Json = { ...full, [plateKey]: it.plate }
+      // {OP} na matrícula → operador do cartão na Intranet (gsmOperator): NOS ou VDF
+      let plate = it.plate
+      if (plate.includes('{OP}')) {
+        const g = pick(full, ['gsmOperator', 'GsmOperator']) ?? ''
+        const op = /vodafone|\bvdf/i.test(g) ? 'VDF' : /\bnos\b|optimus|zon/i.test(g) ? 'NOS' : null
+        if (!op) { out.push({ imei: it.imei, ok: false, error: `operador GSM "${g || 'vazio'}" não é NOS nem Vodafone — nada alterado` }); continue }
+        plate = plate.replace('{OP}', op)
+      }
+      const body: Json = { ...full, [plateKey]: plate }
       // PIN: a Intranet exige 4 dígitos (opcionalmente com *), "*" ou "----". Se vier vazio/mascarado/inválido, envia "----".
       for (const k of Object.keys(body)) {
         if (k.toLowerCase() !== 'pin') continue
@@ -734,7 +742,7 @@ export async function updateIntranetDevices(items: IntranetDeviceUpdate[]): Prom
       // lê de novo o equipamento: confirma o que mudou mesmo (matrícula, conta) e que MSISDN/operador ficaram iguais
       let after: Json | null = null
       try { after = await getJson(`/api/devices/details/${encodeURIComponent(vid)}`, token) as Json } catch { /* sem verificação */ }
-      const plateNow = after ? pick(after, [plateKey]) : it.plate
+      const plateNow = after ? pick(after, [plateKey]) : plate
       const accNow = after ? pick(after, ['accountId', 'AccountId']) : (it.accountId ?? before.accountId)
       await sql`update devices set license_plate = ${plateNow}, intranet_device_id = coalesce(intranet_device_id, ${vid})
                 ${accNow ? sql`, intranet_account_id = ${accNow}` : sql``} where imei = ${it.imei}`
@@ -743,11 +751,11 @@ export async function updateIntranetDevices(items: IntranetDeviceUpdate[]): Prom
         const k2 = keep(after)
         if (k2.msisdn !== kept.msisdn) problems.push(`ATENÇÃO: MSISDN mudou (antes ${kept.msisdn ?? '—'})`)
         if (k2.gsm !== kept.gsm) problems.push(`ATENÇÃO: operador GSM mudou (antes ${kept.gsm ?? '—'})`)
-        if (plateNow !== it.plate) problems.push('a matrícula não mudou')
+        if (plateNow !== plate) problems.push('a matrícula não mudou')
         if (!transferError && it.accountId && String(accNow) !== String(it.accountId)) problems.push('a matrícula mudou, mas a CONTA NÃO MUDOU')
       }
       if (transferError) problems.unshift(transferError)
-      out.push(problems.length ? { imei: it.imei, ok: false, before, error: problems.join(' · ') } : { imei: it.imei, ok: true, before })
+      out.push(problems.length ? { imei: it.imei, ok: false, before, plate, error: problems.join(' · ') } : { imei: it.imei, ok: true, before, plate })
     }
     return out
   } finally {

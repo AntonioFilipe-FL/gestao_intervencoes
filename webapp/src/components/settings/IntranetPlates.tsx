@@ -9,7 +9,7 @@ import { applyIntranetPlates, getIntranetAccounts, previewIntranetPlates, type P
 
 type Opt = { id: string; name: string }
 
-/** Super admin: atualizar a matrícula (XX_Ay_1234567) e, opcionalmente, a conta dos equipamentos na Intranet */
+/** Super admin: atualizar a matrícula (XX_Ay_ZZZ_12345) e, opcionalmente, a conta dos equipamentos na Intranet */
 export function IntranetPlates({ warehouses }: { warehouses: Opt[] }) {
   const [busy, start] = useTransition()
   const [whs, setWhs] = useState<string[]>([])
@@ -52,7 +52,7 @@ export function IntranetPlates({ warehouses }: { warehouses: Opt[] }) {
       <div>
         <h3 className="font-bold">Matrículas na Intranet</h3>
         <p className="fc-small text-fc-dark-60">
-          Matrícula nova: <b>XX_Ay_1234567</b> — XX = armazém (A1/A2 → FL), y = 1 Venda / 2 Aluguer, últimos 7 dígitos do IMEI.
+          Matrícula nova: <b>XX_Ay_ZZZ_12345</b> — XX = armazém (A1/A2 → FL), y = 1 Venda / 2 Aluguer, ZZZ = operador do cartão (NOS/VDF, confirmado na Intranet ao enviar; ??? = ainda por confirmar), últimos 5 dígitos do IMEI.
           Nada é alterado na Intranet sem carregar em &ldquo;Atualizar&rdquo;.
         </p>
       </div>

@@ -37,7 +37,7 @@ export function StockActions({ warehouses, originWarehouses, equipment }: { ware
   const [intraAcc, setIntraAcc] = useState('')
   const [accounts, setAccounts] = useState<{ id: string; name: string }[] | null>(null)
   useEffect(() => {
-    if (intra && accounts === null) getIntranetAccounts().then(setAccounts).catch(() => setAccounts([]))
+    if (intra && accounts === null) getIntranetAccounts(true).then(setAccounts).catch(() => setAccounts([]))
   }, [intra, accounts])
   const eqOpts = equipment.map((e) => ({ value: e.id, label: e.name }))
   const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }))
@@ -175,13 +175,13 @@ export function StockActions({ warehouses, originWarehouses, equipment }: { ware
               <div className="space-y-2 border border-fc-dark-20 px-3 py-2">
                 <label className="flex items-center gap-2 fc-small font-semibold">
                   <input type="checkbox" checked={intra} onChange={(e) => setIntra(e.target.checked)} />
-                  Atualizar a matrícula na Intranet (XX_Ay_1234567 do armazém de destino)
+                  Atualizar a matrícula na Intranet (XX_Ay_ZZZ_12345 do armazém de destino)
                 </label>
                 {intra && (
                   <div className="space-y-1.5">
                     <Label>Transferir para a conta Intranet (opcional)</Label>
                     <SearchableSelect options={(accounts ?? []).map((a) => ({ value: a.id, label: a.name }))} value={intraAcc} onChange={setIntraAcc} placeholder="Manter a conta atual" />
-                    <p className="fc-small text-fc-dark-60">É feito logo a seguir a registar a transferência. A1/A2 → FL; y = 1 Venda / 2 Aluguer. Os dados do equipamento (PIN, MSISDN, operador) não mudam.</p>
+                    <p className="fc-small text-fc-dark-60">É feito logo a seguir a registar a transferência. A1/A2 → FL; y = 1 Venda / 2 Aluguer; ZZZ = NOS/VDF conforme o operador do cartão na Intranet. Os dados do equipamento (PIN, MSISDN, operador) não mudam.</p>
                   </div>
                 )}
               </div>

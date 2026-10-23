@@ -10,6 +10,9 @@ export type PlateRow = {
 }
 
 /** Prefixo do armazém na matrícula: A1/A2 → FL; restantes → nome do armazém (RL, RN, LS, CG, TC, PG, RMA…) */
+/** NOS / VDF a partir de um texto (operador GSM da Intranet ou matrícula atual) */
+const opFromText = (t: string | null | undefined) => (!t ? null : /vodafone|vdf/i.test(t) ? 'VDF' : /nos|optimus|zon/i.test(t) ? 'NOS' : null)
+
 const prefixOf = (wh: string) => (/^A[12]\b/i.test(wh.trim()) ? 'FL' : wh.trim().split(/\s|-/)[0].toUpperCase())
 
 /** Pré-visualização (não altera nada): matrícula nova XX_Ay_1234567 por IMEI */
@@ -38,7 +41,10 @@ async function previewCore(input: { warehouseIds: string[]; imeis: string }): Pr
     if (!r.in_intranet) issue = 'Não existe na Intranet'
     else if (r.modality !== 'Venda' && r.modality !== 'Aluguer') issue = 'Sem modalidade (Venda/Aluguer)'
     else if (/mobilizado/i.test(r.warehouse ?? '')) issue = 'Instalado num cliente (Mobilizado)'
-    const target = issue ? null : `${prefixOf(r.warehouse!)}_A${r.modality === 'Venda' ? 1 : 2}_${r.imei.slice(-7)}`
+    // XX_Ay_ZZZ_12345 — ZZZ = operador do cartão (NOS/VDF), confirmado na Intranet no momento de enviar;
+    // na pré-visualização usa o que estiver na matrícula atual (ou ??? se não se souber)
+    const op = opFromText(r.current) ?? '???'
+    const target = issue ? null : `${prefixOf(r.warehouse!)}_A${r.modality === 'Venda' ? 1 : 2}_${op}_${r.imei.slice(-5)}`
     if (!issue && target === r.current) issue = 'Já está certo'
     return { imei: r.imei, warehouse: r.warehouse, modality: r.modality, current: r.current, account: r.account, target, issue }
   })
@@ -48,15 +54,18 @@ async function previewCore(input: { warehouseIds: string[]; imeis: string }): Pr
   return out
 }
 
-/** Contas Intranet conhecidas (para escolher o destino) */
-export async function getIntranetAccounts() {
+/** Contas Intranet conhecidas (para escolher o destino). `onlyFrotcom`: só as "Frotcom Lusitana…" (transferências) */
+export async function getIntranetAccounts(onlyFrotcom = false) {
   await requireAdmin()
   return sql<{ id: string; name: string }[]>`
-    select distinct on (id) id, name from (
-      select intranet_account_id as id, coalesce(intranet_short_name, name) as name from clients where intranet_account_id is not null
-      union all
-      select intranet_account_id, name from intranet_pending
-    ) x where id is not null order by id, name`
+    select * from (
+      select distinct on (id) id, name from (
+        select intranet_account_id as id, coalesce(intranet_short_name, name) as name from clients where intranet_account_id is not null
+        union all
+        select intranet_account_id, name from intranet_pending
+      ) x where id is not null order by id, name
+    ) y ${onlyFrotcom ? sql`where y.name ilike 'frotcom lusitana%'` : sql``}
+    order by y.name`
 }
 
 /** Aplica na Intranet (SÓ super admin) — ecrã Configurações › Super admin */
@@ -73,6 +82,9 @@ export async function applyIntranetPlates(input: { imeis: string[]; accountId?: 
 export async function applyIntranetForTransfer(input: { imeis: string[]; accountId?: string }) {
   try {
     const user = await requireAdmin()
+    // nas transferências, só contas internas "Frotcom Lusitana…"
+    if (input.accountId && !(await getIntranetAccounts(true)).some((a) => a.id === input.accountId))
+      throw new Error('Nas transferências só é possível escolher contas "Frotcom Lusitana…".')
     return await applyCore(user.email, input)
   } catch (e) {
     return { ok: false as const, error: (e as Error).message }
@@ -92,9 +104,9 @@ async function applyCore(by: string, input: { imeis: string[]; accountId?: strin
   const [acc] = input.accountId ? await sql<{ name: string }[]>`
     select coalesce((select coalesce(intranet_short_name, name) from clients where intranet_account_id = ${input.accountId} limit 1),
                     (select name from intranet_pending where intranet_account_id = ${input.accountId} limit 1)) as name` : [undefined]
-  const res = await updateIntranetDevices(todo.map((r) => ({ imei: r.imei, plate: r.target!, accountId: input.accountId || null, accountName: acc?.name ?? null })))
+  const res = await updateIntranetDevices(todo.map((r) => ({ imei: r.imei, plate: r.target!.replace(/_\?\?\?_|_(NOS|VDF)_/, '_{OP}_'), accountId: input.accountId || null, accountName: acc?.name ?? null })))
   await sql`insert into intranet_write_log ${sql(res.map((r) => ({
-    imei: r.imei, old_plate: r.before?.plate ?? null, new_plate: todo.find((t) => t.imei === r.imei)?.target ?? null,
+    imei: r.imei, old_plate: r.before?.plate ?? null, new_plate: r.plate ?? todo.find((t) => t.imei === r.imei)?.target ?? null,
     old_account: r.before?.accountId ?? null, new_account: input.accountId || null, ok: r.ok, error: r.error ?? null, created_by: by,
   })))}`
   return { ok: true as const, done: res.filter((r) => r.ok).length, failed: [...res.filter((r) => !r.ok), ...skipped] }
