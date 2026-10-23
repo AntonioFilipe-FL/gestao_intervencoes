@@ -688,7 +688,16 @@ export async function updateIntranetDevices(items: IntranetDeviceUpdate[]): Prom
       if (!obj || !vid) { out.push({ imei: it.imei, ok: false, error: obj ? 'sem vehicleId na Intranet' : 'IMEI não encontrado na Intranet' }); continue }
       const plateKey = ['licensePlate', 'LicensePlate', 'vehicleLicensePlate'].find((k) => k in obj) ?? 'licensePlate'
       const before = { plate: pick(obj, [plateKey]), accountId: pick(obj, ['accountId', 'AccountId']) }
-      const body: Json = { ...obj, [plateKey]: it.plate }
+      // objeto completo do equipamento (a lista pode vir resumida); se não houver GET individual, usa o da lista
+      let full: Json = obj
+      try { const one = await getJson(`/api/devices/${encodeURIComponent(vid)}`, token); if (one && typeof one === 'object' && !Array.isArray(one)) full = { ...obj, ...(one as Json) } } catch { /* sem GET individual */ }
+      const body: Json = { ...full, [plateKey]: it.plate }
+      // PIN: a Intranet exige 4 dígitos (opcionalmente com *), "*" ou "----". Se vier vazio/mascarado, envia "*" (mantém o atual).
+      for (const k of Object.keys(body)) {
+        if (k.toLowerCase() !== 'pin') continue
+        const v = body[k] == null ? '' : String(body[k]).trim()
+        if (!/^(\*?\d{4}|\*|----)$/.test(v)) body[k] = '*'
+      }
       if (it.accountId) {
         body.accountId = /^\d+$/.test(it.accountId) ? Number(it.accountId) : it.accountId
         if (it.accountName && 'accountName' in obj) body.accountName = it.accountName

@@ -18,19 +18,28 @@ export function IntranetPlates({ warehouses }: { warehouses: Opt[] }) {
   const [accounts, setAccounts] = useState<Opt[] | null>(null)
   const [account, setAccount] = useState('')
   const [msg, setMsg] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null)
+  const [sel, setSel] = useState<string[]>([])
 
   const preview = () => start(async () => {
     setMsg(null)
-    setRows(await previewIntranetPlates({ warehouseIds: whs, imeis }))
+    const r = await previewIntranetPlates({ warehouseIds: whs, imeis })
+    setRows(r)
+    // pré-seleciona só os IMEIs colados à mão (os dos armazéns ficam por marcar)
+    const typed = new Set(imeis.split(/[\s,;]+/).map((x) => (x.trim().length === 14 ? '0' + x.trim() : x.trim())))
+    setSel(r.filter((x) => typed.has(x.imei) && x.target && !x.issue).map((x) => x.imei))
     if (!accounts) setAccounts(await getIntranetAccounts())
   })
-  const todo = (rows ?? []).filter((r) => r.target && (!r.issue || (r.issue === 'Já está certo' && account)))
+  const eligible = (rows ?? []).filter((r) => r.target && (!r.issue || (r.issue === 'Já está certo' && account)))
+  // só os IMEIs que o utilizador marcou
+  const todo = eligible.filter((r) => sel.includes(r.imei))
+  const toggleSel = (imei: string) => setSel((x) => (x.includes(imei) ? x.filter((i) => i !== imei) : [...x, imei]))
   const apply = (testOne: boolean) => {
     const n = testOne ? 1 : todo.length
+    const first = todo[0]?.imei
     const accName = accounts?.find((a) => a.id === account)?.name
-    if (!confirm(`Vai ALTERAR NA INTRANET ${n} equipamento(s)${accName ? ` e passá-los para a conta "${accName}"` : ''}. Continuar?`)) return
+    if (!confirm(`Vai ALTERAR NA INTRANET ${testOne ? `o IMEI ${first}` : `${n} equipamento(s)`}${accName ? ` e passá-los para a conta "${accName}"` : ''}. Continuar?`)) return
     start(async () => {
-      const r = await applyIntranetPlates({ imeis: todo.map((t) => t.imei), accountId: account || undefined, testOne })
+      const r = await applyIntranetPlates({ imeis: testOne ? [first!] : todo.map((t) => t.imei), accountId: account || undefined })
       if (!r.ok) return setMsg({ tone: 'err', text: r.error })
       setMsg({ tone: r.failed.length ? 'err' : 'ok', text: `${r.done} atualizado(s) na Intranet.${r.failed.length ? ` Falharam ${r.failed.length}: ${r.failed.slice(0, 5).map((f) => `${f.imei} (${f.error})`).join('; ')}` : ''}` })
       setRows(await previewIntranetPlates({ warehouseIds: whs, imeis }))
@@ -68,16 +77,21 @@ export function IntranetPlates({ warehouses }: { warehouses: Opt[] }) {
       {rows && (
         <>
           <p className="fc-small">
-            <b>{todo.length}</b> a atualizar · {rows.filter((r) => r.issue === 'Já está certo').length} já certos · {rows.filter((r) => r.issue && r.issue !== 'Já está certo').length} com problema
+            <b>{todo.length}</b> selecionado(s) de {eligible.length} possíveis ·
+            <button type="button" className="mx-1 text-fc-light-100 underline" onClick={() => setSel(eligible.map((r) => r.imei))}>selecionar todos</button>
+            <button type="button" className="mr-1 text-fc-light-100 underline" onClick={() => setSel([])}>nenhum</button> · {rows.filter((r) => r.issue === 'Já está certo').length} já certos · {rows.filter((r) => r.issue && r.issue !== 'Já está certo').length} com problema
           </p>
           <div className="max-h-96 overflow-auto border border-fc-dark-20">
             <table className="w-full fc-small">
               <thead className="sticky top-0 bg-fc-grey-80 text-left">
-                <tr><th className="px-2 py-1">IMEI</th><th className="px-2 py-1">Armazém</th><th className="px-2 py-1">Modalidade</th><th className="px-2 py-1">Matrícula atual</th><th className="px-2 py-1">Matrícula nova</th><th className="px-2 py-1">Conta</th><th className="px-2 py-1">Estado</th></tr>
+                <tr><th className="px-2 py-1" /><th className="px-2 py-1">IMEI</th><th className="px-2 py-1">Armazém</th><th className="px-2 py-1">Modalidade</th><th className="px-2 py-1">Matrícula atual</th><th className="px-2 py-1">Matrícula nova</th><th className="px-2 py-1">Conta</th><th className="px-2 py-1">Estado</th></tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.imei} className="border-t border-fc-dark-10">
+                    <td className="px-2 py-1">
+                      <input type="checkbox" disabled={!eligible.includes(r)} checked={sel.includes(r.imei)} onChange={() => toggleSel(r.imei)} />
+                    </td>
                     <td className="px-2 py-1 font-mono">{r.imei}</td><td className="px-2 py-1">{r.warehouse ?? '—'}</td><td className="px-2 py-1">{r.modality ?? '—'}</td>
                     <td className="px-2 py-1 font-mono">{r.current ?? '—'}</td><td className="px-2 py-1 font-mono font-bold">{r.target ?? '—'}</td>
                     <td className="px-2 py-1">{r.account ?? '—'}</td>
@@ -92,8 +106,8 @@ export function IntranetPlates({ warehouses }: { warehouses: Opt[] }) {
               <Label>Transferir para a conta Intranet (opcional)</Label>
               <SearchableSelect options={(accounts ?? []).map((a) => ({ value: a.id, label: a.name }))} value={account} onChange={setAccount} placeholder="Manter a conta atual" />
             </div>
-            <Button variant="inverse" disabled={busy || !todo.length} onClick={() => apply(true)}>Testar com 1</Button>
-            <Button disabled={busy || !todo.length} onClick={() => apply(false)}>{busy ? 'A atualizar…' : `Atualizar ${todo.length} na Intranet`}</Button>
+            <Button variant="inverse" disabled={busy || !todo.length} onClick={() => apply(true)}>{todo[0] ? `Testar com ${todo[0].imei}` : 'Testar com 1'}</Button>
+            <Button disabled={busy || !todo.length} onClick={() => apply(false)}>{busy ? 'A atualizar…' : `Atualizar ${todo.length} selecionado(s) na Intranet`}</Button>
           </div>
         </>
       )}

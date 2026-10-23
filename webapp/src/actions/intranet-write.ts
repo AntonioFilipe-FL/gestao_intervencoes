@@ -38,7 +38,9 @@ export async function previewIntranetPlates(input: { warehouseIds: string[]; ime
     if (!issue && target === r.current) issue = 'Já está certo'
     return { imei: r.imei, warehouse: r.warehouse, modality: r.modality, current: r.current, account: r.account, target, issue }
   })
-  for (const imei of list) if (!seen.has(imei)) out.push({ imei, warehouse: null, modality: null, current: null, account: null, target: null, issue: 'Não está em stock na app' })
+  // IMEIs indicados à mão aparecem primeiro
+  out.sort((a, b) => Number(list.includes(b.imei)) - Number(list.includes(a.imei)))
+  for (const imei of list) if (!seen.has(imei)) out.unshift({ imei, warehouse: null, modality: null, current: null, account: null, target: null, issue: 'Não está em stock na app' })
   return out
 }
 
@@ -54,12 +56,11 @@ export async function getIntranetAccounts() {
 }
 
 /** Aplica na Intranet (SÓ super admin). Recalcula a matrícula no servidor — não confia no que vem do browser. */
-export async function applyIntranetPlates(input: { imeis: string[]; accountId?: string; testOne?: boolean }) {
+export async function applyIntranetPlates(input: { imeis: string[]; accountId?: string }) {
   try {
     const user = await requireSuperAdmin()
     const preview = await previewIntranetPlates({ warehouseIds: [], imeis: input.imeis.join('\n') })
-    let todo = preview.filter((r) => r.target && (!r.issue || (r.issue === 'Já está certo' && input.accountId)))
-    if (input.testOne) todo = todo.slice(0, 1)
+    const todo = preview.filter((r) => r.target && (!r.issue || (r.issue === 'Já está certo' && input.accountId)))
     if (!todo.length) throw new Error('Nada a atualizar.')
     const [acc] = input.accountId ? await sql<{ name: string }[]>`
       select coalesce((select coalesce(intranet_short_name, name) from clients where intranet_account_id = ${input.accountId} limit 1),
