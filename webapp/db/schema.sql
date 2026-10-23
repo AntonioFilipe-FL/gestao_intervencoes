@@ -355,6 +355,14 @@ create index if not exists stock_movements_interv_idx on stock_movements (interv
 
 alter table interventions add column if not exists return_modality text;
 
+-- IMEIs a ignorar em toda a app (números inválidos / de teste): não contam no stock nem são sincronizados da Intranet
+create table if not exists gestao_interv.ignored_imeis (
+  imei       text primary key,
+  reason     text,
+  created_by text,
+  created_at timestamptz not null default now()
+);
+
 create or replace view stock_current as
 select distinct on (m.imei)
        m.imei, m.to_warehouse_id as warehouse_id, m.moved_at, m.kind, m.intervention_id,
@@ -540,6 +548,7 @@ select distinct on (m.imei)
                              order by m3.moved_at desc, m3.seq desc limit 1)) as modality
 from stock_movements m
 where m.superseded_at is null and m.imei !~ '^80{6}'
+  and not exists (select 1 from gestao_interv.ignored_imeis ig where ig.imei = m.imei)
 order by m.imei, m.moved_at desc, m.seq desc;
 
 /** Marca como substituídas as correções dos IMEIs de uma intervenção (chamado ao registar/editar/importar) */

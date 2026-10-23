@@ -89,6 +89,7 @@ export async function autoReceiveNewDevices(): Promise<number> {
       and (exists (select 1 from clients c where c.intranet_account_id = d.intranet_account_id and lower(btrim(coalesce(c.intranet_short_name, c.name))) = 'frotcom lusitana')
         or exists (select 1 from intranet_pending p where p.intranet_account_id = d.intranet_account_id and lower(btrim(p.name)) = 'frotcom lusitana'))
       and not exists (select 1 from stock_movements m where m.imei = d.imei)
+      and not exists (select 1 from ignored_imeis ig where ig.imei = d.imei)
       and not exists (select 1 from interventions i where d.imei in (gestao_interv.imei_norm(i.imei), gestao_interv.imei_norm(i.spent_equipment_imei), gestao_interv.imei_norm(i.return_equipment_imei)))`
   const markRun = () => sql`insert into app_settings (key, value, updated_by) values ('auto_reception_last_run', ${today}, 'sistema')
                              on conflict (key) do update set value = excluded.value, updated_at = now()`
@@ -323,7 +324,8 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
         result.devices.error = 'Formato de resposta de /api/devices não reconhecido (não encontrei o campo do IMEI).'
         result.devices.sampleKeys = Object.keys(raw[0] ?? {}).filter(k => k !== '__accountId')
       } else if (rows.length > 0) {
-        const seen = new Map(rows.map(r => [r.imei, r])) // IMEIs repetidos: fica o último
+        const ignored = new Set((await sql<{ imei: string }[]>`select imei from ignored_imeis`.catch(() => [])).map((r) => r.imei))
+        const seen = new Map(rows.filter(r => !ignored.has(r.imei)).map(r => [r.imei, r])) // IMEIs repetidos: fica o último; ignorados: fora
         const unique = [...seen.values()]
         await sql.begin(async tx => {
           for (let i = 0; i < unique.length; i += 500) {
