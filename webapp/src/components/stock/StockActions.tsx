@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 import { locateImeis, registerReception, registerTransfer } from '@/actions/stock'
+import { applyIntranetForTransfer, getIntranetAccounts } from '@/actions/intranet-write'
 
 type Opt = { id: string; name: string }
 const today = () => new Date().toISOString().slice(0, 10)
@@ -31,6 +32,13 @@ export function StockActions({ warehouses, originWarehouses, equipment }: { ware
   const [loc, setLoc] = useState<Loc | null>(null)
   const [picked, setPicked] = useState<string[]>([])
   const [shown, setShown] = useState<string | null>(null)
+  // opção: atualizar a matrícula na Intranet (XX_Ay_…) e, opcionalmente, a conta
+  const [intra, setIntra] = useState(false)
+  const [intraAcc, setIntraAcc] = useState('')
+  const [accounts, setAccounts] = useState<{ id: string; name: string }[] | null>(null)
+  useEffect(() => {
+    if (intra && accounts === null) getIntranetAccounts().then(setAccounts).catch(() => setAccounts([]))
+  }, [intra, accounts])
   const eqOpts = equipment.map((e) => ({ value: e.id, label: e.name }))
   const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }))
 
@@ -38,6 +46,8 @@ export function StockActions({ warehouses, originWarehouses, equipment }: { ware
     setF({ from: k === 'transferencia' ? AUTO : '', to: '', modality: '', equipment: '', imeis: '', date: today(), notes: '' })
     setMsg(null)
     setLoc(null)
+    setIntra(false)
+    setIntraAcc('')
     setOpen(k)
   }
 
@@ -63,7 +73,18 @@ export function StockActions({ warehouses, originWarehouses, equipment }: { ware
           ? await registerReception({ warehouseId: f.to, modality: f.modality, equipmentId: f.equipment, imeis: f.imeis, date: f.date, notes: f.notes })
           : await registerTransfer({ fromWarehouseId: isAuto ? undefined : f.from, fromWarehouseIds: isAuto ? picked : undefined, toWarehouseId: f.to, modality: f.modality, imeis: f.imeis, date: f.date, notes: f.notes })
       if (!r.ok) return setMsg({ tone: 'err', text: r.error })
-      setMsg({ tone: 'ok', text: [`${r.n} IMEI(s) registados.`, ...r.warnings].join(' ') })
+      const texts = [`${r.n} IMEI(s) registados.`, ...r.warnings]
+      let tone: 'ok' | 'err' = 'ok'
+      if (open === 'transferencia' && intra) {
+        const list = [...new Set(f.imeis.split(/[\s,;]+/).filter(Boolean))]
+        const ir = await applyIntranetForTransfer({ imeis: list, accountId: intraAcc || undefined })
+        if (!ir.ok) { texts.push(`Intranet: ${ir.error}`); tone = 'err' }
+        else {
+          texts.push(`Intranet: ${ir.done} atualizado(s).`)
+          if (ir.failed.length) { tone = 'err'; texts.push(`Não atualizados ${ir.failed.length}: ${ir.failed.slice(0, 5).map((x) => `${x.imei} (${x.error})`).join('; ')}`) }
+        }
+      }
+      setMsg({ tone, text: texts.join(' ') })
       setF((x) => ({ ...x, imeis: '' }))
       setLoc(null)
       router.refresh()
@@ -150,6 +171,21 @@ export function StockActions({ warehouses, originWarehouses, equipment }: { ware
               <Label>Observações</Label>
               <Input value={f.notes} onChange={(e) => set('notes')(e.target.value)} placeholder="Ex.: fatura, guia de remessa, técnico…" />
             </div>
+            {open === 'transferencia' && (
+              <div className="space-y-2 border border-fc-dark-20 px-3 py-2">
+                <label className="flex items-center gap-2 fc-small font-semibold">
+                  <input type="checkbox" checked={intra} onChange={(e) => setIntra(e.target.checked)} />
+                  Atualizar a matrícula na Intranet (XX_Ay_1234567 do armazém de destino)
+                </label>
+                {intra && (
+                  <div className="space-y-1.5">
+                    <Label>Transferir para a conta Intranet (opcional)</Label>
+                    <SearchableSelect options={(accounts ?? []).map((a) => ({ value: a.id, label: a.name }))} value={intraAcc} onChange={setIntraAcc} placeholder="Manter a conta atual" />
+                    <p className="fc-small text-fc-dark-60">É feito logo a seguir a registar a transferência. A1/A2 → FL; y = 1 Venda / 2 Aluguer. Os dados do equipamento (PIN, MSISDN, operador) não mudam.</p>
+                  </div>
+                )}
+              </div>
+            )}
             {msg && <p className={msg.tone === 'ok' ? 'bg-fc-success/20 px-3 py-2 text-[#4b850d]' : 'bg-fc-danger/20 px-3 py-2 text-[#b31d25]'}>{msg.text}</p>}
           </div>
           <DialogFooter>
