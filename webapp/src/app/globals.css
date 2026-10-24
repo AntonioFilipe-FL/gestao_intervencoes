@@ -190,3 +190,10 @@
 .dark .text-\[\#4b850d\] { color: #8fd14f; }
 .dark .text-\[\#b31d25\] { color: #ff7a7f; }
 .dark .text-\[\#8a5a00\] { color: #f2c063; }
+/* tabelas: linhas alternadas (as pares eram brancas) */
+.dark [data-slot="table-body"] > tr:nth-child(even) { background-color: #18212a !important; }
+.dark [data-slot="table-body"] > tr:nth-child(odd) { background-color: #1e2832 !important; }
+.dark [data-slot="table-body"] > tr:hover { background-color: #2a3541 !important; }
+/* etiquetas (badges) com texto escuro */
+.dark .text-\[\#005380\] { color: #7cc8f2; }
+.dark .text-\[\#c7830b\] { color: #f2c063; }
