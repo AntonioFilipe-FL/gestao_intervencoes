@@ -148,3 +148,45 @@
   /* Rótulo de campo/secção (11px uppercase) */
   .fc-label { font-size: 11px; line-height: 16px; text-transform: uppercase; color: var(--fc-blue-dark-60); letter-spacing: 0.02em; }
 }
+
+/* ======================= MODO ESCURO =======================
+ * Ativado pela classe .dark no <html> (botão na barra de topo; preferência guardada no browser).
+ * Os tons claros da paleta (fundos, linhas, cinzentos) passam a escuros; o azul-escuro Frotcom
+ * continua a ser usado como fundo da barra de topo, cabeçalhos de tabela e botões.
+ */
+.dark {
+  color-scheme: dark;
+  --fc-blue-dark-60: #9aa4ae;
+  --fc-blue-dark-40: #7a8692;
+  --fc-blue-dark-20: #3a4754;
+  --fc-blue-dark-10: #2a3541;
+  --fc-grey-light-100: #121a22;
+  --fc-grey-light-80: #1b252f;
+  --background: #121a22;
+  --foreground: #e3e7eb;
+  --card: #1a232d;
+  --card-foreground: #e3e7eb;
+  --popover: #1a232d;
+  --popover-foreground: #e3e7eb;
+  --muted: #1b252f;
+  --muted-foreground: #9aa4ae;
+  --accent: #24303b;
+  --accent-foreground: #e3e7eb;
+  --border: #3a4754;
+  --input: #4a5865;
+  --sidebar: #1a232d;
+  --sidebar-foreground: #e3e7eb;
+}
+/* texto azul-escuro → claro (o fundo bg-fc-dark-100/80 mantém-se escuro) */
+.dark .text-fc-dark-100, .dark body { color: #e3e7eb; }
+.dark .text-fc-dark-80 { color: #c8ced4; }
+.dark .bg-white { background-color: #1a232d; }
+.dark .text-fc-light-100 { color: #4fb0e6; }
+.dark .hover\:text-fc-light-60:hover { color: #8fd0f2; }
+/* inputs, selects e textareas nativos */
+.dark input, .dark select, .dark textarea { color: #e3e7eb; }
+.dark input::placeholder, .dark textarea::placeholder { color: #6f7b87; }
+/* faixas de mensagens (ok / erro / aviso) com texto legível */
+.dark .text-\[\#4b850d\] { color: #8fd14f; }
+.dark .text-\[\#b31d25\] { color: #ff7a7f; }
+.dark .text-\[\#8a5a00\] { color: #f2c063; }

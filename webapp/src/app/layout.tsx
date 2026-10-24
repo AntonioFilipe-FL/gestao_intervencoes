@@ -27,7 +27,11 @@ export default async function RootLayout({
   const user = await getCurrentUser();
 
   return (
-    <html lang="pt" className={`${lato.variable} h-full antialiased`}>
+    <html lang="pt" className={`${lato.variable} h-full antialiased`} suppressHydrationWarning>
+      <head>
+        {/* aplica o modo escuro antes de desenhar a página (evita o "flash" claro) */}
+        <script dangerouslySetInnerHTML={{ __html: "try{if(localStorage.getItem('theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}" }} />
+      </head>
       <body className="flex min-h-full flex-col bg-fc-grey-100 text-fc-dark-100">
         {user && <Navbar user={user} />}
         {user?.role === "admin" && <AutoReceptionNotice />}

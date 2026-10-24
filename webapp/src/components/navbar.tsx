@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { CurrentUser } from '@/lib/auth'
 import { NavLinks } from '@/components/nav-links'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 export function Navbar({ user }: { user: CurrentUser }) {
   const links = [
@@ -31,6 +32,7 @@ export function Navbar({ user }: { user: CurrentUser }) {
           </div>
           <form action="/auth/logout" method="post" className="ml-4 flex shrink-0 items-center gap-4">
             <span className="hidden text-[12px] text-fc-dark-40 md:inline">{user.email}</span>
+            <ThemeToggle />
             <button
               type="submit"
               className="cursor-pointer text-[11px] tracking-[0.02em] text-fc-dark-40 uppercase transition-colors hover:text-white"
