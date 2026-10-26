@@ -802,3 +802,17 @@ create table if not exists gestao_interv.intranet_write_log (
 
 -- Operador GSM do cartão (gsmOperator da Intranet): PT-Optimus → NOS, PT-Vodafone → VDF
 alter table gestao_interv.devices add column if not exists gsm_operator text;
+
+-- Pedidos de atualização de firmware feitos pela app (super admin)
+create table if not exists gestao_interv.firmware_upgrade_log (
+  id          uuid primary key default gen_random_uuid(),
+  imei        text not null,
+  kind        text not null default 'device' check (kind in ('device', 'canadapter')),
+  previous    text,
+  requested   text,
+  firmware_id int,
+  ok          boolean not null,
+  error       text,
+  created_by  text,
+  created_at  timestamptz not null default now()
+);

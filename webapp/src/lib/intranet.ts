@@ -799,3 +799,73 @@ export async function fetchGsmOperators(imeis: string[]): Promise<Map<string, st
     await logout(token)
   }
 }
+
+// ---------------------------------------------------------------------------
+// Firmware (só usado por ações de SUPER ADMIN — ver src/actions/firmware.ts)
+// ---------------------------------------------------------------------------
+
+export type FirmwareInfo = {
+  imei: string; vehicleId: string | null; hardware: string | null; firmware: string | null
+  available: string | null; availableId: number | null; lastUpgrade: string | null
+  canFirmware: string | null; canAvailable: string | null; canAvailableId: number | null; error?: string
+}
+
+/** Lê nos detalhes de cada equipamento (Intranet) a versão de firmware e a atualização disponível */
+export async function getFirmwareInfo(imeis: string[]): Promise<FirmwareInfo[]> {
+  if (!imeis.length) return []
+  const token = await login()
+  try {
+    const known = await sql<{ imei: string; vid: string | null }[]>`select imei, intranet_device_id as vid from devices where imei = any(${imeis})`
+    const vidOf = new Map(known.filter((k) => k.vid).map((k) => [k.imei, k.vid!]))
+    if (imeis.some((i) => !vidOf.has(i))) {
+      for (const d of asList(await getJson('/api/devices', token))) {
+        const imei = pick(d, ['imei', 'IMEI', 'Imei']); const vid = pick(d, ['vehicleId', 'VehicleId', 'vehicle.id', 'id'])
+        if (imei && vid && imeis.includes(imei)) vidOf.set(imei, vid)
+      }
+    }
+    const num = (v: string | null) => (v && /^\d+$/.test(v) && v !== '0' ? Number(v) : null)
+    const out: FirmwareInfo[] = []
+    const queue = [...imeis]
+    const worker = async () => {
+      for (let imei = queue.shift(); imei; imei = queue.shift()) {
+        const vid = vidOf.get(imei) ?? null
+        if (!vid) { out.push({ imei, vehicleId: null, hardware: null, firmware: null, available: null, availableId: null, lastUpgrade: null, canFirmware: null, canAvailable: null, canAvailableId: null, error: 'não encontrado na Intranet' }); continue }
+        try {
+          const d = await getJson(`/api/devices/details/${encodeURIComponent(vid)}`, token) as Json
+          out.push({
+            imei, vehicleId: vid, hardware: pick(d, ['hardware']), firmware: pick(d, ['firmwareVersion']),
+            available: pick(d, ['availableUpgrade']), availableId: num(pick(d, ['availableUpgradeFirmwareId'])),
+            lastUpgrade: pick(d, ['lastFirmwareUpgrade']),
+            canFirmware: pick(d, ['canAdapterFirmwareVersion']), canAvailable: pick(d, ['canAdapterAvailableUpgrade']),
+            canAvailableId: num(pick(d, ['canAdapterAvailableUpgradeFirmwareId'])),
+          })
+        } catch (e) {
+          out.push({ imei, vehicleId: vid, hardware: null, firmware: null, available: null, availableId: null, lastUpgrade: null, canFirmware: null, canAvailable: null, canAvailableId: null, error: (e as Error).message.slice(0, 120) })
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: 8 }, worker))
+    return out
+  } finally {
+    await logout(token)
+  }
+}
+
+/** Pede a atualização de firmware: equipamento (POST /api/devices/details/operations) ou CAN chip (…/operations/canadapter) */
+export async function requestFirmwareUpgrades(items: { imei: string; firmwareId: number; requested: string; previous: string | null; reason: string }[], kind: 'device' | 'canadapter' = 'device') {
+  if (!items.length) return [] as { imei: string; ok: boolean; error?: string }[]
+  const token = await login()
+  try {
+    const out: { imei: string; ok: boolean; error?: string }[] = []
+    for (const it of items) {
+      const res = await fetch(`${baseUrl()}/api/devices/details/operations${kind === 'canadapter' ? '/canadapter' : ''}?api_key=${encodeURIComponent(token)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+        body: JSON.stringify({ imei: it.imei, reason: it.reason, requestedFirmwareVersion: it.requested, previousFirmwareVersion: it.previous ?? '', firmwareId: it.firmwareId }),
+      })
+      out.push(res.ok ? { imei: it.imei, ok: true } : { imei: it.imei, ok: false, error: `HTTP ${res.status} ${(await res.text()).slice(0, 200)}` })
+    }
+    return out
+  } finally {
+    await logout(token)
+  }
+}
