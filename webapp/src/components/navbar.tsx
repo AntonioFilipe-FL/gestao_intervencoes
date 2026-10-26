@@ -9,6 +9,7 @@ export function Navbar({ user }: { user: CurrentUser }) {
     ...(user.role === 'admin' ? [{ href: '/interventions/new', label: 'Novo registo' }] : []),
     { href: '/stock', label: 'Stock Material' },
     { href: '/accessories', label: 'Stock Acessórios' },
+    { href: '/equipment-update', label: 'Atualização Equipamento' },
     { href: '/reports', label: 'Relatórios' },
     ...(user.role === 'admin' ? [{ href: '/settings', label: 'Configurações' }] : []),
     { href: '/help', label: 'Ajuda' },

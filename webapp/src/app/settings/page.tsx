@@ -11,7 +11,6 @@ import { getCurrentUser } from '@/lib/auth'
 import { getStockMinMargin } from '@/lib/stock-settings'
 import { SuperAdminSettings } from '@/components/settings/SuperAdminSettings'
 import { IntranetPlates } from '@/components/settings/IntranetPlates'
-import { FirmwareUpgrade } from '@/components/settings/FirmwareUpgrade'
 import { sql } from '@/lib/db'
 import { UserManagement } from '@/components/settings/UserManagement'
 import { EmailSettings } from '@/components/settings/EmailSettings'
@@ -69,8 +68,6 @@ export default async function SettingsPage({
                   <SuperAdminSettings margin={margin} />
                   <hr className="border-fc-dark-20" />
                   <IntranetPlates warehouses={await sql<{ id: string; name: string }[]>`select id, name from warehouses where active and type <> 'mobilizado' order by name`} />
-                  <hr className="border-fc-dark-20" />
-                  <FirmwareUpgrade />
                 </div>
               </TabsContent>
             )}

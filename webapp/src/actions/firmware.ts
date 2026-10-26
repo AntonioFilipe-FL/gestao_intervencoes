@@ -1,7 +1,7 @@
 'use server'
 
 import { sql } from '@/lib/db'
-import { requireSuperAdmin } from '@/lib/auth'
+import { requireUser } from '@/lib/auth'
 import { equipmentNamer } from '@/lib/equipment-namer'
 import { getFirmwareInfo, requestFirmwareUpgrades } from '@/lib/intranet'
 
@@ -37,21 +37,26 @@ async function previewCore(input: { accountIds: string[]; imeis: string; kind?: 
     order by 5, d.imei`
   const eqName = await equipmentNamer()
   const base = rows.map((r) => ({ ...r, equipment: eqName(r.hardware) ?? r.equipment }))
-  const allowed = (e: string | null) => !!e && MODELS.includes(e.toUpperCase())
+  // modelo abrangido: pelo equipamento da app OU pelo hardware da Intranet (ex.: "MD C4MAX V4 3GEU" → C4MAX V4)
+  const fold = (v: string | null | undefined) => (v ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const modelOf = (r: { equipment: string | null; hardware: string | null }) =>
+    MODELS.find((m) => fold(m) === fold(r.equipment)) ??
+    [...MODELS].sort((a, b) => b.length - a.length).find((m) => fold(r.hardware).includes(fold(m))) ?? null
+  const allowedRow = (r: { equipment: string | null; hardware: string | null }) => !!modelOf(r)
   // só se lê na Intranet os modelos abrangidos (máx. 300 de cada vez)
-  const toRead = base.filter((r) => allowed(r.equipment)).map((r) => r.imei).slice(0, 300)
+  const toRead = base.filter((r) => allowedRow(r)).map((r) => r.imei).slice(0, 300)
   const info = new Map((await getFirmwareInfo(toRead, can ? 'canadapter' : 'device')).map((i) => [i.imei, i]))
   const out: FirmwareRow[] = base.map((r) => {
     const i = info.get(r.imei)
     let issue: string | null = null
-    if (!allowed(r.equipment)) issue = `Modelo não abrangido (${MODELS.join(', ')})`
+    if (!allowedRow(r)) issue = `Modelo não abrangido (${MODELS.join(', ')})`
     else if (!i) issue = 'Não lido (limite de 300 por pré-visualização)'
     else if (i.error) issue = i.error
     const cur = can ? i?.canFirmware : i?.firmware, av = can ? i?.canAvailable : i?.available, avId = can ? i?.canAvailableId : i?.availableId
     if (!issue && (!avId || !av)) issue = 'Sem atualização disponível'
     else if (!issue && av === cur) issue = 'Já atualizado'
     else if (!issue && i?.lastOp?.status && /pend|request|queue|progress|sent/i.test(i.lastOp.status)) issue = `Já tem um pedido pendente (${i.lastOp.firmware ?? ''})`
-    return { imei: r.imei, warehouse: r.warehouse, equipment: r.equipment, firmware: cur ?? null, available: av ?? null, availableId: avId ?? null, issue,
+    return { imei: r.imei, warehouse: r.warehouse, equipment: modelOf(r) ?? r.equipment, firmware: cur ?? null, available: av ?? null, availableId: avId ?? null, issue,
              account: r.account, lastStatus: i?.lastOp?.status ?? null, lastDate: i?.lastOp?.requested ?? null }
   })
   const seen = new Set(out.map((r) => r.imei))
@@ -63,14 +68,14 @@ async function previewCore(input: { accountIds: string[]; imeis: string; kind?: 
 
 /** Pré-visualização (só leitura na Intranet) */
 export async function previewFirmware(input: { accountIds: string[]; imeis: string; kind?: FirmwareKind }) {
-  await requireSuperAdmin()
+  await requireUser()
   return previewCore(input)
 }
 
-/** Pede a atualização de firmware (SÓ super admin). Revalida tudo no servidor antes de enviar. */
+/** Pede a atualização de firmware (qualquer utilizador com acesso à app). Revalida tudo no servidor antes de enviar. */
 export async function applyFirmware(input: { imeis: string[]; kind?: FirmwareKind }) {
   try {
-    const user = await requireSuperAdmin()
+    const user = await requireUser()
     const kind: FirmwareKind = input.kind === 'canadapter' ? 'canadapter' : 'device'
     const rows = (await previewCore({ accountIds: [], imeis: input.imeis.join('\n'), kind })).filter((r) => !r.issue && r.availableId && r.available)
     if (!rows.length) throw new Error('Nada a atualizar (sem atualização disponível ou modelo não abrangido).')

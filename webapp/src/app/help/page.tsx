@@ -67,6 +67,15 @@ const SECTIONS: Section[] = [
     </>,
   },
   {
+    id: 'atualizacao', title: 'Atualização de equipamento',
+    body: <L items={[
+      <>Menu <b>Atualização Equipamento</b>, disponível para todos os utilizadores.</>,
+      <>Separador <b>Firmware do equipamento</b> (FMC640, FMC650, FMC130, FMC150, C4MAX V8, C4MAX V4) e <b>CAN chip</b> (só FMC150).</>,
+      <>Escolhe-se uma ou mais <b>contas Intranet</b> e/ou colam-se IMEIs; a pré-visualização lê na Intranet a versão atual, a disponível e o último pedido, e só mostra os equipamentos que podem ser atualizados.</>,
+      <>Marcam-se os pretendidos, <b>Testar com 1</b> e depois <b>Atualizar</b>. O pedido fica <i>Pending</i> na Intranet até o equipamento comunicar. Equipamentos com pedido pendente não podem ser pedidos de novo.</>,
+    ]} />,
+  },
+  {
     id: 'acessorios', title: 'Stock acessórios', who: 'admin',
     body: <L items={[
       <>Quantidade por armazém = última <b>contagem</b> + receções, transferências e acessórios gastos/retomados nas intervenções.</>,

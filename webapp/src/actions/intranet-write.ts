@@ -1,7 +1,7 @@
 'use server'
 
 import { sql } from '@/lib/db'
-import { requireAdmin, requireSuperAdmin } from '@/lib/auth'
+import { requireAdmin, requireSuperAdmin, requireUser } from '@/lib/auth'
 import { fetchGsmOperators, updateIntranetDevices } from '@/lib/intranet'
 
 export type PlateRow = {
@@ -79,7 +79,7 @@ async function previewCore(input: { warehouseIds: string[]; imeis: string }): Pr
 
 /** Contas Intranet conhecidas (para escolher o destino). `onlyFrotcom`: só as "Frotcom Lusitana…" (transferências) */
 export async function getIntranetAccounts(onlyFrotcom = false) {
-  await requireAdmin()
+  await requireUser()
   return sql<{ id: string; name: string }[]>`
     select * from (
       select distinct on (id) id, name from (
