@@ -11,6 +11,7 @@ export function Navbar({ user }: { user: CurrentUser }) {
     { href: '/accessories', label: 'Stock Acessórios' },
     { href: '/reports', label: 'Relatórios' },
     ...(user.role === 'admin' ? [{ href: '/settings', label: 'Configurações' }] : []),
+    { href: '/help', label: 'Ajuda' },
   ]
 
   return (
