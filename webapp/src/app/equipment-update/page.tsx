@@ -1,9 +1,11 @@
+import { can } from '@/lib/permissions'
+import { redirect } from 'next/navigation'
 import { requireUser } from '@/lib/auth'
 import { FirmwareUpgrade } from '@/components/settings/FirmwareUpgrade'
 
 /** Atualização de equipamentos (firmware e CAN chip) — disponível para todos os utilizadores */
 export default async function EquipmentUpdatePage() {
-  await requireUser()
+  if (!can(await requireUser(), 'equipment')) redirect('/help')
   return (
     <div className="mx-auto max-w-[1920px] space-y-5 px-4 py-6 sm:px-6 lg:px-8">
       <div>

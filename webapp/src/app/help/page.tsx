@@ -11,10 +11,11 @@ const SECTIONS: Section[] = [
   {
     id: 'perfis', title: 'Perfis de acesso',
     body: <L items={[
-      <><b>User</b> — consulta intervenções, stock e relatórios.</>,
+      <><b>User</b> — consulta intervenções e relatórios; pede atualizações de firmware/CAN chip (Atualização Equipamento).</>,
       <><b>Financeiro</b> — como o user, e marca a faturação como <i>Processado</i>.</>,
       <><b>Admin</b> — regista e edita intervenções, receções, transferências, acertos e configurações.</>,
-      <><b>Super admin</b> — tudo o que o admin faz, mais: gerir utilizadores e permissões, margem do stock mínimo e atualizar matrículas/contas na Intranet.</>,
+      <><b>Perfis personalizados</b> — o super admin cria perfis em <i>Configurações → Perfis</i> e define, por menu (Intervenções, Stock material, Stock acessórios, Atualização equipamento, Relatórios, Configurações, Faturação), <i>Sem acesso</i>, <i>Ler</i> ou <i>Ler e escrever</i>. Os menus sem acesso ficam escondidos. Os perfis User e Financeiro também podem ser ajustados.</>,
+      <><b>Super admin</b> — tudo o que o admin faz, mais: <b>gerir utilizadores e permissões</b> (só o super admin), margem do stock mínimo, matrículas/contas na Intranet e aviso de contas novas. O super admin não pode ser alterado nem removido.</>,
     ]} />,
   },
   {
@@ -25,13 +26,15 @@ const SECTIONS: Section[] = [
         <><b>Material gasto</b> (saída) e <b>material retomado</b> (entrada) movimentam o stock: o IMEI gasto sai do armazém de saída; o retomado entra no armazém de entrada.</>,
         <>Ao escolher um equipamento, os acessórios do <b>kit</b> são sugeridos (exceto em assistências, onde os acessórios ficam na viatura).</>,
         <>Nas <b>Entregas / Entradas de Material</b> podem colar-se vários IMEIs em <i>IMEIs adicionais</i>; o kit dos equipamentos entra automaticamente se não for registado à mão.</>,
-        <>Editar ou eliminar uma intervenção recalcula o stock dessa intervenção.</>,
+        <>O detalhe da intervenção mostra o <b>Equipamento</b>, que é o que movimenta o stock.</>,
+        <>Editar ou eliminar uma intervenção recalcula o stock dessa intervenção (e os acessórios).</>,
         <>Na lista, as colunas <b>Faturar</b> e <b>Processado</b> controlam a faturação; o filtro <i>Faturação</i> mostra as que estão por processar.</>,
       ]} />
       <H>Regras de stock nas intervenções</H>
       <L items={[
         <><b>Venda</b>: o equipamento instalado sai do stock. <b>Aluguer</b>: fica no armazém <i>Instalado Aluguer (Mobilizado)</i>.</>,
-        <><b>Desinstalação</b> sem armazém de entrada: Aluguer → sai do Mobilizado e entra no armazém do técnico; Venda → o equipamento é do cliente e não entra no stock.</>,
+        <><b>Desinstalação</b> sem armazém de entrada: Aluguer → sai do Mobilizado e entra no armazém do técnico; Venda → o equipamento é do cliente e sai do stock (se ainda lá estivesse).</>,
+        <>Clientes de Venda/Aluguer: a modalidade da intervenção define o destino do equipamento. Defina a modalidade de cada cliente em Configurações › Clientes.</>,
       ]} />
     </>,
   },
@@ -43,6 +46,8 @@ const SECTIONS: Section[] = [
         <>A tabela <b>Por equipamento e armazém</b> mostra quantidades; clicar num número abre a lista desses IMEIs. O equipamento é sempre o do hardware da Intranet.</>,
         <><b>IMEIs em stock</b> e <b>Últimos movimentos</b> abrem-se ao clicar no título. Clicar num IMEI mostra o histórico dele.</>,
         <><b>Exportar Excel</b> gera a lista de IMEIs (atualiza da Intranet antes, se necessário).</>,
+        <>Aviso <b>instalados na Intranet</b>: IMEIs que estão em stock mas a Intranet mostra numa viatura de cliente — <b>Dar saída</b> usa a modalidade da conta do cliente (Aluguer → Mobilizado; Venda → sai do stock).</>,
+        <>Aviso <b>Uso Interno</b>: IMEIs nas contas de demonstração/teste (demopt, testing) que devem estar no armazém Uso Interno.</>
       ]} />
       <H>Receção</H>
       <L items={[<>Material que chega (compra, fornecedor). Escolhe-se o armazém e a modalidade; o equipamento é identificado pelo hardware da Intranet.</>,
@@ -51,7 +56,10 @@ const SECTIONS: Section[] = [
       <L items={[
         <>Origem <b>Automático</b>: a app vê onde está cada IMEI; pode-se escolher um ou vários armazéns de origem (com <i>ver IMEIs</i> em cada um). O destino é sempre um.</>,
         <>Do A1/A2 para um técnico, os acessórios do kit vão também.</>,
-        <>Opção <b>Atualizar a matrícula na Intranet</b>: muda a matrícula para a nomenclatura do armazém de destino e, se escolhida, transfere para uma conta <i>Frotcom Lusitana…</i>.</>,
+        <>Opção <b>Atualizar a matrícula na Intranet</b>: muda a matrícula para a nomenclatura do armazém de destino e, se escolhida, transfere para uma conta <i>Frotcom Lusitana…</i> (sem apagar dados). Formatos:
+          <L items={[<><code>XX_Ay_ZZZ_12345</code> — RL, RN, LS, CG, TC, PG… (A1/A2 → <b>FL</b>); y = 1 Venda / 2 Aluguer; ZZZ = NOS (PT-Optimus) / VDF (PT-Vodafone); últimos 5 dígitos</>,
+            <><code>RMA_Ay_ZZZ12345</code> · <code>ABATE_ZZZ12345</code> · <code>Trash_123456</code> (6 dígitos)</>,
+            <>Equip. Pago, Uso Interno e Mobilizado não são alterados. PIN, MSISDN e operador ficam iguais.</>]} /></>,
       ]} />
       <H>Acerto de stock</H>
       <L items={[
@@ -61,7 +69,8 @@ const SECTIONS: Section[] = [
         <><b>Mudar modalidade</b>: Venda ↔ Aluguer sem mudar de armazém.</>,
       ]} />
       <H>Stock mínimo</H>
-      <L items={[<>Define-se por equipamento e armazém. Na tabela: <span className="text-[#d0312d]">●</span> igual ou abaixo do mínimo, <span className="text-[#f2b600]">●</span> perto do mínimo. Os admins recebem um aviso diário ao entrar.</>]} />
+      <L items={[<>Botão <b>Stock mínimo</b>: define-se por equipamento e armazém. Na tabela: <span className="text-[#d0312d]">●</span> igual ou abaixo do mínimo, <span className="text-[#f2b600]">●</span> até X% acima (margem definida pelo super admin, por omissão 20%).</>,
+        <>Os admins recebem, uma vez por dia ao entrar, o aviso <b>Stock abaixo do mínimo</b> por armazém/técnico.</>]} />
       <H>Histórico de transferências</H>
       <L items={[<>Lotes de receções, transferências e acertos agrupados; um movimento manual pode ser <b>anulado</b>.</>]} />
     </>,
@@ -80,7 +89,9 @@ const SECTIONS: Section[] = [
     body: <L items={[
       <>Quantidade por armazém = última <b>contagem</b> + receções, transferências e acessórios gastos/retomados nas intervenções.</>,
       <>Um ✓ indica que o armazém já foi contado. Valores a vermelho são negativos (gastou-se mais do que entrou): corrigem-se com uma <b>Contagem</b>.</>,
+      <>Os <b>kits</b> entram/saem automaticamente: receção automática (A1), Entregas/Entradas de Material sem acessórios registados, e transferências de equipamento do A1/A2 para um técnico.</>,
       <>Para os kits contarem, cada acessório tem de estar associado a um item em Configurações › Mapeamento de acessórios.</>,
+      <>Armazéns inativos (ex.: Stock Frotcom) não aparecem e não contam no total.</>,
     ]} />,
   },
   {
@@ -89,6 +100,7 @@ const SECTIONS: Section[] = [
       <>Tabelas de referência: técnicos, clientes (com Venda/Aluguer), equipamentos (e kits), acessórios, tipos, motivos, armazéns, bundles.</>,
       <><b>Intranet</b>: sincronização de contas e IMEIs; associar contas novas a clientes.</>,
       <><b>Email</b>: envio automático à financeira (ligar/desligar).</>,
+      <>Os <b>Utilizadores</b> (acessos e perfis) só são geridos pelo super admin.</>,
     ]} />,
   },
   {
@@ -96,14 +108,16 @@ const SECTIONS: Section[] = [
     body: <L items={[
       <><b>Utilizadores</b>: adicionar/remover acessos, mudar perfis e tornar alguém super admin (retirar só por script).</>,
       <><b>Margem do stock mínimo</b> (aviso amarelo).</>,
-      <><b>Matrículas na Intranet</b>: escolher armazéns e/ou IMEIs, pré-visualizar e atualizar (Testar com 1 primeiro). Formatos: <code>XX_Ay_ZZZ_12345</code> (A1/A2 → FL), <code>RMA_Ay_ZZZ12345</code>, <code>ABATE_ZZZ12345</code>, <code>Trash_123456</code>; ZZZ = NOS (PT-Optimus) / VDF (PT-Vodafone). PIN, MSISDN e operador não são alterados.</>,
+      <><b>Matrículas na Intranet</b>: escolher armazéns e/ou IMEIs, marcar os pretendidos, <b>Testar com 1</b> e atualizar; opcionalmente transferir para qualquer conta Intranet. Mesmos formatos da transferência (ver Stock material). Tudo fica registado.</>,
       <>Aviso de <b>contas novas na Intranet</b> ao entrar, com opção de criar o cliente.</>,
     ]} />,
   },
   {
     id: 'outros', title: 'Outros',
     body: <L items={[
-      <><b>Modo escuro</b>: ícone 🌙 / ☀️ na barra de topo, ao lado do email.</>,
+      <><b>Modo escuro</b>: ícone 🌙 / ☀️ na barra de topo, ao lado do email (fica guardado no browser).</>,
+      <>Avisos ao entrar: <b>Material novo recebido</b> e <b>Stock abaixo do mínimo</b> (admins), <b>Contas novas na Intranet</b> (super admin).</>,
+      <>Janelas e campos de IMEIs grandes têm scroll; as secções longas do Stock abrem-se ao clicar no título.</>,
       <>Em caso de dúvida ou erro, contacte o administrador da aplicação.</>,
     ]} />,
   },

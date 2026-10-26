@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { randomUUID } from 'crypto'
 import { sql } from '@/lib/db'
-import { requireAdmin, requireUser } from '@/lib/auth'
+import { requirePerm, requireUser } from '@/lib/auth'
 
 export type AccStockRow = { item_id: string; item: string; warehouse_id: string | null; warehouse: string | null; quantity: number; counted_at: string | null }
 
@@ -22,7 +22,7 @@ export type AccMove = { id: string | null; date: string; kind: string; warehouse
 
 /** Movimentos de um item (manuais + intervenções), mais recentes primeiro */
 export async function getAccessoryMovements(itemId: string, warehouseId?: string) {
-  await requireAdmin()
+  await requirePerm('accessories', 'read')
   return sql<AccMove[]>`
     select * from (
       select m.id::text, m.moved_at::text as date, m.kind, w.name as warehouse, m.quantity,
@@ -51,7 +51,7 @@ export async function registerAccessoryMovement(input: {
   quantity: number; date?: string; notes?: string
 }) {
   try {
-    const user = await requireAdmin()
+    const user = await requirePerm('accessories', 'write')
     const q = Math.trunc(Number(input.quantity))
     if (!input.itemId || !input.warehouseId) throw new Error('Escolha o acessório e o armazém.')
     if (!Number.isFinite(q) || (input.kind === 'contagem' ? q < 0 : q === 0)) throw new Error('Quantidade inválida.')
@@ -78,7 +78,7 @@ export async function registerAccessoryMovement(input: {
 /** Anula um movimento manual (numa transferência, anula as duas linhas) */
 export async function deleteAccessoryMovement(id: string) {
   try {
-    await requireAdmin()
+    await requirePerm('accessories', 'write')
     const [m] = await sql<{ group_id: string | null }[]>`select group_id from accessory_movements where id = ${id}`
     if (!m) throw new Error('Movimento não encontrado.')
     if (m.group_id) await sql`delete from accessory_movements where group_id = ${m.group_id}`
@@ -93,7 +93,7 @@ export async function deleteAccessoryMovement(id: string) {
 // --- Configurações › Stock acessórios -------------------------------------------------
 
 export async function getAccessoryMapping() {
-  await requireAdmin()
+  await requirePerm('accessories', 'write')
   const [items, accessories] = await Promise.all([
     sql<{ id: string; name: string; active: boolean }[]>`select id, name, active from accessory_stock_items order by lower(name)`,
     sql<{ id: string; name: string; active: boolean; item_id: string | null; uses: number }[]>`
@@ -106,7 +106,7 @@ export async function getAccessoryMapping() {
 
 export async function setAccessoryMapping(accessoryId: string, itemId: string | null) {
   try {
-    await requireAdmin()
+    await requirePerm('accessories', 'write')
     if (itemId) await sql`insert into accessory_stock_map (accessory_id, item_id) values (${accessoryId}, ${itemId})
                           on conflict (accessory_id) do update set item_id = excluded.item_id`
     else await sql`delete from accessory_stock_map where accessory_id = ${accessoryId}`
@@ -119,7 +119,7 @@ export async function setAccessoryMapping(accessoryId: string, itemId: string | 
 
 export async function upsertAccessoryItem(input: { id?: string; name: string; active?: boolean }) {
   try {
-    await requireAdmin()
+    await requirePerm('accessories', 'write')
     const name = input.name.trim()
     if (!name) throw new Error('Indique o nome.')
     if (input.id) await sql`update accessory_stock_items set name = ${name}, active = ${input.active ?? true} where id = ${input.id}`

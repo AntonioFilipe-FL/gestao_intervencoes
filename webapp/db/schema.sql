@@ -816,3 +816,28 @@ create table if not exists gestao_interv.firmware_upgrade_log (
   created_by  text,
   created_at  timestamptz not null default now()
 );
+
+-- ===== Perfis configuráveis (RBAC por menu) =====
+create table if not exists roles (
+  name       text primary key,
+  label      text not null,
+  builtin    boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create table if not exists role_permissions (
+  role   text not null references roles(name) on update cascade on delete cascade,
+  module text not null,
+  level  text not null check (level in ('none', 'read', 'write')),
+  primary key (role, module)
+);
+insert into roles (name, label, builtin) values
+  ('admin', 'Administrador', true), ('user', 'Utilizador', true), ('financeiro', 'Financeiro', true)
+on conflict (name) do nothing;
+insert into role_permissions (role, module, level) values
+  ('user','interventions','read'), ('user','stock','read'), ('user','accessories','read'), ('user','equipment','write'),
+  ('user','reports','read'), ('user','settings','none'), ('user','billing','none'),
+  ('financeiro','interventions','read'), ('financeiro','stock','read'), ('financeiro','accessories','read'), ('financeiro','equipment','write'),
+  ('financeiro','reports','read'), ('financeiro','settings','none'), ('financeiro','billing','write')
+on conflict (role, module) do nothing;
+-- o papel passa a ser qualquer perfil da tabela roles
+alter table profiles drop constraint if exists profiles_role_check;

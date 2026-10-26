@@ -30,7 +30,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
-export function UserManagement() {
+export function UserManagement({ roles }: { roles: { name: string; label: string }[] }) {
   const [users, setUsers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isAddOpen, setIsAddOpen] = useState(false)
@@ -118,7 +118,7 @@ export function UserManagement() {
                   <TableCell className="font-medium">{user.email}</TableCell>
                   <TableCell>
                     <Badge variant={user.role === 'admin' || user.is_superadmin ? 'default' : 'secondary'}>
-                      {user.is_superadmin ? 'super admin' : user.role}
+                      {user.is_superadmin ? 'super admin' : roles.find((r) => r.name === user.role)?.label ?? user.role}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right flex justify-end gap-2">
@@ -133,13 +133,11 @@ export function UserManagement() {
                       defaultValue={user.role}
                       onValueChange={(value) => value && handleRoleChange(user.email, value)}
                     >
-                      <SelectTrigger className="w-[120px]">
+                      <SelectTrigger className="w-[160px]">
                         <SelectValue placeholder="Papel" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="user">User</SelectItem>
-                        <SelectItem value="financeiro">Financeiro</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
+                        {roles.map((r) => <SelectItem key={r.name} value={r.name}>{r.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
                     <Button 
@@ -183,9 +181,7 @@ export function UserManagement() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="user">Utilizador Comum</SelectItem>
-                  <SelectItem value="financeiro">Financeiro (só marca faturação como processada)</SelectItem>
-                  <SelectItem value="admin">Administrador</SelectItem>
+                  {roles.map((r) => <SelectItem key={r.name} value={r.name}>{r.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

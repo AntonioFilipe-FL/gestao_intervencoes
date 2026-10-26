@@ -1,3 +1,4 @@
+import { can } from '@/lib/permissions'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { sql } from '@/lib/db'
@@ -18,7 +19,7 @@ const KIND: Record<string, string> = { transferencia: 'Transferência', rececao:
 export default async function TransfersHistoryPage({ searchParams }: Props) {
   const p = await searchParams
   const user = await requireUser()
-  if (user.role !== 'admin') redirect('/stock')
+  if (!can(user, 'stock', 'write')) redirect('/stock')
   const kind = p.kind ?? 'transferencia'
   const [batches, warehouses] = await Promise.all([
     getMovementBatches({ ...p, kind: kind === 'todos' ? undefined : kind }),

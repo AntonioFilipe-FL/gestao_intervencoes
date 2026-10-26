@@ -1,3 +1,4 @@
+import { can } from '@/lib/permissions'
 import { notFound, redirect } from 'next/navigation'
 import { sql } from '@/lib/db'
 import { requireUser } from '@/lib/auth'
@@ -14,7 +15,7 @@ interface Props {
 export default async function EditInterventionPage({ params }: Props) {
   const { id } = await params
   const user = await requireUser()
-  if (user.role !== 'admin') redirect(`/interventions/${id}`)
+  if (!can(user, 'interventions', 'write')) redirect(`/interventions/${id}`)
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound()
 
   const [row] = await sql`select * from interventions where id = ${id}`

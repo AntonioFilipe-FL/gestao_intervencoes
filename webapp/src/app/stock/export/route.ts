@@ -1,3 +1,4 @@
+import { can } from '@/lib/permissions'
 import { equipmentNamer } from '@/lib/equipment-namer'
 import ExcelJS from 'exceljs'
 import { sql } from '@/lib/db'
@@ -13,7 +14,7 @@ const MAX_SYNC_AGE_MS = 10 * 60 * 1000
  */
 export async function GET(request: Request) {
   const user = await getCurrentUser()
-  if (user?.role !== 'admin') return new Response('Sem permissão', { status: 403 })
+  if (!user || !can(user, 'stock', 'write')) return new Response('Sem permissão', { status: 403 })
   const wh = new URL(request.url).searchParams.get('wh')
   const whId = wh && /^[0-9a-f-]{36}$/i.test(wh) ? wh : null
 

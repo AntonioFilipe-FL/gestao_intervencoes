@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { sql } from '@/lib/db'
 import { getCurrentUser, requireSuperAdmin } from '@/lib/auth'
+import { can } from '@/lib/permissions'
 
 /** Lista de emails autorizados e respetivos papéis (só o super admin gere permissões) */
 export async function getUserRoles() {
@@ -22,7 +23,8 @@ export async function updateUserRole(email: string, role: string) {
     const me = await requireSuperAdmin()
     const e = email.toLowerCase().trim()
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) throw new Error('Email inválido')
-    if (!['admin', 'user', 'financeiro'].includes(role)) throw new Error('Papel inválido')
+    const [r] = await sql`select 1 from roles where name = ${role}`
+    if (!r) throw new Error('Perfil inválido')
     if (e === me.email.toLowerCase() && role !== 'admin') throw new Error('Não pode retirar a si próprio o papel de admin.')
     await assertNotSuperAdmin(e)
     await sql`insert into profiles (email, role) values (${e}, ${role})
@@ -51,6 +53,12 @@ export async function deleteUserProfile(email: string) {
 export async function isAdmin() {
   const user = await getCurrentUser()
   return user?.role === 'admin'
+}
+
+/** Pode entrar em Configurações (perfil com leitura) */
+export async function canSettings(level: 'read' | 'write' = 'read') {
+  const user = await getCurrentUser()
+  return !!user && (user.superadmin || can(user, 'settings', level))
 }
 
 /** Promove um utilizador a super admin (só o super admin). Retirar o perfil só por script, para não ficar sem super admin. */

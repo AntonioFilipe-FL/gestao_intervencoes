@@ -1,7 +1,8 @@
+import { can } from '@/lib/permissions'
 'use server'
 
 import { sql } from '@/lib/db'
-import { requireUser } from '@/lib/auth'
+import { requirePerm, requireUser } from '@/lib/auth'
 import { equipmentNamer } from '@/lib/equipment-namer'
 import { getFirmwareInfo, requestFirmwareUpgrades } from '@/lib/intranet'
 
@@ -68,14 +69,14 @@ async function previewCore(input: { accountIds: string[]; imeis: string; kind?: 
 
 /** Pré-visualização (só leitura na Intranet) */
 export async function previewFirmware(input: { accountIds: string[]; imeis: string; kind?: FirmwareKind }) {
-  await requireUser()
+  await requirePerm('equipment', 'read')
   return previewCore(input)
 }
 
 /** Pede a atualização de firmware (qualquer utilizador com acesso à app). Revalida tudo no servidor antes de enviar. */
 export async function applyFirmware(input: { imeis: string[]; kind?: FirmwareKind }) {
   try {
-    const user = await requireUser()
+    const user = await requirePerm('equipment', 'write')
     const kind: FirmwareKind = input.kind === 'canadapter' ? 'canadapter' : 'device'
     const rows = (await previewCore({ accountIds: [], imeis: input.imeis.join('\n'), kind })).filter((r) => !r.issue && r.availableId && r.available)
     if (!rows.length) throw new Error('Nada a atualizar (sem atualização disponível ou modelo não abrangido).')

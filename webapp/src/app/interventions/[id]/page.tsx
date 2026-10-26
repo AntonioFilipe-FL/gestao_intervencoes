@@ -1,10 +1,11 @@
+import { can } from '@/lib/permissions'
 import { getInterventionById } from '@/services/database'
 import { requireUser } from '@/lib/auth'
 import { BillingProcessed } from '@/components/interventions/BillingProcessed'
 import { isBillable } from '@/lib/billing-notification'
 import { BillingEmailStatus } from '@/components/interventions/BillingEmailStatus'
 import { DeleteIntervention } from '@/components/interventions/DeleteIntervention'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
@@ -56,6 +57,7 @@ export default async function InterventionDetailsPage({ params }: Props) {
   const { id } = await params
   const [user, intervention] = await Promise.all([requireUser(), getInterventionById(id)])
 
+  if (!can(user, 'interventions')) redirect('/help')
   if (!intervention) {
     notFound()
   }
@@ -75,7 +77,7 @@ export default async function InterventionDetailsPage({ params }: Props) {
             </p>
           </div>
         </div>
-        {user.role === 'admin' && (
+        {can(user, 'interventions', 'write') && (
           <div className="flex gap-2">
             <DeleteIntervention
               id={intervention.id}
@@ -180,7 +182,7 @@ export default async function InterventionDetailsPage({ params }: Props) {
               <DetailItem label="Faturar?" value={intervention.billing} />
               {isBillable(intervention.billing) && (
                 <BillingProcessed id={intervention.id} processedAt={intervention.billing_processed_at ? String(intervention.billing_processed_at) : null}
-                  processedBy={intervention.billing_processed_by} canEdit={user.role === 'admin' || user.role === 'financeiro'} />
+                  processedBy={intervention.billing_processed_by} canEdit={can(user, 'billing', 'write')} />
               )}
               {intervention.billing_email && <DetailItem label="Email de faturação (histórico)" value={intervention.billing_email} />}
               <DetailItem label="Observações de Faturação" value={intervention.billing_observations} />
@@ -190,7 +192,7 @@ export default async function InterventionDetailsPage({ params }: Props) {
                 notifiedAt={intervention.billing_notified_at}
                 notifiedBy={intervention.billing_notified_by}
                 error={intervention.billing_notify_error}
-                canSend={user.role === 'admin'}
+                canSend={can(user, 'interventions', 'write')}
               />
             </CardContent>
           </Card>

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { sql } from '@/lib/db'
-import { requireAdmin, requireUser } from '@/lib/auth'
+import { requirePerm, requireUser } from '@/lib/auth'
 import { matchEquipment } from '@/lib/hardware'
 import { equipmentNamer } from '@/lib/equipment-namer'
 
@@ -54,7 +54,7 @@ export async function getStockTotals() {
 
 /** IMEIs em stock (com filtros) */
 export async function getStockItems(f: { warehouseId?: string; modality?: string; q?: string; installed?: boolean }) {
-  await requireAdmin()
+  await requirePerm('stock', 'read')
   const q = (f.q ?? '').replace(/\s/g, '')
   const text = (f.q ?? '').trim()
   const isImei = /^\d+$/.test(q)
@@ -87,7 +87,7 @@ export async function getStockItems(f: { warehouseId?: string; modality?: string
 
 /** Últimos movimentos (opcionalmente de um IMEI) */
 export async function getMovements(imei?: string) {
-  await requireAdmin()
+  await requirePerm('stock', 'read')
   const v = (imei ?? '').replace(/\s/g, '')
   return sql<Movement[]>`
     select m.id, m.imei, m.kind, m.moved_at::text, wf.name as from_wh, wt.name as to_wh, e.name as equipment,
@@ -111,7 +111,7 @@ export async function registerReception(input: {
   warehouseId: string; modality: string; equipmentId?: string; imeis: string; date: string; notes?: string
 }): Promise<Result> {
   try {
-    const user = await requireAdmin()
+    const user = await requirePerm('stock', 'write')
     if (!input.warehouseId) throw new Error('Escolha o armazém.')
     if (input.modality !== 'Venda' && input.modality !== 'Aluguer') throw new Error('Escolha Venda ou Aluguer.')
     const imeis = parseImeis(input.imeis)
@@ -174,7 +174,7 @@ export async function registerTransfer(input: {
   fromWarehouseId?: string; fromWarehouseIds?: string[]; toWarehouseId: string; imeis: string; date: string; modality?: string; notes?: string
 }): Promise<Result> {
   try {
-    const user = await requireAdmin()
+    const user = await requirePerm('stock', 'write')
     if (!input.toWarehouseId) throw new Error('Escolha o armazém de destino.')
     const auto = !input.fromWarehouseId
     const origins = auto ? (input.fromWarehouseIds ?? []) : [input.fromWarehouseId!]
@@ -211,7 +211,7 @@ export async function registerTransfer(input: {
 /** Anula um movimento manual (receção/transferência). Os das intervenções mudam-se editando a intervenção. */
 export async function deleteMovement(id: string) {
   try {
-    await requireAdmin()
+    await requirePerm('stock', 'write')
     const [m] = await sql`delete from stock_movements where id = ${id} and intervention_id is null returning id`
     if (!m) throw new Error('Só é possível anular receções e transferências (os movimentos das intervenções mudam-se editando a intervenção).')
     revalidatePath('/stock')
@@ -238,7 +238,7 @@ export async function getInstalledConflicts() {
  */
 export async function removeInstalledFromStock(input: { warehouseId?: string; imeis?: string[]; toWarehouseId?: string }) {
   try {
-    const user = await requireAdmin()
+    const user = await requirePerm('stock', 'write')
     const imeis = (input.imeis ?? []).filter((i) => /^\d{15}$/.test(i))
     const rows = await sql<{ imei: string; warehouse_id: string; equipment_id: string | null; modality: string | null; client_modality: string | null; plate: string; client: string | null }[]>`
       select c.imei, c.warehouse_id, c.equipment_id, c.modality, d.license_plate as plate, coalesce(dc.name, p.name) as client,
@@ -282,7 +282,7 @@ export async function removeInstalledFromStock(input: { warehouseId?: string; im
 
 /** IMEIs nas contas de uso interno da Intranet (demopt, testing) que na app não estão no armazém "Uso Interno" */
 export async function getInternalUseMismatches() {
-  await requireAdmin()
+  await requirePerm('stock', 'read')
   return sql<{ imei: string; plate: string | null; account: string | null; warehouse: string | null; modality: string | null }[]>`
     select d.imei, d.license_plate as plate, coalesce(dc.intranet_short_name, dc.name, p.name) as account, w.name as warehouse, c.modality
     from devices d
@@ -298,7 +298,7 @@ export async function getInternalUseMismatches() {
 /** Passa para o armazém "Uso Interno" os IMEIs das contas demopt/testing (todos ou os indicados) */
 export async function moveToInternalUse(imeis?: string[]) {
   try {
-    const user = await requireAdmin()
+    const user = await requirePerm('stock', 'write')
     const [uso] = await sql<{ id: string }[]>`select id from warehouses where active and name ~* '^uso interno' order by name limit 1`
     if (!uso) throw new Error('Não existe um armazém "Uso Interno".')
     const all = await getInternalUseMismatches()
@@ -329,7 +329,7 @@ export type MovementBatch = {
 
 /** Histórico de lotes manuais (transferências, receções, ajustes): agrupados por registo (mesmo pedido, origem e destino) */
 export async function getMovementBatches(f: { from?: string; to?: string; wh?: string; kind?: string; q?: string }) {
-  await requireAdmin()
+  await requirePerm('stock', 'read')
   const isDate = (d?: string) => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d)
   const kind = ['transferencia', 'rececao', 'ajuste'].includes(f.kind ?? '') ? f.kind! : null
   return sql<MovementBatch[]>`
@@ -357,7 +357,7 @@ export async function getMovementBatches(f: { from?: string; to?: string; wh?: s
 
 /** Contagem de um armazém: compara os IMEIs contados com o que a app tem lá */
 export async function previewStockCount(input: { warehouseId: string; imeis: string }) {
-  await requireAdmin()
+  await requirePerm('stock', 'read')
   if (!input.warehouseId) throw new Error('Escolha o armazém.')
   const counted = parseImeis(input.imeis)
   const [inWh, elsewhere] = await Promise.all([
@@ -381,7 +381,7 @@ export async function previewStockCount(input: { warehouseId: string; imeis: str
 /** Aplica a contagem: os que faltam saem do stock (ajuste); os que sobram entram no armazém (transferência de onde estavam, ou receção) */
 export async function applyStockCount(input: { warehouseId: string; imeis: string; date: string; modality?: string; notes?: string }): Promise<Result> {
   try {
-    const user = await requireAdmin()
+    const user = await requirePerm('stock', 'write')
     const p = await previewStockCount(input)
     if (!p.missing.length && !p.extra.length) throw new Error('A contagem bate certo — não há nada a acertar.')
     const date = input.date || new Date().toISOString().slice(0, 10)
@@ -418,7 +418,7 @@ export async function applyStockCount(input: { warehouseId: string; imeis: strin
 /** Retira IMEIs do stock (perdido, avariado, abatido…) — movimento "Ajuste" a partir do armazém onde estão */
 export async function removeImeisFromStock(input: { imeis: string; reason: string; date: string; notes?: string }): Promise<Result> {
   try {
-    const user = await requireAdmin()
+    const user = await requirePerm('stock', 'write')
     if (!input.reason) throw new Error('Indique o motivo.')
     const imeis = parseImeis(input.imeis)
     if (!imeis.length) throw new Error('Indique pelo menos um IMEI.')
@@ -446,7 +446,7 @@ export async function removeImeisFromStock(input: { imeis: string; reason: strin
  */
 export async function replaceRmaImeis(input: { pairs: string; toWarehouseId?: string; date: string; notes?: string }): Promise<Result> {
   try {
-    const user = await requireAdmin()
+    const user = await requirePerm('stock', 'write')
     const norm = (v: string) => (/^1\d{13}$/.test(v) ? '0' + v : v)
     const pairs = input.pairs.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => l.split(/[\s,;]+/).filter(Boolean).map(norm))
     const bad = pairs.filter((p) => p.length !== 2 || !p.every((x) => /^\d{15}$/.test(x)) || p[0] === p[1])
@@ -505,7 +505,7 @@ const RMA_SOURCE_ACCOUNTS = '^frotcom lusitana - (rma|storage service|installati
 /** IMEIs das contas Frotcom Lusitana - RMA / Storage Service / Installation / Refurbished com Shipped on nos últimos 30 dias
  *  e sem nenhuma entrada na app (candidatos a IMEI de substituição) */
 export async function getRecentRmaAccountDevices() {
-  await requireAdmin()
+  await requirePerm('stock', 'read')
   const rows = await sql<{ imei: string; model: string | null; shipped_on: string | null; account: string | null }[]>`
     select d.imei, d.model, d.shipped_on::text, coalesce(c.intranet_short_name, c.name, p.name) as account
     from devices d
@@ -533,7 +533,7 @@ export async function getStockMinimums() {
 /** Define (ou remove, com min vazio) o stock mínimo de um equipamento num armazém */
 export async function setStockMinimum(input: { equipmentId: string; warehouseId: string; min: string }) {
   try {
-    const user = await requireAdmin()
+    const user = await requirePerm('stock', 'write')
     if (!input.equipmentId || !input.warehouseId) throw new Error('Escolha o equipamento e o armazém.')
     if (input.min.trim() === '') {
       await sql`delete from stock_minimums where equipment_id = ${input.equipmentId} and warehouse_id = ${input.warehouseId}`
@@ -554,7 +554,7 @@ export async function setStockMinimum(input: { equipmentId: string; warehouseId:
 /** Muda a modalidade (Venda/Aluguer) de IMEIs em stock, sem mudar de armazém */
 export async function changeModality(input: { imeis: string; modality: string; date: string; notes?: string }): Promise<Result> {
   try {
-    const user = await requireAdmin()
+    const user = await requirePerm('stock', 'write')
     if (input.modality !== 'Venda' && input.modality !== 'Aluguer') throw new Error('Escolha Venda ou Aluguer.')
     const imeis = parseImeis(input.imeis)
     if (!imeis.length) throw new Error('Indique pelo menos um IMEI.')

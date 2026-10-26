@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation'
+import { can } from '@/lib/permissions'
 import Link from 'next/link'
 import { getInterventions } from '@/services/database'
 import { getCurrentUser } from '@/lib/auth'
@@ -36,6 +38,7 @@ export default async function InterventionsPage({ searchParams }: Props) {
     getInterventions({ page: currentPage, pageSize: PAGE_SIZE, clientSearch, techSearch, plateSearch, dateFrom, dateTo, billingFilter, orderBy }),
   ])
 
+  if (!can(user, 'interventions')) redirect('/help')
   if (error) {
     return (
       <div className="mx-auto max-w-[1920px] p-8">
@@ -58,7 +61,7 @@ export default async function InterventionsPage({ searchParams }: Props) {
         title="Intervenções"
         subtitle={`${count.toLocaleString('pt-PT')} registos${hasFilters ? ' encontrados' : ''}`}
         actions={
-          user?.role === 'admin' && (
+          can(user, 'interventions', 'write') && (
             <Link href="/interventions/new" className={buttonVariants({ size: 'lg' })}>
               Nova intervenção
             </Link>
@@ -176,7 +179,7 @@ export default async function InterventionsPage({ searchParams }: Props) {
                   <TableCell className="whitespace-nowrap">
                     {isBillable(i.billing) && (
                       <BillingProcessed id={i.id} processedAt={i.billing_processed_at} processedBy={i.billing_processed_by}
-                        canEdit={user?.role === 'admin' || user?.role === 'financeiro'} compact />
+                        canEdit={can(user, 'billing', 'write')} compact />
                     )}
                   </TableCell>
                 </TableRow>

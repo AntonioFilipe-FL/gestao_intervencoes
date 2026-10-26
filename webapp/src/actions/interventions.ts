@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { sql } from '@/lib/db'
-import { requireAdmin, requireBilling } from '@/lib/auth'
+import { requirePerm, requireBilling } from '@/lib/auth'
 import { interventionSchema, toDbValues, type AccessoryLine } from '@/lib/schemas/intervention'
 import { isBillable, notifyBilling, isBillingEmailEnabled } from '@/lib/billing-notification'
 import { headers } from 'next/headers'
@@ -23,7 +23,7 @@ const merge = (lines: AccessoryLine[]) => {
 
 export async function createIntervention(input: unknown) {
   try {
-    const user = await requireAdmin()
+    const user = await requirePerm('interventions', 'write')
     const parsed = interventionSchema.safeParse(input)
     if (!parsed.success) {
       return { success: false as const, error: parsed.error.issues.map(i => i.message).join('; ') }
@@ -71,7 +71,7 @@ export async function createIntervention(input: unknown) {
 /** Edição de um registo gravado (só admin). Substitui os acessórios. */
 export async function updateIntervention(id: string, input: unknown) {
   try {
-    const user = await requireAdmin()
+    const user = await requirePerm('interventions', 'write')
     if (!/^[0-9a-f-]{36}$/i.test(id)) return { success: false as const, error: 'Registo inválido.' }
     const parsed = interventionSchema.safeParse(input)
     if (!parsed.success) {
@@ -120,7 +120,7 @@ export async function updateIntervention(id: string, input: unknown) {
 
 /** Reenvia manualmente o email à financeira (ex.: após um erro) */
 export async function resendBillingEmail(id: string) {
-  const user = await requireAdmin()
+  const user = await requirePerm('interventions', 'write')
   if (!(await isBillingEmailEnabled()))
     return { ok: false as const, error: 'O envio de emails à financeira está desligado (Configurações › Email).' }
   const r = await notifyBilling(id, user, await appUrl())
@@ -131,7 +131,7 @@ export async function resendBillingEmail(id: string) {
 /** Elimina uma intervenção (só admin). Apaga também os acessórios e os movimentos de stock dela. */
 export async function deleteIntervention(id: string) {
   try {
-    const user = await requireAdmin()
+    const user = await requirePerm('interventions', 'write')
     if (!/^[0-9a-f-]{36}$/i.test(id)) return { success: false as const, error: 'Registo inválido.' }
     const [row] = await sql`delete from interventions where id = ${id} returning id, intervention_date::text, license_plate`
     if (!row) return { success: false as const, error: 'Registo não encontrado.' }

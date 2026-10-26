@@ -1,3 +1,6 @@
+import { redirect } from 'next/navigation'
+import { can } from '@/lib/permissions'
+import { requireUser } from '@/lib/auth'
 import Link from 'next/link'
 import { getStats, REPORT_TYPES } from '@/services/database'
 import { cn } from '@/lib/utils'
@@ -37,6 +40,7 @@ interface Props {
 }
 
 export default async function ReportsPage({ searchParams }: Props) {
+  if (!can(await requireUser(), 'reports')) redirect('/help')
   const p = await searchParams
   const valid = (t?: string) => (t && REPORT_TYPES.some((r) => r.toLowerCase() === t.toLowerCase()) ? t : undefined)
   const etipo = valid(p.etipo), ctipo = valid(p.ctipo)

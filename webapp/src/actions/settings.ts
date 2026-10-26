@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { sql } from '@/lib/db'
-import { requireAdmin } from '@/lib/auth'
+import { requirePerm } from '@/lib/auth'
 
 /** Tabelas editáveis em Configurações e campos extra permitidos em cada uma */
 const EDITABLE: Record<string, string[]> = {
@@ -25,7 +25,7 @@ type Item = { id?: string; name: string; active?: boolean; [k: string]: unknown 
 
 export async function upsertReferenceItem(table: string, item: Item) {
   try {
-    await requireAdmin()
+    await requirePerm('settings', 'write')
     const extra = EDITABLE[table]
     if (!extra) throw new Error(`Tabela não permitida: ${table}`)
     const name = (item.name ?? '').toString().trim()
@@ -51,7 +51,7 @@ export async function upsertReferenceItem(table: string, item: Item) {
 /** Em vez de apagar (quebraria o histórico), os itens são desativados. */
 export async function deleteReferenceItem(table: string, id: string) {
   try {
-    await requireAdmin()
+    await requirePerm('settings', 'write')
     if (!EDITABLE[table]) throw new Error(`Tabela não permitida: ${table}`)
     await sql`update ${sql(table)} set active = false where id = ${id}`
     revalidatePath('/settings')
@@ -64,7 +64,7 @@ export async function deleteReferenceItem(table: string, id: string) {
 /** Define os acessórios que acompanham um equipamento (kit) */
 export async function setEquipmentKit(equipmentId: string, lines: { accessory_id: string; quantity: number }[]) {
   try {
-    await requireAdmin()
+    await requirePerm('settings', 'write')
     const uuid = /^[0-9a-f-]{36}$/i
     if (!uuid.test(equipmentId)) throw new Error('Equipamento inválido.')
     const clean = new Map<string, number>()
@@ -88,7 +88,7 @@ export async function setEquipmentKit(equipmentId: string, lines: { accessory_id
 /** Liga/desliga rapidamente um item (em Equipamentos/Acessórios: disponível em novos registos ou só histórico) */
 export async function toggleReferenceItem(table: string, id: string, active: boolean) {
   try {
-    await requireAdmin()
+    await requirePerm('settings', 'write')
     if (!EDITABLE[table]) throw new Error(`Tabela não permitida: ${table}`)
     await sql`update ${sql(table)} set active = ${active} where id = ${id}`
     revalidatePath('/settings')

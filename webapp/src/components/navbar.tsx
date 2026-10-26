@@ -1,3 +1,4 @@
+import { can } from '@/lib/permissions'
 import Link from 'next/link'
 import type { CurrentUser } from '@/lib/auth'
 import { NavLinks } from '@/components/nav-links'
@@ -5,13 +6,13 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 
 export function Navbar({ user }: { user: CurrentUser }) {
   const links = [
-    { href: '/interventions', label: 'Intervenções', exact: true },
-    ...(user.role === 'admin' ? [{ href: '/interventions/new', label: 'Novo registo' }] : []),
-    { href: '/stock', label: 'Stock Material' },
-    { href: '/accessories', label: 'Stock Acessórios' },
-    { href: '/equipment-update', label: 'Atualização Equipamento' },
-    { href: '/reports', label: 'Relatórios' },
-    ...(user.role === 'admin' ? [{ href: '/settings', label: 'Configurações' }] : []),
+    ...(can(user, 'interventions') ? [{ href: '/interventions', label: 'Intervenções', exact: true }] : []),
+    ...(can(user, 'interventions', 'write') ? [{ href: '/interventions/new', label: 'Novo registo' }] : []),
+    ...(can(user, 'stock') ? [{ href: '/stock', label: 'Stock Material' }] : []),
+    ...(can(user, 'accessories') ? [{ href: '/accessories', label: 'Stock Acessórios' }] : []),
+    ...(can(user, 'equipment') ? [{ href: '/equipment-update', label: 'Atualização Equipamento' }] : []),
+    ...(can(user, 'reports') ? [{ href: '/reports', label: 'Relatórios' }] : []),
+    ...(can(user, 'settings') || user.superadmin ? [{ href: '/settings', label: 'Configurações' }] : []),
     { href: '/help', label: 'Ajuda' },
   ]
 

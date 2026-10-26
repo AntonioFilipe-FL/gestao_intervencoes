@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation'
+import { can } from '@/lib/permissions'
 import Link from 'next/link'
 import { sql } from '@/lib/db'
 import { requireUser } from '@/lib/auth'
@@ -20,7 +22,8 @@ const KIND: Record<string, string> = {
 export default async function AccessoriesStockPage({ searchParams }: Props) {
   const p = await searchParams
   const user = await requireUser()
-  const isAdmin = user.role === 'admin'
+  if (!can(user, 'accessories')) redirect('/help')
+  const isAdmin = can(user, 'accessories', 'write')
   const [{ items, rows }, warehouses] = await Promise.all([
     getAccessoryStock(),
     sql<{ id: string; name: string }[]>`select id, name from warehouses where active and type <> 'mobilizado' order by name`,

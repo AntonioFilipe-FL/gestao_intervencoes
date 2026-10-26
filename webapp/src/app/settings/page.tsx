@@ -6,7 +6,9 @@ import { redirect } from 'next/navigation'
 import { getReferenceData } from '@/services/database'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SettingsTable } from '@/components/settings/SettingsTable'
-import { isAdmin } from '@/actions/users'
+import { isAdmin, canSettings } from '@/actions/users'
+import { getRoles } from '@/actions/roles'
+import { RoleManagement } from '@/components/settings/RoleManagement'
 import { getCurrentUser } from '@/lib/auth'
 import { getStockMinMargin } from '@/lib/stock-settings'
 import { SuperAdminSettings } from '@/components/settings/SuperAdminSettings'
@@ -27,8 +29,9 @@ export default async function SettingsPage({
   const params = await searchParams
   const data = await getReferenceData(false)
   const userIsAdmin = await isAdmin()
-  if (!userIsAdmin) redirect('/interventions')
+  if (!(await canSettings())) redirect('/help')
   const me = await getCurrentUser()
+  const roles = me?.superadmin ? await getRoles() : []
   const margin = me?.superadmin ? await getStockMinMargin() : 20
 
   return (
@@ -38,7 +41,7 @@ export default async function SettingsPage({
         <p className="fc-small text-fc-dark-60">Gerir tabelas de referência e listas de apoio.</p>
       </div>
 
-      <Tabs defaultValue={userIsAdmin && (params.tab === 'email' || params.tab === 'intranet' || params.tab === 'superadmin') ? params.tab : 'technicians'} className="gap-0 border border-fc-dark-20 bg-white">
+      <Tabs defaultValue={userIsAdmin && (params.tab === 'email' || params.tab === 'intranet' || params.tab === 'superadmin' || params.tab === 'roles') ? params.tab : 'technicians'} className="gap-0 border border-fc-dark-20 bg-white">
         <TabsList>
           <TabsTrigger value="technicians">Técnicos</TabsTrigger>
           <TabsTrigger value="clients">Clientes</TabsTrigger>
@@ -52,6 +55,7 @@ export default async function SettingsPage({
           {me?.superadmin && (
             <TabsTrigger value="users">Utilizadores</TabsTrigger>
           )}
+          {me?.superadmin && <TabsTrigger value="roles">Perfis</TabsTrigger>}
           {userIsAdmin && (
             <TabsTrigger value="email">Email</TabsTrigger>
           )}
@@ -136,7 +140,12 @@ export default async function SettingsPage({
 
             {me?.superadmin && (
               <TabsContent value="users">
-                <UserManagement />
+                <UserManagement roles={roles} />
+              </TabsContent>
+            )}
+            {me?.superadmin && (
+              <TabsContent value="roles">
+                <RoleManagement roles={roles} />
               </TabsContent>
             )}
             {userIsAdmin && (

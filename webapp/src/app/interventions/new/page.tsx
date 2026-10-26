@@ -1,3 +1,4 @@
+import { can } from '@/lib/permissions'
 import { redirect } from 'next/navigation'
 import { getReferenceData } from '@/services/database'
 import { InterventionForm } from '@/components/interventions/InterventionForm'
@@ -8,7 +9,7 @@ import { sql } from '@/lib/db'
 
 export default async function NewInterventionPage() {
   const user = await requireUser()
-  if (user.role !== 'admin') redirect('/interventions')
+  if (!can(user, 'interventions', 'write')) redirect('/interventions')
   const [referenceData, clientOptions, [validator]] = await Promise.all([
     getReferenceData(),
     getClientOptions(),

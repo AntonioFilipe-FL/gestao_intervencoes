@@ -2,12 +2,12 @@
 
 import { revalidatePath } from 'next/cache'
 import { sql } from '@/lib/db'
-import { requireAdmin, requireUser } from '@/lib/auth'
+import { requirePerm, requireUser } from '@/lib/auth'
 import { syncFromIntranet, waitForAutoSync, linkAdditionalClient, unlinkClient, linkPending, createFromPending, setPendingStatus, revertAutoCreatedClients } from '@/lib/intranet'
 
 /** Sincronizar clientes e IMEIs a partir da Intranet (só admins) */
 export async function runIntranetSync() {
-  const user = await requireAdmin()
+  const user = await requirePerm('settings', 'write')
   await waitForAutoSync()
   const r = await syncFromIntranet(user.email)
   revalidatePath('/settings')
@@ -68,7 +68,7 @@ export async function resolvePending(
   action: { type: 'link'; clientId: string } | { type: 'create' } | { type: 'ignore' } | { type: 'restore' }
 ) {
   try {
-    await requireAdmin()
+    await requirePerm('settings', 'write')
     if (action.type === 'link') {
       if (intranetIds.length !== 1) throw new Error('Associe uma conta de cada vez.')
       await linkPending(intranetIds[0], action.clientId)
@@ -92,7 +92,7 @@ export async function resolvePending(
 /** Liga mais um cliente da BD a uma conta da Intranet (ex.: venda + aluguer) */
 export async function linkAnotherClient(intranetId: string, clientId: string) {
   try {
-    await requireAdmin()
+    await requirePerm('settings', 'write')
     await linkAdditionalClient(intranetId, clientId)
     revalidatePath('/settings')
     revalidatePath('/interventions/new')
@@ -105,7 +105,7 @@ export async function linkAnotherClient(intranetId: string, clientId: string) {
 /** Desliga um cliente da conta da Intranet */
 export async function unlinkIntranetClient(clientId: string) {
   try {
-    await requireAdmin()
+    await requirePerm('settings', 'write')
     await unlinkClient(clientId)
     revalidatePath('/settings')
     revalidatePath('/interventions/new')
@@ -118,7 +118,7 @@ export async function unlinkIntranetClient(clientId: string) {
 /** Devolve à lista "Por associar" os clientes criados automaticamente (sem intervenções nem dados próprios) */
 export async function revertAutoCreated() {
   try {
-    await requireAdmin()
+    await requirePerm('settings', 'write')
     const n = await revertAutoCreatedClients()
     revalidatePath('/settings')
     return { ok: true as const, n }
@@ -169,7 +169,7 @@ export type HardwareRow = { hardware: string; devices: number; equipment_id: str
 
 /** Hardware distinto que veio da Intranet, com nº de equipamentos e a correspondência manual (se houver) */
 export async function getHardwareList(): Promise<HardwareRow[]> {
-  await requireAdmin()
+  await requirePerm('settings', 'write')
   return sql<HardwareRow[]>`
     select d.model as hardware, count(*)::int as devices, m.equipment_id,
            min(d.imei) as sample_imei, max(d.synced_at)::text as synced_at
@@ -181,7 +181,7 @@ export async function getHardwareList(): Promise<HardwareRow[]> {
 /** Define (ou retira, com null) a correspondência manual de um hardware */
 export async function setHardwareMapping(hardware: string, equipmentId: string | null) {
   try {
-    const user = await requireAdmin()
+    const user = await requirePerm('settings', 'write')
     if (!hardware.trim()) throw new Error('Hardware inválido.')
     if (equipmentId && !/^[0-9a-f-]{36}$/i.test(equipmentId)) throw new Error('Equipamento inválido.')
     if (equipmentId)
