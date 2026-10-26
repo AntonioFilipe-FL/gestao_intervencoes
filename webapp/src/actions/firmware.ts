@@ -1,4 +1,3 @@
-import { can } from '@/lib/permissions'
 'use server'
 
 import { sql } from '@/lib/db'
