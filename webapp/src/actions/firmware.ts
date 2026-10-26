@@ -6,7 +6,7 @@ import { equipmentNamer } from '@/lib/equipment-namer'
 import { getFirmwareInfo, requestFirmwareUpgrades } from '@/lib/intranet'
 
 /** Modelos com atualização de firmware pela app */
-const FIRMWARE_MODELS = ['FMC640', 'FMC650', 'FMC130', 'FMC150', 'C4MAX V8']
+const FIRMWARE_MODELS = ['FMC640', 'FMC650', 'FMC130', 'FMC150', 'C4MAX V8', 'C4MAX V4']
 /** CAN chip / CAN adapter: só FMC150 */
 const CAN_MODELS = ['FMC150']
 export type FirmwareKind = 'device' | 'canadapter'
@@ -57,7 +57,8 @@ async function previewCore(input: { accountIds: string[]; imeis: string; kind?: 
   const seen = new Set(out.map((r) => r.imei))
   for (const imei of list) if (!seen.has(imei)) out.unshift({ imei, warehouse: null, equipment: null, firmware: null, available: null, availableId: null, issue: 'Não existe na Intranet', account: null, lastStatus: null, lastDate: null })
   out.sort((a, b) => Number(list.includes(b.imei)) - Number(list.includes(a.imei)))
-  return out
+  // das contas só aparecem os que podem ser atualizados; os IMEIs colados à mão aparecem sempre (com o motivo, se não der)
+  return out.filter((r) => !r.issue || list.includes(r.imei))
 }
 
 /** Pré-visualização (só leitura na Intranet) */

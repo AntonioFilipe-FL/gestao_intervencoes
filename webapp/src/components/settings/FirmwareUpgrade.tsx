@@ -53,7 +53,7 @@ export function FirmwareUpgrade() {
           ))}
         </div>
         <p className="fc-small text-fc-dark-60">
-          {kind === 'device' ? 'FMC640, FMC650, FMC130, FMC150 e C4MAX V8.' : 'Só FMC150 (CAN adapter / CAN chip).'} Usa a atualização disponível indicada pela Intranet para cada equipamento.
+          {kind === 'device' ? 'FMC640, FMC650, FMC130, FMC150, C4MAX V8 e C4MAX V4.' : 'Só FMC150 (CAN adapter / CAN chip).'} Usa a atualização disponível indicada pela Intranet para cada equipamento.
           A pré-visualização só lê; nada é pedido sem carregar em &ldquo;Atualizar&rdquo;.
         </p>
       </div>
@@ -81,7 +81,7 @@ export function FirmwareUpgrade() {
       {rows && (
         <>
           <p className="fc-small">
-            <b>{todo.length}</b> selecionado(s) de {eligible.length} com atualização disponível ·
+            <b>{todo.length}</b> selecionado(s) de {eligible.length} com atualização disponível (só aparecem os equipamentos abrangidos) ·
             <button type="button" className="mx-1 text-fc-light-100 underline" onClick={() => setSel(eligible.map((r) => r.imei))}>selecionar todos</button>
             <button type="button" className="text-fc-light-100 underline" onClick={() => setSel([])}>nenhum</button>
           </p>
