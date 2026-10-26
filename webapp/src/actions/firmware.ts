@@ -14,28 +14,33 @@ export type FirmwareKind = 'device' | 'canadapter'
 export type FirmwareRow = {
   imei: string; warehouse: string | null; equipment: string | null; firmware: string | null
   available: string | null; availableId: number | null; issue: string | null
+  account: string | null; lastStatus: string | null; lastDate: string | null
 }
 
-async function previewCore(input: { warehouseIds: string[]; imeis: string; kind?: FirmwareKind }): Promise<FirmwareRow[]> {
+async function previewCore(input: { accountIds: string[]; imeis: string; kind?: FirmwareKind }): Promise<FirmwareRow[]> {
   const can = input.kind === 'canadapter'
   const MODELS = can ? CAN_MODELS : FIRMWARE_MODELS
   const list = [...new Set(input.imeis.split(/[\s,;]+/).map((x) => x.trim()).filter((x) => /^\d{14,15}$/.test(x)).map((x) => (x.length === 14 ? '0' + x : x)))]
-  if (!input.warehouseIds.length && !list.length) return []
-  const rows = await sql<{ imei: string; warehouse: string | null; equipment: string | null; hardware: string | null }[]>`
-    select c.imei, w.name as warehouse, e.name as equipment, d.model as hardware
-    from stock_current c
-    join warehouses w on w.id = c.warehouse_id
+  if (!input.accountIds.length && !list.length) return []
+  // por CONTA da Intranet (todos os equipamentos ativos da conta, instalados ou em stock) e/ou IMEIs
+  const rows = await sql<{ imei: string; warehouse: string | null; equipment: string | null; hardware: string | null; account: string | null }[]>`
+    select d.imei, w.name as warehouse, e.name as equipment, d.model as hardware,
+           coalesce(dc.intranet_short_name, dc.name, p.name) as account
+    from devices d
+    left join stock_current c on c.imei = d.imei
+    left join warehouses w on w.id = c.warehouse_id
     left join equipment_list e on e.id = c.equipment_id
-    left join devices d on d.imei = c.imei
-    where (${input.warehouseIds.length ? sql`c.warehouse_id = any(${input.warehouseIds})` : sql`false`}
-           or ${list.length ? sql`c.imei = any(${list})` : sql`false`})
-    order by w.name, c.imei`
+    left join clients dc on dc.intranet_account_id = d.intranet_account_id
+    left join intranet_pending p on p.intranet_account_id = d.intranet_account_id
+    where d.active and (${input.accountIds.length ? sql`d.intranet_account_id = any(${input.accountIds})` : sql`false`}
+           or ${list.length ? sql`d.imei = any(${list})` : sql`false`})
+    order by 5, d.imei`
   const eqName = await equipmentNamer()
   const base = rows.map((r) => ({ ...r, equipment: eqName(r.hardware) ?? r.equipment }))
   const allowed = (e: string | null) => !!e && MODELS.includes(e.toUpperCase())
   // só se lê na Intranet os modelos abrangidos (máx. 300 de cada vez)
   const toRead = base.filter((r) => allowed(r.equipment)).map((r) => r.imei).slice(0, 300)
-  const info = new Map((await getFirmwareInfo(toRead)).map((i) => [i.imei, i]))
+  const info = new Map((await getFirmwareInfo(toRead, can ? 'canadapter' : 'device')).map((i) => [i.imei, i]))
   const out: FirmwareRow[] = base.map((r) => {
     const i = info.get(r.imei)
     let issue: string | null = null
@@ -45,16 +50,18 @@ async function previewCore(input: { warehouseIds: string[]; imeis: string; kind?
     const cur = can ? i?.canFirmware : i?.firmware, av = can ? i?.canAvailable : i?.available, avId = can ? i?.canAvailableId : i?.availableId
     if (!issue && (!avId || !av)) issue = 'Sem atualização disponível'
     else if (!issue && av === cur) issue = 'Já atualizado'
-    return { imei: r.imei, warehouse: r.warehouse, equipment: r.equipment, firmware: cur ?? null, available: av ?? null, availableId: avId ?? null, issue }
+    else if (!issue && i?.lastOp?.status && /pend|request|queue|progress|sent/i.test(i.lastOp.status)) issue = `Já tem um pedido pendente (${i.lastOp.firmware ?? ''})`
+    return { imei: r.imei, warehouse: r.warehouse, equipment: r.equipment, firmware: cur ?? null, available: av ?? null, availableId: avId ?? null, issue,
+             account: r.account, lastStatus: i?.lastOp?.status ?? null, lastDate: i?.lastOp?.requested ?? null }
   })
   const seen = new Set(out.map((r) => r.imei))
-  for (const imei of list) if (!seen.has(imei)) out.unshift({ imei, warehouse: null, equipment: null, firmware: null, available: null, availableId: null, issue: 'Não está em stock na app' })
+  for (const imei of list) if (!seen.has(imei)) out.unshift({ imei, warehouse: null, equipment: null, firmware: null, available: null, availableId: null, issue: 'Não existe na Intranet', account: null, lastStatus: null, lastDate: null })
   out.sort((a, b) => Number(list.includes(b.imei)) - Number(list.includes(a.imei)))
   return out
 }
 
 /** Pré-visualização (só leitura na Intranet) */
-export async function previewFirmware(input: { warehouseIds: string[]; imeis: string; kind?: FirmwareKind }) {
+export async function previewFirmware(input: { accountIds: string[]; imeis: string; kind?: FirmwareKind }) {
   await requireSuperAdmin()
   return previewCore(input)
 }
@@ -64,7 +71,7 @@ export async function applyFirmware(input: { imeis: string[]; kind?: FirmwareKin
   try {
     const user = await requireSuperAdmin()
     const kind: FirmwareKind = input.kind === 'canadapter' ? 'canadapter' : 'device'
-    const rows = (await previewCore({ warehouseIds: [], imeis: input.imeis.join('\n'), kind })).filter((r) => !r.issue && r.availableId && r.available)
+    const rows = (await previewCore({ accountIds: [], imeis: input.imeis.join('\n'), kind })).filter((r) => !r.issue && r.availableId && r.available)
     if (!rows.length) throw new Error('Nada a atualizar (sem atualização disponível ou modelo não abrangido).')
     const res = await requestFirmwareUpgrades(rows.map((r) => ({
       imei: r.imei, firmwareId: r.availableId!, requested: r.available!, previous: r.firmware, reason: `Atualização de ${kind === 'canadapter' ? 'CAN chip' : 'firmware'} via Gestão de Intervenções (${user.email})`,

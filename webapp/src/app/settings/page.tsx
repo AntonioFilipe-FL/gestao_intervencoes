@@ -70,7 +70,7 @@ export default async function SettingsPage({
                   <hr className="border-fc-dark-20" />
                   <IntranetPlates warehouses={await sql<{ id: string; name: string }[]>`select id, name from warehouses where active and type <> 'mobilizado' order by name`} />
                   <hr className="border-fc-dark-20" />
-                  <FirmwareUpgrade warehouses={await sql<{ id: string; name: string }[]>`select id, name from warehouses where active and type <> 'mobilizado' order by name`} />
+                  <FirmwareUpgrade />
                 </div>
               </TabsContent>
             )}

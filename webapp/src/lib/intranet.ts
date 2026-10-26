@@ -808,10 +808,12 @@ export type FirmwareInfo = {
   imei: string; vehicleId: string | null; hardware: string | null; firmware: string | null
   available: string | null; availableId: number | null; lastUpgrade: string | null
   canFirmware: string | null; canAvailable: string | null; canAvailableId: number | null; error?: string
+  /** último pedido de atualização registado na Intranet (estado e data) */
+  lastOp?: { status: string | null; requested: string | null; firmware: string | null } | null
 }
 
 /** Lê nos detalhes de cada equipamento (Intranet) a versão de firmware e a atualização disponível */
-export async function getFirmwareInfo(imeis: string[]): Promise<FirmwareInfo[]> {
+export async function getFirmwareInfo(imeis: string[], kind: 'device' | 'canadapter' = 'device'): Promise<FirmwareInfo[]> {
   if (!imeis.length) return []
   const token = await login()
   try {
@@ -838,6 +840,7 @@ export async function getFirmwareInfo(imeis: string[]): Promise<FirmwareInfo[]> 
             lastUpgrade: pick(d, ['lastFirmwareUpgrade']),
             canFirmware: pick(d, ['canAdapterFirmwareVersion']), canAvailable: pick(d, ['canAdapterAvailableUpgrade']),
             canAvailableId: num(pick(d, ['canAdapterAvailableUpgradeFirmwareId'])),
+            lastOp: await lastOperation(imei, kind, token),
           })
         } catch (e) {
           out.push({ imei, vehicleId: vid, hardware: null, firmware: null, available: null, availableId: null, lastUpgrade: null, canFirmware: null, canAvailable: null, canAvailableId: null, error: (e as Error).message.slice(0, 120) })
@@ -849,6 +852,19 @@ export async function getFirmwareInfo(imeis: string[]): Promise<FirmwareInfo[]> 
   } finally {
     await logout(token)
   }
+}
+
+/** Último pedido de atualização (GET /api/devices/details/operations/{imei}[/canadapter]) — null se não houver ou não der para ler */
+async function lastOperation(imei: string, kind: 'device' | 'canadapter', token: string) {
+  try {
+    const raw = await getJson(`/api/devices/details/operations/${encodeURIComponent(imei)}${kind === 'canadapter' ? '/canadapter' : ''}`, token)
+    const list = Array.isArray(raw) ? (raw as Json[]) : asList(raw).length ? asList(raw) : raw && typeof raw === 'object' ? [raw as Json] : []
+    const when = (o: Json) => pick(o, ['requested', 'requestedDate', 'requestDate', 'creation', 'createdAt', 'date']) ?? ''
+    const last = [...list].sort((a, b) => when(b).localeCompare(when(a)))[0]
+    if (!last) return null
+    return { status: pick(last, ['status', 'Status', 'state', 'operationStatus']), requested: when(last) || null,
+             firmware: pick(last, ['requestedFirmwareVersion', 'firmwareUpdate', 'newFirmware', 'firmware']) }
+  } catch { return null }
 }
 
 /** Pede a atualização de firmware: equipamento (POST /api/devices/details/operations) ou CAN chip (…/operations/canadapter) */

@@ -1,17 +1,21 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { applyFirmware, previewFirmware, type FirmwareKind, type FirmwareRow } from '@/actions/firmware'
+import { getIntranetAccounts } from '@/actions/intranet-write'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 
 type Opt = { id: string; name: string }
 
 /** Super admin: pedir atualização de firmware (FMC640, FMC650, FMC130, FMC150, C4MAX V8) */
-export function FirmwareUpgrade({ warehouses }: { warehouses: Opt[] }) {
+export function FirmwareUpgrade() {
   const [busy, start] = useTransition()
-  const [whs, setWhs] = useState<string[]>([])
+  const [accs, setAccs] = useState<string[]>([])
+  const [accounts, setAccounts] = useState<Opt[]>([])
+  useEffect(() => { getIntranetAccounts().then(setAccounts).catch(() => {}) }, [])
   const [imeis, setImeis] = useState('')
   const [rows, setRows] = useState<FirmwareRow[] | null>(null)
   const [sel, setSel] = useState<string[]>([])
@@ -20,7 +24,7 @@ export function FirmwareUpgrade({ warehouses }: { warehouses: Opt[] }) {
 
   const preview = () => start(async () => {
     setMsg(null)
-    const r = await previewFirmware({ warehouseIds: whs, imeis, kind })
+    const r = await previewFirmware({ accountIds: accs, imeis, kind })
     setRows(r)
     const typed = new Set(imeis.split(/[\s,;]+/).map((x) => x.trim()))
     setSel(r.filter((x) => !x.issue && typed.has(x.imei)).map((x) => x.imei))
@@ -55,13 +59,15 @@ export function FirmwareUpgrade({ warehouses }: { warehouses: Opt[] }) {
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="space-y-1.5">
-          <Label>Armazéns</Label>
-          <div className="flex flex-wrap gap-x-4 gap-y-1">
-            {warehouses.map((w) => (
-              <label key={w.id} className="flex items-center gap-1.5 fc-small">
-                <input type="checkbox" checked={whs.includes(w.id)} onChange={() => setWhs((x) => (x.includes(w.id) ? x.filter((i) => i !== w.id) : [...x, w.id]))} />
-                {w.name}
-              </label>
+          <Label>Contas Intranet</Label>
+          <SearchableSelect options={accounts.filter((a) => !accs.includes(a.id)).map((a) => ({ value: a.id, label: a.name }))} value=""
+            onChange={(v) => v && setAccs((x) => [...x, v])} placeholder="Adicionar conta…" />
+          <div className="flex flex-wrap gap-1.5">
+            {accs.map((id) => (
+              <button key={id} type="button" onClick={() => setAccs((x) => x.filter((i) => i !== id))} title="Retirar"
+                className="border border-fc-dark-20 bg-fc-grey-80 px-2 py-0.5 fc-small hover:border-fc-danger">
+                {accounts.find((a) => a.id === id)?.name ?? id} ✕
+              </button>
             ))}
           </div>
         </div>
@@ -70,7 +76,7 @@ export function FirmwareUpgrade({ warehouses }: { warehouses: Opt[] }) {
           <Textarea rows={4} value={imeis} onChange={(e) => setImeis(e.target.value)} placeholder="Um por linha" className="font-mono text-[12px]" />
         </div>
       </div>
-      <Button disabled={busy || (!whs.length && !imeis.trim())} onClick={preview}>{busy && !rows ? 'A ler a Intranet…' : 'Pré-visualizar'}</Button>
+      <Button disabled={busy || (!accs.length && !imeis.trim())} onClick={preview}>{busy && !rows ? 'A ler a Intranet…' : 'Pré-visualizar'}</Button>
 
       {rows && (
         <>
@@ -82,14 +88,15 @@ export function FirmwareUpgrade({ warehouses }: { warehouses: Opt[] }) {
           <div className="max-h-96 overflow-auto border border-fc-dark-20">
             <table className="w-full fc-small">
               <thead className="sticky top-0 bg-fc-grey-80 text-left">
-                <tr><th className="px-2 py-1" /><th className="px-2 py-1">IMEI</th><th className="px-2 py-1">Armazém</th><th className="px-2 py-1">Equipamento</th><th className="px-2 py-1">{kind === 'canadapter' ? 'CAN chip atual' : 'Firmware atual'}</th><th className="px-2 py-1">Disponível</th><th className="px-2 py-1">Estado</th></tr>
+                <tr><th className="px-2 py-1" /><th className="px-2 py-1">IMEI</th><th className="px-2 py-1">Conta / armazém</th><th className="px-2 py-1">Equipamento</th><th className="px-2 py-1">{kind === 'canadapter' ? 'CAN chip atual' : 'Firmware atual'}</th><th className="px-2 py-1">Disponível</th><th className="px-2 py-1">Último pedido</th><th className="px-2 py-1">Estado</th></tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.imei} className="border-t border-fc-dark-10">
                     <td className="px-2 py-1"><input type="checkbox" disabled={!!r.issue} checked={sel.includes(r.imei)} onChange={() => toggle(r.imei)} /></td>
-                    <td className="px-2 py-1 font-mono">{r.imei}</td><td className="px-2 py-1">{r.warehouse ?? '—'}</td><td className="px-2 py-1">{r.equipment ?? '—'}</td>
+                    <td className="px-2 py-1 font-mono">{r.imei}</td><td className="px-2 py-1">{r.account ?? '—'}{r.warehouse && <span className="block text-fc-dark-60">{r.warehouse}</span>}</td><td className="px-2 py-1">{r.equipment ?? '—'}</td>
                     <td className="px-2 py-1 font-mono">{r.firmware ?? '—'}</td><td className="px-2 py-1 font-mono font-bold">{r.available ?? '—'}</td>
+                    <td className="px-2 py-1">{r.lastStatus ? <>{r.lastStatus}{r.lastDate && <span className="block text-fc-dark-60">{r.lastDate.slice(0, 10).split('-').reverse().join('/')}</span>}</> : '—'}</td>
                     <td className={`px-2 py-1 ${r.issue ? 'text-fc-dark-60' : ''}`}>{r.issue ?? 'Atualizar'}</td>
                   </tr>
                 ))}
