@@ -21,10 +21,12 @@ export function FirmwareUpgrade() {
   const [sel, setSel] = useState<string[]>([])
   const [msg, setMsg] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null)
   const [kind, setKind] = useState<FirmwareKind>('device')
+  const [models, setModels] = useState<string[]>([])
+  const MODEL_LIST = kind === 'canadapter' ? ['FMC150'] : ['FMC640', 'FMC650', 'FMC130', 'FMC150', 'C4MAX V8', 'C4MAX V4']
 
   const preview = () => start(async () => {
     setMsg(null)
-    const r = await previewFirmware({ accountIds: accs, imeis, kind })
+    const r = await previewFirmware({ accountIds: accs, imeis, kind, models })
     setRows(r)
     const typed = new Set(imeis.split(/[\s,;]+/).map((x) => x.trim()))
     setSel(r.filter((x) => !x.issue && typed.has(x.imei)).map((x) => x.imei))
@@ -48,7 +50,7 @@ export function FirmwareUpgrade() {
         <h3 className="font-bold">Atualização de firmware</h3>
         <div className="my-2 flex gap-2">
           {([['device', 'Firmware do equipamento'], ['canadapter', 'CAN chip (FMC150)']] as const).map(([k, l]) => (
-            <button key={k} type="button" onClick={() => { setKind(k); setRows(null); setSel([]); setMsg(null) }}
+            <button key={k} type="button" onClick={() => { setKind(k); setRows(null); setSel([]); setMsg(null); setModels([]) }}
               className={`px-3 py-1.5 fc-small font-semibold ${kind === k ? 'bg-fc-dark-100 text-white' : 'border border-fc-dark-20'}`}>{l}</button>
           ))}
         </div>
@@ -76,7 +78,17 @@ export function FirmwareUpgrade() {
           <Textarea rows={4} value={imeis} onChange={(e) => setImeis(e.target.value)} placeholder="Um por linha" className="font-mono text-[12px]" />
         </div>
       </div>
-      <Button disabled={busy || (!accs.length && !imeis.trim())} onClick={preview}>{busy && !rows ? 'A ler a Intranet…' : 'Pré-visualizar'}</Button>
+      <div className="space-y-1.5">
+        <Label>e/ou por equipamento</Label>
+        <div className="flex flex-wrap gap-1.5">
+          {MODEL_LIST.map((m) => (
+            <button key={m} type="button" onClick={() => setModels((x) => (x.includes(m) ? x.filter((y) => y !== m) : [...x, m]))}
+              className={`px-2.5 py-1 fc-small font-semibold ${models.includes(m) ? 'bg-fc-dark-100 text-white' : 'border border-fc-dark-20'}`}>{m}</button>
+          ))}
+        </div>
+        <p className="fc-small text-fc-dark-60">Sem conta nem IMEIs: todos os equipamentos ativos destes modelos (sem os que já têm pedido pendente, em espera ou já atualizados). Com contas: filtra os equipamentos dessas contas. São lidos no máximo 300 de cada vez; depois de pedir, volte a pré-visualizar para os seguintes.</p>
+      </div>
+      <Button disabled={busy || (!accs.length && !imeis.trim() && !models.length)} onClick={preview}>{busy && !rows ? 'A ler a Intranet…' : 'Pré-visualizar'}</Button>
 
       {rows && (
         <>

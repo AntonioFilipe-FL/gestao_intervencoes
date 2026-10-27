@@ -81,7 +81,7 @@ const SECTIONS: Section[] = [
     body: <L items={[
       <>Menu <b>Atualização Equipamento</b>, disponível para todos os utilizadores.</>,
       <>Separador <b>Firmware do equipamento</b> (FMC640, FMC650, FMC130, FMC150, C4MAX V8, C4MAX V4) e <b>CAN chip</b> (só FMC150).</>,
-      <>Escolhe-se uma ou mais <b>contas Intranet</b> e/ou colam-se IMEIs; a pré-visualização lê na Intranet a versão atual, a disponível e o último pedido, e só mostra os equipamentos que podem ser atualizados.</>,
+      <>Escolhe-se uma ou mais <b>contas Intranet</b>, colam-se IMEIs e/ou escolhe-se <b>por equipamento</b> (modelo). Só com o modelo, entram todos os equipamentos ativos desse modelo que ainda não têm pedido (no máximo 300 de cada vez); com contas, o modelo filtra os equipamentos dessas contas; a pré-visualização lê na Intranet a versão atual, a disponível e o último pedido, e só mostra os equipamentos que podem ser atualizados.</>,
       <>Marcam-se os pretendidos, <b>Testar com 1</b> e depois <b>Atualizar</b>. O pedido fica <i>Pending</i> na Intranet até o equipamento comunicar. Equipamentos com pedido pendente não podem ser pedidos de novo.</>,
       <>A pré-visualização mostra a <b>ignição</b> e a <b>última comunicação</b>. O pedido só é enviado com a <b>ignição desligada</b>; com a ignição ligada fica <i>Em espera</i> e a app envia-o sozinha quando a ignição desligar (até 7 dias).</>,
     ]} />,

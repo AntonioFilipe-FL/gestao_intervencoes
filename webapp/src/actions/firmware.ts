@@ -17,11 +17,16 @@ export type FirmwareRow = {
   account: string | null; lastStatus: string | null; lastDate: string | null; lastComm?: string | null; ignition?: boolean | null
 }
 
-async function previewCore(input: { accountIds: string[]; imeis: string; kind?: FirmwareKind }): Promise<FirmwareRow[]> {
+async function previewCore(input: { accountIds: string[]; imeis: string; kind?: FirmwareKind; models?: string[] }): Promise<FirmwareRow[]> {
   const can = input.kind === 'canadapter'
   const MODELS = can ? CAN_MODELS : FIRMWARE_MODELS
   const list = [...new Set(input.imeis.split(/[\s,;]+/).map((x) => x.trim()).filter((x) => /^\d{14,15}$/.test(x)).map((x) => (x.length === 14 ? '0' + x : x)))]
-  if (!input.accountIds.length && !list.length) return []
+  const fold0 = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const models = (input.models ?? []).filter((m) => MODELS.includes(m))
+  // por equipamento (modelo) sem conta nem IMEIs: todos os ativos desses modelos, sem os que já têm pedido (pendente/em espera/atualizado)
+  const byModel = !!models.length && !input.accountIds.length && !list.length
+  if (!input.accountIds.length && !list.length && !models.length) return []
+  const kindNow = can ? 'canadapter' : 'device'
   // por CONTA da Intranet (todos os equipamentos ativos da conta, instalados ou em stock) e/ou IMEIs
   const rows = await sql<{ imei: string; warehouse: string | null; equipment: string | null; hardware: string | null; account: string | null }[]>`
     select d.imei, w.name as warehouse, e.name as equipment, d.model as hardware,
@@ -33,7 +38,10 @@ async function previewCore(input: { accountIds: string[]; imeis: string; kind?: 
     left join clients dc on dc.intranet_account_id = d.intranet_account_id
     left join intranet_pending p on p.intranet_account_id = d.intranet_account_id
     where d.active and (${input.accountIds.length ? sql`d.intranet_account_id = any(${input.accountIds})` : sql`false`}
-           or ${list.length ? sql`d.imei = any(${list})` : sql`false`})
+           or ${list.length ? sql`d.imei = any(${list})` : sql`false`}
+           or ${byModel ? sql`(regexp_replace(lower(coalesce(d.model, '')), '[^a-z0-9]', '', 'g') like any(${models.map((m) => `%${fold0(m)}%`)})
+                and not exists (select 1 from firmware_upgrade_log l where l.imei = d.imei and l.kind = ${kindNow}
+                                and (l.queued or (l.ok and (l.result is null or l.result = 'updated')) ) and l.created_at > now() - interval '60 days'))` : sql`false`})
     order by 5, d.imei`
   const eqName = await equipmentNamer()
   const base = rows.map((r) => ({ ...r, equipment: eqName(r.hardware) ?? r.equipment }))
@@ -43,6 +51,11 @@ async function previewCore(input: { accountIds: string[]; imeis: string; kind?: 
     MODELS.find((m) => fold(m) === fold(r.equipment)) ??
     [...MODELS].sort((a, b) => b.length - a.length).find((m) => fold(r.hardware).includes(fold(m))) ?? null
   const allowedRow = (r: { equipment: string | null; hardware: string | null }) => !!modelOf(r)
+  // filtro por modelo (também se aplica às contas escolhidas; os IMEIs colados à mão aparecem sempre)
+  if (models.length) {
+    const keep = base.filter((r) => list.includes(r.imei) || models.includes(modelOf(r) ?? ''))
+    base.length = 0; base.push(...keep)
+  }
   // só se lê na Intranet os modelos abrangidos (máx. 300 de cada vez)
   const toRead = base.filter((r) => allowedRow(r)).map((r) => r.imei).slice(0, 300)
   const [infoList, ign] = await Promise.all([getFirmwareInfo(toRead, can ? 'canadapter' : 'device'), getIgnition(toRead)])
@@ -68,7 +81,7 @@ async function previewCore(input: { accountIds: string[]; imeis: string; kind?: 
 }
 
 /** Pré-visualização (só leitura na Intranet) */
-export async function previewFirmware(input: { accountIds: string[]; imeis: string; kind?: FirmwareKind }) {
+export async function previewFirmware(input: { accountIds: string[]; imeis: string; kind?: FirmwareKind; models?: string[] }) {
   await requirePerm('equipment', 'read')
   return previewCore(input)
 }
@@ -136,7 +149,8 @@ export async function refreshFirmwareResults(): Promise<RefreshInfo> {
         : /fail|error|erro|cancel|reject|abort/i.test(st) ? 'failed' : null
       await sql`update firmware_upgrade_log set current_version = ${cur ?? null}, last_comm = coalesce(${i.lastComm ?? null}::text, last_comm),
                 result = ${result}, result_at = ${result ? sql`now()` : null}
-                where imei = ${p.imei} and kind = ${kind} and ok and result is null and created_at <= ${p.created_at}`
+                where imei = ${p.imei} and kind = ${kind} and ok and result is null
+                  and created_at <= (select created_at from firmware_upgrade_log where id = ${p.id})`
       if (result === 'updated') info0.updated++
       if (result === 'failed') info0.failed++
     }
