@@ -18,6 +18,7 @@ const fmt = (d: Date) => new Date(d).toLocaleString('pt-PT', { timeZone: 'Europe
 export function FirmwareHistory({ rows, params }: { rows: FirmwareLogRow[]; params: { q?: string; kind?: string; from?: string; to?: string } }) {
   const ok = rows.filter((r) => r.ok).length
   const upd = rows.filter((r) => r.result === 'updated').length
+  const waiting = rows.filter((r) => r.queued).length
   return (
     <div className="space-y-3">
       <div>
@@ -42,7 +43,7 @@ export function FirmwareHistory({ rows, params }: { rows: FirmwareLogRow[]; para
           <input type="date" name="to" defaultValue={params.to ?? ''} className="border border-fc-dark-20 bg-transparent px-2 py-1" />
         </label>
         <button type="submit" className="bg-fc-dark-100 px-3 py-1.5 text-white">Filtrar</button>
-        <span className="ml-auto text-fc-dark-60">{rows.length} pedido(s) · {upd} atualizado(s) · {ok - upd} enviado(s) por confirmar · {rows.length - ok} com erro</span>
+        <span className="ml-auto text-fc-dark-60">{rows.length} pedido(s) · {upd} atualizado(s) · {ok - upd} enviado(s) por confirmar · {waiting} em espera · {rows.length - ok - waiting} com erro</span>
       </form>
       <div className="max-h-[600px] overflow-auto border border-fc-dark-20">
         <table className="w-full text-[13px]">
@@ -64,7 +65,9 @@ export function FirmwareHistory({ rows, params }: { rows: FirmwareLogRow[]; para
                 <td className="px-3 py-1.5">{r.kind === 'canadapter' ? 'CAN chip' : 'Firmware'}</td>
                 <td className="px-3 py-1.5">{r.previous ?? '—'}</td>
                 <td className="px-3 py-1.5">{r.requested ?? '—'}</td>
-                <td className="px-3 py-1.5">{r.ok
+                <td className="px-3 py-1.5">{r.queued
+                  ? <span className="font-semibold text-[#c98a00]" title="É enviado automaticamente quando a ignição desligar (expira ao fim de 7 dias)">Em espera · ignição ligada</span>
+                  : r.ok
                   ? r.result === 'updated'
                     ? <span className="font-semibold text-[#4b850d]" title={r.result_at ? `Confirmado em ${fmt(r.result_at)}` : ''}>Atualizado{r.current_version ? ` (${r.current_version})` : ''}</span>
                     : r.result === 'failed'

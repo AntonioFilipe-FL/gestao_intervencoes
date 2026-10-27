@@ -83,6 +83,7 @@ const SECTIONS: Section[] = [
       <>Separador <b>Firmware do equipamento</b> (FMC640, FMC650, FMC130, FMC150, C4MAX V8, C4MAX V4) e <b>CAN chip</b> (só FMC150).</>,
       <>Escolhe-se uma ou mais <b>contas Intranet</b> e/ou colam-se IMEIs; a pré-visualização lê na Intranet a versão atual, a disponível e o último pedido, e só mostra os equipamentos que podem ser atualizados.</>,
       <>Marcam-se os pretendidos, <b>Testar com 1</b> e depois <b>Atualizar</b>. O pedido fica <i>Pending</i> na Intranet até o equipamento comunicar. Equipamentos com pedido pendente não podem ser pedidos de novo.</>,
+      <>A pré-visualização mostra a <b>ignição</b> e a <b>última comunicação</b>. O pedido só é enviado com a <b>ignição desligada</b>; com a ignição ligada fica <i>Em espera</i> e a app envia-o sozinha quando a ignição desligar (até 7 dias).</>,
     ]} />,
   },
   {
@@ -108,7 +109,7 @@ const SECTIONS: Section[] = [
     id: 'superadmin', title: 'Super admin', who: 'superadmin',
     body: <L items={[
       <><b>Utilizadores</b>: adicionar/remover acessos, atribuir o perfil e tornar alguém super admin (retirar só por script).</>,
-      <><b>Histórico de atualizações</b>: em <i>Atualização Equipamento</i>, por baixo do formulário, a lista dos pedidos de firmware e CAN chip enviados (data, IMEI, versões, resultado e quem pediu), com a conta Intranet e filtros por IMEI/conta/utilizador, tipo e datas. Ao abrir a página, a app confirma na Intranet os pedidos pendentes: <i>Atualizado</i> (a versão pedida já está instalada), <i>Falhou na Intranet</i> ou <i>Enviado · pendente</i>, com o aviso <i>não comunica desde…</i> quando o equipamento está sem comunicar.</>,
+      <><b>Histórico de atualizações</b>: em <i>Atualização Equipamento</i>, por baixo do formulário, a lista dos pedidos de firmware e CAN chip enviados (data, IMEI, versões, resultado e quem pediu), com a conta Intranet e filtros por IMEI/conta/utilizador, tipo e datas. Ao abrir a página, a app confirma na Intranet os pedidos pendentes: <i>Atualizado</i> (a versão pedida já está instalada), <i>Falhou na Intranet</i> ou <i>Enviado · pendente</i>, com o aviso <i>não comunica desde…</i> quando o equipamento está sem comunicar. Os pedidos só seguem para a Intranet com a <b>ignição desligada</b>; com a ignição ligada ficam <i>Em espera</i> e são enviados automaticamente quando desligar (expiram ao fim de 7 dias).</>,
       <><b>Perfis</b>: criar, renomear e apagar perfis e definir, em cada menu, <i>Sem acesso</i>, <i>Ler</i> ou <i>Ler e escrever</i>. O Administrador tem sempre tudo; os perfis base não se apagam, nem um perfil com utilizadores.</>,
       <><b>Margem do stock mínimo</b> (aviso amarelo).</>,
       <><b>Matrículas na Intranet</b>: escolher armazéns e/ou IMEIs, marcar os pretendidos, <b>Testar com 1</b> e atualizar; opcionalmente transferir para qualquer conta Intranet. Mesmos formatos da transferência (ver Stock material). Tudo fica registado.</>,

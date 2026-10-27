@@ -38,7 +38,7 @@ export function FirmwareUpgrade() {
     start(async () => {
       const r = await applyFirmware({ imeis: list, kind })
       if (!r.ok) return setMsg({ tone: 'err', text: r.error })
-      setMsg({ tone: r.failed.length ? 'err' : 'ok', text: `${r.done} pedido(s) de atualização registado(s) na Intranet.${r.failed.length ? ` Falharam ${r.failed.length}: ${r.failed.slice(0, 5).map((f) => `${f.imei} (${f.error})`).join('; ')}` : ''}` })
+      setMsg({ tone: r.failed.length ? 'err' : 'ok', text: `${r.done} pedido(s) enviado(s) à Intranet.${r.queued ? ` ${r.queued} em espera (ignição ligada): são enviados automaticamente quando a ignição desligar.` : ''}${r.failed.length ? ` Falharam ${r.failed.length}: ${r.failed.slice(0, 5).map((f) => `${f.imei} (${f.error})`).join('; ')}` : ''}` })
     })
   }
 
@@ -88,7 +88,7 @@ export function FirmwareUpgrade() {
           <div className="max-h-96 overflow-auto border border-fc-dark-20">
             <table className="w-full fc-small">
               <thead className="sticky top-0 bg-fc-grey-80 text-left">
-                <tr><th className="px-2 py-1" /><th className="px-2 py-1">IMEI</th><th className="px-2 py-1">Conta / armazém</th><th className="px-2 py-1">Equipamento</th><th className="px-2 py-1">{kind === 'canadapter' ? 'CAN chip atual' : 'Firmware atual'}</th><th className="px-2 py-1">Disponível</th><th className="px-2 py-1">Última comunicação</th><th className="px-2 py-1">Último pedido</th><th className="px-2 py-1">Estado</th></tr>
+                <tr><th className="px-2 py-1" /><th className="px-2 py-1">IMEI</th><th className="px-2 py-1">Conta / armazém</th><th className="px-2 py-1">Equipamento</th><th className="px-2 py-1">{kind === 'canadapter' ? 'CAN chip atual' : 'Firmware atual'}</th><th className="px-2 py-1">Disponível</th><th className="px-2 py-1">Ignição</th><th className="px-2 py-1">Última comunicação</th><th className="px-2 py-1">Último pedido</th><th className="px-2 py-1">Estado</th></tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
@@ -96,6 +96,7 @@ export function FirmwareUpgrade() {
                     <td className="px-2 py-1"><input type="checkbox" disabled={!!r.issue} checked={sel.includes(r.imei)} onChange={() => toggle(r.imei)} /></td>
                     <td className="px-2 py-1 font-mono">{r.imei}</td><td className="px-2 py-1">{r.account ?? '—'}{r.warehouse && <span className="block text-fc-dark-60">{r.warehouse}</span>}</td><td className="px-2 py-1">{r.equipment ?? '—'}</td>
                     <td className="px-2 py-1 font-mono">{r.firmware ?? '—'}</td><td className="px-2 py-1 font-mono font-bold">{r.available ?? '—'}</td>
+                    <td className="px-2 py-1">{r.ignition === true ? <span className="font-semibold text-[#c98a00]">Ligada</span> : r.ignition === false ? 'Desligada' : '—'}</td>
                     <td className="px-2 py-1">{r.lastComm && !isNaN(Date.parse(r.lastComm))
                       ? <span className={Date.now() - Date.parse(r.lastComm) > 2 * 86400000 ? 'font-semibold text-[#c98a00]' : ''}>{new Date(r.lastComm).toLocaleDateString('pt-PT')}{Date.now() - Date.parse(r.lastComm) > 2 * 86400000 && <span className="block font-normal">não comunica</span>}</span>
                       : '—'}</td>

@@ -857,6 +857,29 @@ export async function getFirmwareInfo(imeis: string[], kind: 'device' | 'canadap
   }
 }
 
+/**
+ * Estado da ignição (campo "ignition" de GET /api/devices, uma só leitura da lista).
+ * true = ligada, false = desligada, null = desconhecido (não encontrado ou erro).
+ */
+export async function getIgnition(imeis: string[]): Promise<Map<string, boolean | null>> {
+  const out = new Map<string, boolean | null>(imeis.map((i) => [i, null]))
+  if (!imeis.length) return out
+  const token = await login()
+  try {
+    for (const d of asList(await getJson('/api/devices', token))) {
+      const imei = pick(d, ['imei', 'IMEI', 'Imei'])
+      if (!imei || !out.has(imei)) continue
+      const v = (d as Json).ignition
+      out.set(imei, typeof v === 'boolean' ? v : v === 'true' ? true : v === 'false' ? false : null)
+    }
+    return out
+  } catch {
+    return out
+  } finally {
+    await logout(token)
+  }
+}
+
 /** Última comunicação nos detalhes do equipamento: nomes conhecidos e, se não houver, qualquer campo "last…" com data */
 function lastCommOf(d: Json): string | null {
   const known = pick(d, ['lastRegDate', 'lastValidGPS', 'lastCommunication', 'lastCommunicationDate', 'lastCommunicationTime', 'lastConnection', 'lastConnectionDate',

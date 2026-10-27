@@ -823,6 +823,11 @@ alter table gestao_interv.firmware_upgrade_log add column if not exists last_com
 alter table gestao_interv.firmware_upgrade_log add column if not exists result text;
 alter table gestao_interv.firmware_upgrade_log add column if not exists result_at timestamptz;
 alter table gestao_interv.firmware_upgrade_log add column if not exists current_version text;
+-- fila: pedidos à espera que a ignição desligue (enviados pela tarefa /api/cron/firmware-queue)
+alter table gestao_interv.firmware_upgrade_log add column if not exists queued boolean not null default false;
+alter table gestao_interv.firmware_upgrade_log add column if not exists reason text;
+alter table gestao_interv.firmware_upgrade_log add column if not exists sent_at timestamptz;
+create index if not exists firmware_upgrade_log_queued_idx on gestao_interv.firmware_upgrade_log (queued) where queued;
 
 -- ===== Perfis configuráveis (RBAC por menu) =====
 create table if not exists roles (

@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { decrypt, SESSION_COOKIE } from '@/lib/session'
 
-const PUBLIC_PATHS = ['/login', '/auth', '/unauthorized']
+// /api/cron: sem sessão, protegido por CRON_SECRET na própria rota
+const PUBLIC_PATHS = ['/login', '/auth', '/unauthorized', '/api/cron/']
 
 /**
  * Verificação otimista: sem sessão válida → /login.

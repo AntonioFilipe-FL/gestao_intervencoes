@@ -24,6 +24,15 @@ async function main() {
   const t = token ?? Token!
   try {
     let vid = row?.vid ?? null
+    {
+      // GET /api/devices: mostra todos os campos do item deste IMEI
+      const l = await (await fetch(`${BASE}/api/devices?api_key=${encodeURIComponent(t)}`)).json() as unknown
+      const list = (Array.isArray(l) ? l : ((l as { devices?: unknown[] })?.devices ?? [])) as Record<string, unknown>[]
+      const hit = list.find((x) => String(x.imei ?? x.IMEI ?? x.Imei ?? '') === IMEI)
+      console.log(`Item em /api/devices (${list.length} equipamentos):`)
+      console.log(hit ? JSON.stringify(hit, null, 2) : '(não encontrado)')
+      if (!vid && hit) vid = String(hit.vehicleId ?? hit.VehicleId ?? hit.id ?? '') || null
+    }
     if (!vid) {
       // como a app: procura o vehicleId na lista de equipamentos da Intranet
       const l = await (await fetch(`${BASE}/api/devices?api_key=${encodeURIComponent(t)}`)).json() as unknown
@@ -37,9 +46,9 @@ async function main() {
     const j = await r.json() as Record<string, unknown>
     const walk = (o: unknown, path = ''): void => {
       if (o && typeof o === 'object') for (const [k, v] of Object.entries(o)) walk(v, path ? `${path}.${k}` : k)
-      else if (typeof o === 'string' && /\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}/.test(o)) console.log(`${path}: ${o}`)
+      else if ((typeof o === 'string' && /\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}/.test(o)) || /ign|engine|motor|status|state|speed|moving|motion|online|connect/i.test(path)) console.log(`${path}: ${o}`)
     }
-    console.log(`Campos com datas em /api/devices/details/${d.vid}:`)
+    console.log(`Campos com datas / ignição / estado em /api/devices/details/${d.vid}:`)
     walk(j)
   } finally {
     await fetch(`${BASE}/api/authorize?api_key=${encodeURIComponent(t)}`, { method: 'DELETE' }).catch(() => {})
