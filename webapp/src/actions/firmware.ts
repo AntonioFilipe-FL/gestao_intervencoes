@@ -1,7 +1,7 @@
 'use server'
 
 import { sql } from '@/lib/db'
-import { requirePerm, requireUser } from '@/lib/auth'
+import { requirePerm, requireSuperAdmin, requireUser } from '@/lib/auth'
 import { equipmentNamer } from '@/lib/equipment-namer'
 import { getFirmwareInfo, requestFirmwareUpgrades } from '@/lib/intranet'
 
@@ -90,4 +90,22 @@ export async function applyFirmware(input: { imeis: string[]; kind?: FirmwareKin
   } catch (e) {
     return { ok: false as const, error: (e as Error).message }
   }
+}
+
+export type FirmwareLogRow = { id: string; imei: string; kind: string; previous: string | null; requested: string | null; ok: boolean; error: string | null; created_by: string | null; created_at: Date }
+
+/** Histórico de pedidos de atualização (só o super admin) */
+export async function getFirmwareHistory(f: { q?: string; kind?: string; from?: string; to?: string } = {}) {
+  await requireSuperAdmin()
+  const q = (f.q ?? '').trim()
+  const like = `%${q}%`
+  return sql<FirmwareLogRow[]>`
+    select id, imei, kind, previous, requested, ok, error, created_by, created_at
+    from firmware_upgrade_log
+    where (${q} = '' or imei ilike ${like} or coalesce(created_by, '') ilike ${like})
+      and (${f.kind ?? ''} = '' or kind = ${f.kind ?? ''})
+      and (${f.from ?? ''} = '' or created_at >= ${f.from || '1970-01-01'}::date)
+      and (${f.to ?? ''} = '' or created_at < ${f.to || '1970-01-01'}::date + 1)
+    order by created_at desc
+    limit 500`
 }
