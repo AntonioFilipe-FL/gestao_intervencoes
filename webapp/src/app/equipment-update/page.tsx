@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { can } from '@/lib/permissions'
 import { redirect } from 'next/navigation'
 import { requireUser } from '@/lib/auth'
@@ -5,7 +6,7 @@ import { FirmwareUpgrade } from '@/components/settings/FirmwareUpgrade'
 import { FirmwareHistory } from '@/components/FirmwareHistory'
 import { getFirmwareHistory, refreshFirmwareResults } from '@/actions/firmware'
 
-type Params = { q?: string; kind?: string; from?: string; to?: string }
+type Params = { q?: string; kind?: string; from?: string; to?: string; hist?: string }
 
 /** Atualização de equipamentos (firmware e CAN chip); o histórico só aparece ao super admin */
 export default async function EquipmentUpdatePage({ searchParams }: { searchParams: Promise<Params> }) {
@@ -13,8 +14,10 @@ export default async function EquipmentUpdatePage({ searchParams }: { searchPara
   if (!can(user, 'equipment')) redirect('/help')
   const params = await searchParams
   // super admin: confirma primeiro na Intranet o estado dos pedidos pendentes (Atualizado / Falhou / Pendente)
-  if (user.superadmin) await refreshFirmwareResults().catch(() => 0)
-  const history = user.superadmin ? await getFirmwareHistory(params) : null
+  // só quando pedido (botão "Ver histórico"), para a página abrir depressa
+  const showHist = user.superadmin && params.hist === '1'
+  if (showHist) await refreshFirmwareResults().catch(() => 0)
+  const history = showHist ? await getFirmwareHistory(params) : null
   return (
     <div className="mx-auto max-w-[1920px] space-y-5 px-4 py-6 sm:px-6 lg:px-8">
       <div>
@@ -24,6 +27,12 @@ export default async function EquipmentUpdatePage({ searchParams }: { searchPara
       <div className="border border-fc-dark-20 bg-white p-5">
         <FirmwareUpgrade />
       </div>
+      {user.superadmin && !history && (
+        <div className="border border-fc-dark-20 bg-white p-5">
+          <Link href="/equipment-update?hist=1" className="inline-block bg-fc-dark-100 px-4 py-2 text-white">Ver histórico de atualizações</Link>
+          <p className="mt-2 fc-small text-fc-dark-60">Ao abrir, a app confirma na Intranet o estado dos pedidos pendentes (pode demorar uns segundos).</p>
+        </div>
+      )}
       {history && (
         <div className="border border-fc-dark-20 bg-white p-5">
           <FirmwareHistory rows={history} params={params} />

@@ -22,10 +22,14 @@ export function FirmwareHistory({ rows, params }: { rows: FirmwareLogRow[]; para
   return (
     <div className="space-y-3">
       <div>
-        <h2>Histórico de atualizações</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2>Histórico de atualizações</h2>
+          <a href="/equipment-update" className="fc-small text-fc-light-100 hover:text-fc-light-60">Esconder histórico</a>
+        </div>
         <p className="fc-small text-fc-dark-60">Pedidos enviados à Intranet pela app (últimos 500 que correspondem ao filtro). Visível só para o super admin. A conta é a do equipamento no momento do pedido (ou a atual, nos pedidos antigos).</p>
       </div>
       <form className="flex flex-wrap items-end gap-2 fc-small">
+        <input type="hidden" name="hist" value="1" />
         <label className="flex flex-col gap-1">IMEI, conta ou utilizador
           <input name="q" defaultValue={params.q ?? ''} className="w-56 border border-fc-dark-20 bg-transparent px-2 py-1" />
         </label>
