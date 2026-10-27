@@ -16,7 +16,7 @@ export default async function EquipmentUpdatePage({ searchParams }: { searchPara
   // super admin: confirma primeiro na Intranet o estado dos pedidos pendentes (Atualizado / Falhou / Pendente)
   // só quando pedido (botão "Ver histórico"), para a página abrir depressa
   const showHist = user.superadmin && params.hist === '1'
-  if (showHist) await refreshFirmwareResults().catch(() => 0)
+  const check = showHist ? await refreshFirmwareResults() : null
   const history = showHist ? await getFirmwareHistory(params) : null
   return (
     <div className="mx-auto max-w-[1920px] space-y-5 px-4 py-6 sm:px-6 lg:px-8">
@@ -35,7 +35,7 @@ export default async function EquipmentUpdatePage({ searchParams }: { searchPara
       )}
       {history && (
         <div className="border border-fc-dark-20 bg-white p-5">
-          <FirmwareHistory rows={history} params={params} />
+          <FirmwareHistory rows={history} params={params} check={check} />
         </div>
       )}
     </div>

@@ -1,4 +1,4 @@
-import type { FirmwareLogRow } from '@/actions/firmware'
+import type { FirmwareLogRow, RefreshInfo } from '@/actions/firmware'
 
 const day = (v: string) => new Date(v).toLocaleDateString('pt-PT', { timeZone: 'Europe/Lisbon' })
 /** Sem comunicar há mais de 2 dias no momento do pedido */
@@ -15,7 +15,7 @@ function errorText(r: FirmwareLogRow) {
 const fmt = (d: Date) => new Date(d).toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon', dateStyle: 'short', timeStyle: 'short' })
 
 /** Histórico de pedidos de firmware / CAN chip (só super admin) */
-export function FirmwareHistory({ rows, params }: { rows: FirmwareLogRow[]; params: { q?: string; kind?: string; from?: string; to?: string } }) {
+export function FirmwareHistory({ rows, params, check }: { rows: FirmwareLogRow[]; params: { q?: string; kind?: string; from?: string; to?: string }; check?: RefreshInfo | null }) {
   const ok = rows.filter((r) => r.ok).length
   const upd = rows.filter((r) => r.result === 'updated').length
   const waiting = rows.filter((r) => r.queued).length
@@ -28,6 +28,12 @@ export function FirmwareHistory({ rows, params }: { rows: FirmwareLogRow[]; para
         </div>
         <p className="fc-small text-fc-dark-60">Pedidos enviados à Intranet pela app (últimos 500 que correspondem ao filtro). Visível só para o super admin. A conta é a do equipamento no momento do pedido (ou a atual, nos pedidos antigos).</p>
       </div>
+      {check && (
+        <p className={`fc-small ${check.error ? 'text-[#b31d25]' : 'text-fc-dark-60'}`}>
+          Verificação na Intranet: {check.checked} pedido(s) por confirmar lido(s) · {check.updated} passaram a Atualizado · {check.failed} falharam
+          {check.unread ? ` · ${check.unread} não lido(s)` : ''}{check.error ? ` · Erro: ${check.error}` : ''}
+        </p>
+      )}
       <form className="flex flex-wrap items-end gap-2 fc-small">
         <input type="hidden" name="hist" value="1" />
         <label className="flex flex-col gap-1">IMEI, conta ou utilizador
@@ -76,7 +82,7 @@ export function FirmwareHistory({ rows, params }: { rows: FirmwareLogRow[]; para
                     ? <span className="font-semibold text-[#4b850d]" title={r.result_at ? `Confirmado em ${fmt(r.result_at)}` : ''}>Atualizado{r.current_version ? ` (${r.current_version})` : ''}</span>
                     : r.result === 'failed'
                       ? <span className="text-[#b31d25]">Falhou na Intranet{r.current_version ? ` · está com ${r.current_version}` : ''}</span>
-                      : <span className="text-[#4b850d]">Enviado · pendente{silent(r) && <span className="text-[#c98a00]"> · não comunica desde {day(r.last_comm!)}</span>}</span>
+                      : <span className="text-[#4b850d]">Enviado · pendente{r.current_version && <span className="text-fc-dark-60"> · está com {r.current_version}</span>}{silent(r) && <span className="text-[#c98a00]"> · não comunica desde {day(r.last_comm!)}</span>}</span>
                   : <span className="text-[#b31d25]" title={r.error ?? ''}>{errorText(r)}</span>}</td>
                 <td className="px-3 py-1.5">{r.created_by ?? '—'}</td>
               </tr>

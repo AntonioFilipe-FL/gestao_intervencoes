@@ -107,21 +107,25 @@ export type FirmwareLogRow = { id: string; imei: string; kind: string; queued: b
  * Verifica na Intranet se os pedidos enviados já ficaram instalados (só leitura). Só os pendentes dos últimos 60 dias,
  * no máximo 150 de cada vez; o resultado final fica guardado e não volta a ser lido.
  */
-export async function refreshFirmwareResults() {
+export type RefreshInfo = { checked: number; updated: number; failed: number; unread: number; error: string | null }
+
+export async function refreshFirmwareResults(): Promise<RefreshInfo> {
   await requireSuperAdmin()
+  const info0: RefreshInfo = { checked: 0, updated: 0, failed: 0, unread: 0, error: null }
+  try {
   const pend = await sql<{ id: string; imei: string; kind: 'device' | 'canadapter'; requested: string | null; created_at: Date }[]>`
     select distinct on (imei, kind) id, imei, kind, requested, created_at from firmware_upgrade_log
     where ok and result is null and created_at > now() - interval '60 days'
     order by imei, kind, created_at desc limit 150`
-  if (!pend.length) return 0
-  let n = 0
+  if (!pend.length) return info0
+  info0.checked = pend.length
   for (const kind of ['device', 'canadapter'] as const) {
     const items = pend.filter((p) => p.kind === kind)
     if (!items.length) continue
-    const info = new Map((await getFirmwareInfo(items.map((p) => p.imei), kind).catch(() => [])).map((i) => [i.imei, i]))
+    const info = new Map((await getFirmwareInfo(items.map((p) => p.imei), kind)).map((i) => [i.imei, i]))
     for (const p of items) {
       const i = info.get(p.imei)
-      if (!i || i.error) continue
+      if (!i || i.error) { info0.unread++; if (i?.error && !info0.error) info0.error = `${p.imei}: ${i.error}`; continue }
       const cur = kind === 'canadapter' ? i.canFirmware : i.firmware
       const st = i.lastOp?.status ?? ''
       // instalado quando a versão atual já é a pedida; falhado se a Intranet marcar o último pedido como erro/cancelado
@@ -130,13 +134,17 @@ export async function refreshFirmwareResults() {
       const installed = !!cur && !!p.requested && parts(p.requested).every((x) => parts(cur).includes(x))
       const result = installed ? 'updated'
         : /fail|error|erro|cancel|reject|abort/i.test(st) ? 'failed' : null
-      await sql`update firmware_upgrade_log set current_version = ${cur ?? null}, last_comm = coalesce(${i.lastComm ?? null}, last_comm),
+      await sql`update firmware_upgrade_log set current_version = ${cur ?? null}, last_comm = coalesce(${i.lastComm ?? null}::text, last_comm),
                 result = ${result}, result_at = ${result ? sql`now()` : null}
                 where imei = ${p.imei} and kind = ${kind} and ok and result is null and created_at <= ${p.created_at}`
-      if (result) n++
+      if (result === 'updated') info0.updated++
+      if (result === 'failed') info0.failed++
     }
   }
-  return n
+  } catch (e) {
+    info0.error = (e as Error).message.slice(0, 200)
+  }
+  return info0
 }
 
 /** Histórico de pedidos de atualização (só o super admin) */
