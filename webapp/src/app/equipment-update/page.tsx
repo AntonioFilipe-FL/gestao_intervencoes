@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { requireUser } from '@/lib/auth'
 import { FirmwareUpgrade } from '@/components/settings/FirmwareUpgrade'
 import { FirmwareHistory } from '@/components/FirmwareHistory'
-import { getFirmwareHistory } from '@/actions/firmware'
+import { getFirmwareHistory, refreshFirmwareResults } from '@/actions/firmware'
 
 type Params = { q?: string; kind?: string; from?: string; to?: string }
 
@@ -12,6 +12,8 @@ export default async function EquipmentUpdatePage({ searchParams }: { searchPara
   const user = await requireUser()
   if (!can(user, 'equipment')) redirect('/help')
   const params = await searchParams
+  // super admin: confirma primeiro na Intranet o estado dos pedidos pendentes (Atualizado / Falhou / Pendente)
+  if (user.superadmin) await refreshFirmwareResults().catch(() => 0)
   const history = user.superadmin ? await getFirmwareHistory(params) : null
   return (
     <div className="mx-auto max-w-[1920px] space-y-5 px-4 py-6 sm:px-6 lg:px-8">

@@ -808,6 +808,8 @@ export type FirmwareInfo = {
   imei: string; vehicleId: string | null; hardware: string | null; firmware: string | null
   available: string | null; availableId: number | null; lastUpgrade: string | null
   canFirmware: string | null; canAvailable: string | null; canAvailableId: number | null; error?: string
+  /** data da última comunicação do equipamento (se a Intranet a devolver) */
+  lastComm?: string | null
   /** último pedido de atualização registado na Intranet (estado e data) */
   lastOp?: { status: string | null; requested: string | null; firmware: string | null } | null
 }
@@ -841,6 +843,7 @@ export async function getFirmwareInfo(imeis: string[], kind: 'device' | 'canadap
             canFirmware: pick(d, ['canAdapterFirmwareVersion']), canAvailable: pick(d, ['canAdapterAvailableUpgrade']),
             canAvailableId: num(pick(d, ['canAdapterAvailableUpgradeFirmwareId'])),
             lastOp: await lastOperation(imei, kind, token),
+            lastComm: lastCommOf(d),
           })
         } catch (e) {
           out.push({ imei, vehicleId: vid, hardware: null, firmware: null, available: null, availableId: null, lastUpgrade: null, canFirmware: null, canAvailable: null, canAvailableId: null, error: (e as Error).message.slice(0, 120) })
@@ -852,6 +855,17 @@ export async function getFirmwareInfo(imeis: string[], kind: 'device' | 'canadap
   } finally {
     await logout(token)
   }
+}
+
+/** Última comunicação nos detalhes do equipamento: nomes conhecidos e, se não houver, qualquer campo "last…" com data */
+function lastCommOf(d: Json): string | null {
+  const known = pick(d, ['lastRegDate', 'lastValidGPS', 'lastCommunication', 'lastCommunicationDate', 'lastCommunicationTime', 'lastConnection', 'lastConnectionDate',
+    'lastContact', 'lastContactDate', 'lastSeen', 'lastReport', 'lastReportDate', 'lastPositionDate', 'lastPosition.date', 'lastGpsDate', 'lastDataReceived'])
+  if (known) return known
+  for (const [k, v] of Object.entries(d ?? {})) {
+    if (/last.*(comm|conn|contact|seen|report|position|gps|data|messag)/i.test(k) && typeof v === 'string' && !isNaN(Date.parse(v))) return v
+  }
+  return null
 }
 
 /** Último pedido de atualização (GET /api/devices/details/operations/{imei}[/canadapter]) — null se não houver ou não der para ler */

@@ -108,7 +108,7 @@ const SECTIONS: Section[] = [
     id: 'superadmin', title: 'Super admin', who: 'superadmin',
     body: <L items={[
       <><b>Utilizadores</b>: adicionar/remover acessos, atribuir o perfil e tornar alguém super admin (retirar só por script).</>,
-      <><b>Histórico de atualizações</b>: em <i>Atualização Equipamento</i>, por baixo do formulário, a lista dos pedidos de firmware e CAN chip enviados (data, IMEI, versões, resultado e quem pediu), com filtros por IMEI/utilizador, tipo e datas.</>,
+      <><b>Histórico de atualizações</b>: em <i>Atualização Equipamento</i>, por baixo do formulário, a lista dos pedidos de firmware e CAN chip enviados (data, IMEI, versões, resultado e quem pediu), com a conta Intranet e filtros por IMEI/conta/utilizador, tipo e datas. Ao abrir a página, a app confirma na Intranet os pedidos pendentes: <i>Atualizado</i> (a versão pedida já está instalada), <i>Falhou na Intranet</i> ou <i>Enviado · pendente</i>, com o aviso <i>não comunica desde…</i> quando o equipamento está sem comunicar.</>,
       <><b>Perfis</b>: criar, renomear e apagar perfis e definir, em cada menu, <i>Sem acesso</i>, <i>Ler</i> ou <i>Ler e escrever</i>. O Administrador tem sempre tudo; os perfis base não se apagam, nem um perfil com utilizadores.</>,
       <><b>Margem do stock mínimo</b> (aviso amarelo).</>,
       <><b>Matrículas na Intranet</b>: escolher armazéns e/ou IMEIs, marcar os pretendidos, <b>Testar com 1</b> e atualizar; opcionalmente transferir para qualquer conta Intranet. Mesmos formatos da transferência (ver Stock material). Tudo fica registado.</>,

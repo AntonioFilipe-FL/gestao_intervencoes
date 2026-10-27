@@ -585,7 +585,6 @@ where m.is_correction and m.superseded_at is not null
 
 -- Papel "financeiro": só consulta e marca intervenções faturáveis como processadas
 alter table profiles drop constraint if exists profiles_role_check;
-alter table profiles add constraint profiles_role_check check (role in ('admin', 'user', 'financeiro'));
 alter table interventions
   add column if not exists billing_processed_at timestamptz,
   add column if not exists billing_processed_by text;
@@ -816,6 +815,14 @@ create table if not exists gestao_interv.firmware_upgrade_log (
   created_by  text,
   created_at  timestamptz not null default now()
 );
+
+-- histórico de atualizações: conta Intranet e última comunicação no momento do pedido
+alter table gestao_interv.firmware_upgrade_log add column if not exists account text;
+alter table gestao_interv.firmware_upgrade_log add column if not exists last_comm text;
+-- resultado verificado depois na Intranet: 'updated' (versão já instalada), 'failed' ou null (ainda pendente)
+alter table gestao_interv.firmware_upgrade_log add column if not exists result text;
+alter table gestao_interv.firmware_upgrade_log add column if not exists result_at timestamptz;
+alter table gestao_interv.firmware_upgrade_log add column if not exists current_version text;
 
 -- ===== Perfis configuráveis (RBAC por menu) =====
 create table if not exists roles (

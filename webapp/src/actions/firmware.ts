@@ -14,7 +14,7 @@ export type FirmwareKind = 'device' | 'canadapter'
 export type FirmwareRow = {
   imei: string; warehouse: string | null; equipment: string | null; firmware: string | null
   available: string | null; availableId: number | null; issue: string | null
-  account: string | null; lastStatus: string | null; lastDate: string | null
+  account: string | null; lastStatus: string | null; lastDate: string | null; lastComm?: string | null
 }
 
 async function previewCore(input: { accountIds: string[]; imeis: string; kind?: FirmwareKind }): Promise<FirmwareRow[]> {
@@ -57,7 +57,7 @@ async function previewCore(input: { accountIds: string[]; imeis: string; kind?: 
     else if (!issue && av === cur) issue = 'Já atualizado'
     else if (!issue && i?.lastOp?.status && /pend|request|queue|progress|sent/i.test(i.lastOp.status)) issue = `Já tem um pedido pendente (${i.lastOp.firmware ?? ''})`
     return { imei: r.imei, warehouse: r.warehouse, equipment: modelOf(r) ?? r.equipment, firmware: cur ?? null, available: av ?? null, availableId: avId ?? null, issue,
-             account: r.account, lastStatus: i?.lastOp?.status ?? null, lastDate: i?.lastOp?.requested ?? null }
+             account: r.account, lastStatus: i?.lastOp?.status ?? null, lastDate: i?.lastOp?.requested ?? null, lastComm: i?.lastComm ?? null }
   })
   const seen = new Set(out.map((r) => r.imei))
   for (const imei of list) if (!seen.has(imei)) out.unshift({ imei, warehouse: null, equipment: null, firmware: null, available: null, availableId: null, issue: 'Não existe na Intranet', account: null, lastStatus: null, lastDate: null })
@@ -77,14 +77,18 @@ export async function applyFirmware(input: { imeis: string[]; kind?: FirmwareKin
   try {
     const user = await requirePerm('equipment', 'write')
     const kind: FirmwareKind = input.kind === 'canadapter' ? 'canadapter' : 'device'
-    const rows = (await previewCore({ accountIds: [], imeis: input.imeis.join('\n'), kind })).filter((r) => !r.issue && r.availableId && r.available)
+    // evita pedidos repetidos (ex.: duplo clique): ignora IMEIs com pedido enviado há menos de 15 min
+    const recent = new Set((await sql<{ imei: string }[]>`select imei from firmware_upgrade_log
+      where ok and kind = ${kind} and imei = any(${input.imeis}) and created_at > now() - interval '15 minutes'`).map((r) => r.imei))
+    const rows = (await previewCore({ accountIds: [], imeis: input.imeis.filter((i) => !recent.has(i)).join('\n'), kind })).filter((r) => !r.issue && r.availableId && r.available)
+    if (!rows.length && recent.size) throw new Error('Estes equipamentos já tiveram o pedido enviado há poucos minutos.')
     if (!rows.length) throw new Error('Nada a atualizar (sem atualização disponível ou modelo não abrangido).')
     const res = await requestFirmwareUpgrades(rows.map((r) => ({
       imei: r.imei, firmwareId: r.availableId!, requested: r.available!, previous: r.firmware, reason: `Atualização de ${kind === 'canadapter' ? 'CAN chip' : 'firmware'} via Gestão de Intervenções (${user.email})`,
     })), kind)
     await sql`insert into firmware_upgrade_log ${sql(res.map((x) => {
       const r = rows.find((y) => y.imei === x.imei)!
-      return { imei: x.imei, kind, previous: r.firmware, requested: r.available, firmware_id: r.availableId, ok: x.ok, error: x.error ?? null, created_by: user.email }
+      return { imei: x.imei, kind, previous: r.firmware, requested: r.available, firmware_id: r.availableId, ok: x.ok, error: x.error ?? null, created_by: user.email, account: r.account, last_comm: r.lastComm ?? null }
     }))}`
     return { ok: true as const, done: res.filter((x) => x.ok).length, failed: res.filter((x) => !x.ok) }
   } catch (e) {
@@ -92,7 +96,40 @@ export async function applyFirmware(input: { imeis: string[]; kind?: FirmwareKin
   }
 }
 
-export type FirmwareLogRow = { id: string; imei: string; kind: string; previous: string | null; requested: string | null; ok: boolean; error: string | null; created_by: string | null; created_at: Date }
+export type FirmwareLogRow = { id: string; imei: string; kind: string; account: string | null; last_comm: string | null; result: string | null; result_at: Date | null; current_version: string | null; previous: string | null; requested: string | null; ok: boolean; error: string | null; created_by: string | null; created_at: Date }
+
+/**
+ * Verifica na Intranet se os pedidos enviados já ficaram instalados (só leitura). Só os pendentes dos últimos 60 dias,
+ * no máximo 150 de cada vez; o resultado final fica guardado e não volta a ser lido.
+ */
+export async function refreshFirmwareResults() {
+  await requireSuperAdmin()
+  const pend = await sql<{ id: string; imei: string; kind: 'device' | 'canadapter'; requested: string | null; created_at: Date }[]>`
+    select distinct on (imei, kind) id, imei, kind, requested, created_at from firmware_upgrade_log
+    where ok and result is null and created_at > now() - interval '60 days'
+    order by imei, kind, created_at desc limit 150`
+  if (!pend.length) return 0
+  let n = 0
+  for (const kind of ['device', 'canadapter'] as const) {
+    const items = pend.filter((p) => p.kind === kind)
+    if (!items.length) continue
+    const info = new Map((await getFirmwareInfo(items.map((p) => p.imei), kind).catch(() => [])).map((i) => [i.imei, i]))
+    for (const p of items) {
+      const i = info.get(p.imei)
+      if (!i || i.error) continue
+      const cur = kind === 'canadapter' ? i.canFirmware : i.firmware
+      const st = i.lastOp?.status ?? ''
+      // instalado quando a versão atual já é a pedida; falhado se a Intranet marcar o último pedido como erro/cancelado
+      const result = cur && p.requested && cur.trim() === p.requested.trim() ? 'updated'
+        : /fail|error|erro|cancel|reject|abort/i.test(st) ? 'failed' : null
+      await sql`update firmware_upgrade_log set current_version = ${cur ?? null}, last_comm = coalesce(${i.lastComm ?? null}, last_comm),
+                result = ${result}, result_at = ${result ? sql`now()` : null}
+                where imei = ${p.imei} and kind = ${kind} and ok and result is null and created_at <= ${p.created_at}`
+      if (result) n++
+    }
+  }
+  return n
+}
 
 /** Histórico de pedidos de atualização (só o super admin) */
 export async function getFirmwareHistory(f: { q?: string; kind?: string; from?: string; to?: string } = {}) {
@@ -100,12 +137,18 @@ export async function getFirmwareHistory(f: { q?: string; kind?: string; from?: 
   const q = (f.q ?? '').trim()
   const like = `%${q}%`
   return sql<FirmwareLogRow[]>`
-    select id, imei, kind, previous, requested, ok, error, created_by, created_at
-    from firmware_upgrade_log
-    where (${q} = '' or imei ilike ${like} or coalesce(created_by, '') ilike ${like})
-      and (${f.kind ?? ''} = '' or kind = ${f.kind ?? ''})
-      and (${f.from ?? ''} = '' or created_at >= ${f.from || '1970-01-01'}::date)
-      and (${f.to ?? ''} = '' or created_at < ${f.to || '1970-01-01'}::date + 1)
-    order by created_at desc
+    select l.id, l.imei, l.kind, l.previous, l.requested, l.ok, l.error, l.created_by, l.created_at, l.last_comm, l.result, l.result_at, l.current_version,
+           coalesce(l.account, dc.intranet_short_name, dc.name, p.name) as account
+    from firmware_upgrade_log l
+    left join devices d on d.imei = l.imei
+    left join lateral (select intranet_short_name, name from clients c where c.intranet_account_id = d.intranet_account_id
+                       order by intranet_synced_at nulls last limit 1) dc on true
+    left join intranet_pending p on p.intranet_account_id = d.intranet_account_id
+    where (${q} = '' or l.imei ilike ${like} or coalesce(l.created_by, '') ilike ${like}
+           or coalesce(l.account, dc.intranet_short_name, dc.name, p.name, '') ilike ${like})
+      and (${f.kind ?? ''} = '' or l.kind = ${f.kind ?? ''})
+      and (${f.from ?? ''} = '' or l.created_at >= ${f.from || '1970-01-01'}::date)
+      and (${f.to ?? ''} = '' or l.created_at < ${f.to || '1970-01-01'}::date + 1)
+    order by l.created_at desc
     limit 500`
 }
