@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { BusyLink } from '@/components/BusyActions'
 import { can } from '@/lib/permissions'
 import { redirect } from 'next/navigation'
 import { requireUser } from '@/lib/auth'
@@ -29,7 +29,7 @@ export default async function EquipmentUpdatePage({ searchParams }: { searchPara
       </div>
       {user.superadmin && !history && (
         <div className="border border-fc-dark-20 bg-white p-5">
-          <Link href="/equipment-update?hist=1" className="inline-block bg-fc-dark-100 px-4 py-2 text-white">Ver histórico de atualizações</Link>
+          <BusyLink href="/equipment-update?hist=1" label="Ver histórico de atualizações" busyLabel="A carregar o histórico…" className="inline-block bg-fc-dark-100 px-4 py-2 text-white" />
           <p className="mt-2 fc-small text-fc-dark-60">Ao abrir, a app confirma na Intranet o estado dos pedidos pendentes (pode demorar uns segundos).</p>
         </div>
       )}

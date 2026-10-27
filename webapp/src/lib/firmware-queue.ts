@@ -16,7 +16,11 @@ export async function processFirmwareQueue() {
     select id, imei, kind, firmware_id, requested, previous, reason from firmware_upgrade_log where queued order by created_at limit 300`
   if (!rows.length) return { sent: 0, waiting: 0 }
   const ign = await getIgnition([...new Set(rows.map((r) => r.imei))])
-  const ready = rows.filter((r) => ign.get(r.imei) === false)
+  // um envio por IMEI/tipo: os repetidos na fila ficam marcados como duplicados
+  const seen = new Set<string>()
+  const dup = rows.filter((r) => { const k = `${r.imei}|${r.kind}`; if (seen.has(k)) return true; seen.add(k); return false })
+  for (const d of dup) await sql`update firmware_upgrade_log set queued = false, error = 'Duplicado (já em espera noutro pedido)' where id = ${d.id}`
+  const ready = rows.filter((r) => !dup.includes(r) && ign.get(r.imei) === false)
   let sent = 0
   for (const kind of ['device', 'canadapter'] as const) {
     const items = ready.filter((r) => r.kind === kind)

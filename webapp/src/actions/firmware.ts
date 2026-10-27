@@ -44,7 +44,9 @@ async function previewCore(input: { accountIds: string[]; imeis: string; kind?: 
                                 and (l.queued or (l.ok and (l.result is null or l.result = 'updated')) ) and l.created_at > now() - interval '60 days'))` : sql`false`})
     order by 5, d.imei`
   const eqName = await equipmentNamer()
-  const base = rows.map((r) => ({ ...r, equipment: eqName(r.hardware) ?? r.equipment }))
+  // um IMEI só uma vez: com vários clientes na mesma conta Intranet, o join repetia o equipamento (e o pedido era enviado 2×)
+  const uniq = [...new Map(rows.map((r) => [r.imei, r])).values()]
+  const base = uniq.map((r) => ({ ...r, equipment: eqName(r.hardware) ?? r.equipment }))
   // modelo abrangido: pelo equipamento da app OU pelo hardware da Intranet (ex.: "MD C4MAX V4 3GEU" → C4MAX V4)
   const fold = (v: string | null | undefined) => (v ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
   const modelOf = (r: { equipment: string | null; hardware: string | null }) =>
@@ -99,8 +101,10 @@ export async function applyFirmware(input: { imeis: string[]; kind?: FirmwareKin
     if (!rows.length) throw new Error('Nada a atualizar (sem atualização disponível ou modelo não abrangido).')
     const reason = `Atualização de ${kind === 'canadapter' ? 'CAN chip' : 'firmware'} via Gestão de Intervenções (${user.email})`
     // só se envia com a ignição DESLIGADA; ligada ou desconhecida → fica em espera e a tarefa automática envia depois
-    const now = rows.filter((r) => r.ignition === false)
-    const wait = rows.filter((r) => r.ignition !== false)
+    // nunca mais que um pedido por IMEI na mesma operação
+    const one = [...new Map(rows.map((r) => [r.imei, r])).values()]
+    const now = one.filter((r) => r.ignition === false)
+    const wait = one.filter((r) => r.ignition !== false)
     const res = await requestFirmwareUpgrades(now.map((r) => ({ imei: r.imei, firmwareId: r.availableId!, requested: r.available!, previous: r.firmware, reason })), kind)
     const logRow = (r: FirmwareRow, x: { ok: boolean; error?: string } | null) => ({
       imei: r.imei, kind, previous: r.firmware, requested: r.available, firmware_id: r.availableId, ok: x?.ok ?? false, error: x?.error ?? null,

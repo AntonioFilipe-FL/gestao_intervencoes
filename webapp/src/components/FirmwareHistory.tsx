@@ -1,4 +1,5 @@
 import type { FirmwareLogRow, RefreshInfo } from '@/actions/firmware'
+import { BusySubmit } from '@/components/BusyActions'
 
 const day = (v: string) => new Date(v).toLocaleDateString('pt-PT', { timeZone: 'Europe/Lisbon' })
 /** Sem comunicar há mais de 2 dias no momento do pedido */
@@ -52,7 +53,7 @@ export function FirmwareHistory({ rows, params, check }: { rows: FirmwareLogRow[
         <label className="flex flex-col gap-1">Até
           <input type="date" name="to" defaultValue={params.to ?? ''} className="border border-fc-dark-20 bg-transparent px-2 py-1" />
         </label>
-        <button type="submit" className="bg-fc-dark-100 px-3 py-1.5 text-white">Filtrar</button>
+        <BusySubmit label="Filtrar" busyLabel="A filtrar…" />
         <span className="ml-auto text-fc-dark-60">{rows.length} pedido(s) · {upd} atualizado(s) · {ok - upd} enviado(s) por confirmar · {waiting} em espera · {rows.length - ok - waiting} com erro</span>
       </form>
       <div className="max-h-[600px] overflow-auto border border-fc-dark-20">
