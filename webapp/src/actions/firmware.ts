@@ -120,7 +120,10 @@ export async function refreshFirmwareResults() {
       const cur = kind === 'canadapter' ? i.canFirmware : i.firmware
       const st = i.lastOp?.status ?? ''
       // instalado quando a versão atual já é a pedida; falhado se a Intranet marcar o último pedido como erro/cancelado
-      const result = cur && p.requested && cur.trim() === p.requested.trim() ? 'updated'
+      // a versão atual vem com várias partes (ex.: "D3.5.23 F0.47.9") e a pedida só com uma ("F0.47.9")
+      const parts = (v: string) => v.toUpperCase().split(/[\s,;/|]+/).filter(Boolean)
+      const installed = !!cur && !!p.requested && parts(p.requested).every((x) => parts(cur).includes(x))
+      const result = installed ? 'updated'
         : /fail|error|erro|cancel|reject|abort/i.test(st) ? 'failed' : null
       await sql`update firmware_upgrade_log set current_version = ${cur ?? null}, last_comm = coalesce(${i.lastComm ?? null}, last_comm),
                 result = ${result}, result_at = ${result ? sql`now()` : null}
