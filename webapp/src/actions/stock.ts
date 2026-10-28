@@ -558,20 +558,28 @@ export async function changeModality(input: { imeis: string; modality: string; d
     if (input.modality !== 'Venda' && input.modality !== 'Aluguer') throw new Error('Escolha Venda ou Aluguer.')
     const imeis = parseImeis(input.imeis)
     if (!imeis.length) throw new Error('Indique pelo menos um IMEI.')
-    const cur = await sql<{ imei: string; warehouse_id: string; modality: string | null }[]>`
-      select imei, warehouse_id, modality from stock_current where imei = any(${imeis}) and warehouse_id is not null`
+    const cur = await sql<{ imei: string; warehouse_id: string; modality: string | null; mobilized: boolean }[]>`
+      select c.imei, c.warehouse_id, c.modality, (w.type = 'mobilizado') as mobilized
+      from stock_current c join warehouses w on w.id = c.warehouse_id
+      where c.imei = any(${imeis}) and c.warehouse_id is not null`
     const todo = cur.filter((c) => c.modality !== input.modality)
     if (!todo.length) throw new Error(cur.length ? `Os IMEIs já estão como ${input.modality}.` : 'Nenhum destes IMEIs está em stock.')
     const date = input.date || new Date().toISOString().slice(0, 10)
-    await sql`insert into stock_movements ${sql(todo.map((c) => ({
-      imei: c.imei, equipment_id: null, kind: 'transferencia', from_warehouse_id: c.warehouse_id, to_warehouse_id: c.warehouse_id,
-      modality: input.modality, moved_at: date, is_correction: true, created_by: user.email,
-      notes: [`Mudança de modalidade: ${c.modality ?? 'sem modalidade'} → ${input.modality}`, input.notes].filter(Boolean).join(' · '),
-    })))}`
+    // instalado em aluguer (mobilizado) que passa a Venda: o equipamento fica do cliente → sai do stock
+    const sold = todo.filter((c) => c.mobilized && input.modality === 'Venda')
+    await sql`insert into stock_movements ${sql(todo.map((c) => {
+      const out = sold.includes(c)
+      return {
+        imei: c.imei, equipment_id: null, kind: out ? 'ajuste' : 'transferencia', from_warehouse_id: c.warehouse_id, to_warehouse_id: out ? null : c.warehouse_id,
+        modality: input.modality, moved_at: date, is_correction: true, created_by: user.email,
+        notes: [`Mudança de modalidade: ${c.modality ?? 'sem modalidade'} → ${input.modality}`, out ? 'passou a Venda: sai do stock mobilizado' : null, input.notes].filter(Boolean).join(' · '),
+      }
+    }))}`
     revalidatePath('/stock')
     const warnings: string[] = []
     const same = cur.length - todo.length
     if (same) warnings.push(`${same} já estavam como ${input.modality}.`)
+    if (sold.length) warnings.push(`${sold.length} estavam instalados em aluguer (mobilizado) e saíram do stock.`)
     const out = imeis.filter((i) => !cur.some((c) => c.imei === i))
     if (out.length) warnings.push(`${out.length} não estão em stock: ${out.slice(0, 8).join(', ')}${out.length > 8 ? '…' : ''}`)
     return { ok: true, n: todo.length, warnings }

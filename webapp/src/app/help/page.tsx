@@ -67,7 +67,7 @@ const SECTIONS: Section[] = [
         <><b>Contagem do armazém</b>: cola-se o que está fisicamente; a app mostra o que falta e o que sobra antes de aplicar.</>,
         <><b>Retirar IMEIs</b>: perdido, avariado, devolvido, erro de registo.</>,
         <><b>Substituição RMA</b>: IMEIs antigos à esquerda, novos à direita (mesma ordem); sugere os IMEIs recentes das contas RMA / Storage Service / Installation / Refurbished.</>,
-        <><b>Mudar modalidade</b>: Venda ↔ Aluguer sem mudar de armazém.</>,
+        <><b>Mudar modalidade</b>: Venda ↔ Aluguer sem mudar de armazém. Os equipamentos do <i>Instalado Aluguer (Mobilizado)</i> que passam a <b>Venda</b> saem do stock (ficam do cliente).</>,
       ]} />
       <H>Stock mínimo</H>
       <L items={[<>Botão <b>Stock mínimo</b>: define-se por equipamento e armazém. Na tabela: <span className="text-[#d0312d]">●</span> igual ou abaixo do mínimo, <span className="text-[#f2b600]">●</span> até X% acima (margem definida pelo super admin, por omissão 20%).</>,

@@ -56,7 +56,8 @@ export async function getInterventions({
       ${techSearch ? sql`and t.name ilike ${like(techSearch)}` : sql``}
       ${billingFilter ? sql`and lower(btrim(i.billing)) = 'sim'` : sql``}
       ${billingFilter === 'pendente' ? sql`and i.billing_processed_at is null` : billingFilter === 'processado' ? sql`and i.billing_processed_at is not null` : sql``}
-      ${plateSearch ? sql`and (i.license_plate ilike ${like(plateSearch)} or i.imei ilike ${like(plateSearch)} or i.crm_vehicle ilike ${like(plateSearch)})` : sql``}
+      ${plateSearch ? sql`and (i.license_plate ilike ${like(plateSearch)} or i.imei ilike ${like(plateSearch)} or i.crm_vehicle ilike ${like(plateSearch)}
+             or i.spent_equipment_imei ilike ${like(plateSearch)} or i.return_equipment_imei ilike ${like(plateSearch)})` : sql``}
     `
     const from = sql`
       from interventions i
