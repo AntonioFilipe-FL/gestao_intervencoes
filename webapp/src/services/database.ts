@@ -29,6 +29,7 @@ export async function getInterventions({
   dateFrom = '',
   dateTo = '',
   billingFilter = '',
+  modalityFilter = '',
   orderBy = 'intervencao',
 }: {
   page?: number
@@ -41,6 +42,8 @@ export async function getInterventions({
   dateTo?: string
   /** 'pendente' | 'processado' | 'faturar' */
   billingFilter?: string
+  /** 'Venda' | 'Aluguer' */
+  modalityFilter?: string
   /** 'intervencao' (data da intervenção) | 'registo' (data de registo/validação) */
   orderBy?: string
 } = {}) {
@@ -55,6 +58,7 @@ export async function getInterventions({
       ${clientSearch ? sql`and c.name ilike ${like(clientSearch)}` : sql``}
       ${techSearch ? sql`and t.name ilike ${like(techSearch)}` : sql``}
       ${billingFilter ? sql`and lower(btrim(i.billing)) = 'sim'` : sql``}
+      ${modalityFilter === 'Venda' || modalityFilter === 'Aluguer' ? sql`and lower(btrim(i.venda_aluguer)) = lower(${modalityFilter})` : sql``}
       ${billingFilter === 'pendente' ? sql`and i.billing_processed_at is null` : billingFilter === 'processado' ? sql`and i.billing_processed_at is not null` : sql``}
       ${plateSearch ? sql`and (i.license_plate ilike ${like(plateSearch)} or i.imei ilike ${like(plateSearch)} or i.crm_vehicle ilike ${like(plateSearch)}
              or i.spent_equipment_imei ilike ${like(plateSearch)} or i.return_equipment_imei ilike ${like(plateSearch)})` : sql``}

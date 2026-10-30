@@ -17,7 +17,7 @@ import { BillingProcessed } from '@/components/interventions/BillingProcessed'
 const PAGE_SIZE = 25
 
 interface Props {
-  searchParams: Promise<{ page?: string; client?: string; tech?: string; plate?: string; from?: string; to?: string; fat?: string; ord?: string }>
+  searchParams: Promise<{ page?: string; client?: string; tech?: string; plate?: string; from?: string; to?: string; fat?: string; mod?: string; ord?: string }>
 }
 
 const fmtDate = (d: string) => d.split('-').reverse().join('/')
@@ -32,10 +32,11 @@ export default async function InterventionsPage({ searchParams }: Props) {
   const dateTo = params.to || ''
   const orderBy = params.ord === 'registo' ? 'registo' : 'intervencao'
   const billingFilter = ['faturar', 'pendente', 'processado'].includes(params.fat ?? '') ? params.fat! : ''
+  const modalityFilter = params.mod === 'Venda' || params.mod === 'Aluguer' ? params.mod : ''
 
   const [user, { interventions, totalPages, count, error }] = await Promise.all([
     getCurrentUser(),
-    getInterventions({ page: currentPage, pageSize: PAGE_SIZE, clientSearch, techSearch, plateSearch, dateFrom, dateTo, billingFilter, orderBy }),
+    getInterventions({ page: currentPage, pageSize: PAGE_SIZE, clientSearch, techSearch, plateSearch, dateFrom, dateTo, billingFilter, modalityFilter, orderBy }),
   ])
 
   if (!can(user, 'interventions')) redirect('/help')
@@ -47,11 +48,11 @@ export default async function InterventionsPage({ searchParams }: Props) {
     )
   }
 
-  const hasFilters = clientSearch || techSearch || plateSearch || dateFrom || dateTo || billingFilter
+  const hasFilters = clientSearch || techSearch || plateSearch || dateFrom || dateTo || billingFilter || modalityFilter
   const pageHref = (p: number) =>
-    `/interventions?${new URLSearchParams({ page: String(p), client: clientSearch, tech: techSearch, plate: plateSearch, from: dateFrom, to: dateTo, fat: billingFilter, ord: orderBy === 'registo' ? 'registo' : '' })}`
+    `/interventions?${new URLSearchParams({ page: String(p), client: clientSearch, tech: techSearch, plate: plateSearch, from: dateFrom, to: dateTo, fat: billingFilter, mod: modalityFilter, ord: orderBy === 'registo' ? 'registo' : '' })}`
   const sortHref = (o: string) =>
-    `/interventions?${new URLSearchParams(Object.entries({ client: clientSearch, tech: techSearch, plate: plateSearch, from: dateFrom, to: dateTo, fat: billingFilter, ord: o === 'registo' ? 'registo' : '' }).filter(([, v]) => v))}`
+    `/interventions?${new URLSearchParams(Object.entries({ client: clientSearch, tech: techSearch, plate: plateSearch, from: dateFrom, to: dateTo, fat: billingFilter, mod: modalityFilter, ord: o === 'registo' ? 'registo' : '' }).filter(([, v]) => v))}`
   const from = count === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
   const to = Math.min(currentPage * PAGE_SIZE, count)
 
@@ -72,7 +73,7 @@ export default async function InterventionsPage({ searchParams }: Props) {
       {/* Filtros */}
       <Card>
         <CardContent className="py-4">
-          <form className="grid grid-cols-1 items-end gap-4 md:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_9.5rem_9.5rem_10rem_auto]">
+          <form className="grid grid-cols-1 items-end gap-4 md:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_9.5rem_9.5rem_10rem_8rem_auto]">
             <div className="space-y-1.5">
               <Label htmlFor="client">Cliente</Label>
               <Input id="client" name="client" placeholder="Nome do cliente" defaultValue={clientSearch} />
@@ -100,6 +101,14 @@ export default async function InterventionsPage({ searchParams }: Props) {
                 <option value="faturar">Faturar = Sim</option>
                 <option value="pendente">Por processar</option>
                 <option value="processado">Processadas</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="mod">Venda/Aluguer</Label>
+              <select id="mod" name="mod" defaultValue={modalityFilter} className="h-[26px] w-full rounded-[2px] border border-fc-dark-40 bg-fc-grey-80 px-2 text-[13px] outline-none focus:border-fc-light-60">
+                <option value="">Todas</option>
+                <option value="Venda">Venda</option>
+                <option value="Aluguer">Aluguer</option>
               </select>
             </div>
             {orderBy === 'registo' && <input type="hidden" name="ord" value="registo" />}
