@@ -90,6 +90,7 @@ const SECTIONS: Section[] = [
     id: 'acessorios', title: 'Stock acessórios', who: 'accessories',
     body: <L items={[
       <>Quantidade por armazém = última <b>contagem</b> + receções, transferências e acessórios gastos/retomados nas intervenções.</>,
+      <>Botão <b>Utilização / entradas</b> (admin e super admin): por armazém, acessório e período, onde foram usados os acessórios (intervenção, cliente, matrícula, técnico) e as entradas (receções, retomas, transferências, kits), com resumo por acessório.</>,
       <>Um ✓ indica que o armazém já foi contado. Valores a vermelho são negativos (gastou-se mais do que entrou): corrigem-se com uma <b>Contagem</b>.</>,
       <>Os <b>kits</b> entram/saem automaticamente: receção automática (A1), Entregas/Entradas de Material sem acessórios registados, e transferências de equipamento do A1/A2 para um técnico.</>,
       <>Para os kits contarem, cada acessório tem de estar associado a um item em Configurações › Mapeamento de acessórios.</>,

@@ -52,7 +52,10 @@ export default async function AccessoriesStockPage({ searchParams }: Props) {
       <PageHeader
         title="Stock de acessórios"
         subtitle="Quantidades por armazém: última contagem + receções, transferências e acessórios gastos/retomados nas intervenções"
-        actions={isAdmin && <AccessoryActions items={items} warehouses={warehouses} />}
+        actions={<>
+          {user.role === 'admin' && <Link href="/accessories/usage" className="inline-flex items-center border border-fc-dark-20 px-3 py-2 fc-small font-semibold uppercase hover:border-fc-light-60">Utilização / entradas</Link>}
+          {isAdmin && <AccessoryActions items={items} warehouses={warehouses} />}
+        </>}
       />
 
       <Card>

@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { randomUUID } from 'crypto'
 import { sql } from '@/lib/db'
-import { requirePerm, requireUser } from '@/lib/auth'
+import { requireAdmin, requirePerm, requireUser } from '@/lib/auth'
 
 export type AccStockRow = { item_id: string; item: string; warehouse_id: string | null; warehouse: string | null; quantity: number; counted_at: string | null }
 
@@ -130,4 +130,62 @@ export async function upsertAccessoryItem(input: { id?: string; name: string; ac
     const msg = (e as Error).message
     return { ok: false as const, error: /unique|duplicate/i.test(msg) ? 'Já existe um item com esse nome.' : msg }
   }
+}
+
+export type AccUsageRow = {
+  date: string; item: string; warehouse: string | null; quantity: number; kind: string
+  detail: string | null; intervention_id: string | null; technician: string | null
+}
+
+/**
+ * Onde foram usados os acessórios de cada armazém e as entradas (só admin e super admin).
+ * type: 'uso' (saídas) | 'entradas' | '' (ambos). Contagens não entram (são acertos de quantidade).
+ */
+export async function getAccessoryUsage(f: { warehouseId?: string; from?: string; to?: string; type?: string; itemId?: string }) {
+  await requireAdmin()
+  const isDate = (d?: string) => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d)
+  const from = isDate(f.from) ? f.from! : new Date(Date.now() - 30 * 86400000).toLocaleDateString('sv-SE', { timeZone: 'Europe/Lisbon' })
+  const to = isDate(f.to) ? f.to! : '9999-12-31'
+  const wh = f.warehouseId || null
+  const item = f.itemId || null
+  return sql<AccUsageRow[]>`
+    select * from (
+      select a.moved_at::text as date, s.name as item, w.name as warehouse, a.quantity,
+             case a.direction when 'gasto' then 'Utilizado (intervenção)' when 'kit' then 'Kit (entrega de material)' else 'Retomado (intervenção)' end as kind,
+             concat_ws(' · ', c.name, i.license_plate, it.name) as detail, a.intervention_id::text, t.name as technician, a.created_at
+      from accessory_intervention_moves a
+      join accessory_stock_items s on s.id = a.item_id
+      left join warehouses w on w.id = a.warehouse_id
+      join interventions i on i.id = a.intervention_id
+      left join clients c on c.id = i.client_id
+      left join intervention_types it on it.id = i.intervention_type_id
+      left join technicians t on t.id = i.technician_id
+      where a.moved_at between ${from}::date and ${to}::date
+        and (${wh}::uuid is null or a.warehouse_id = ${wh}::uuid) and (${item}::uuid is null or a.item_id = ${item}::uuid)
+      union all
+      select m.moved_at::text, s.name, w.name, m.quantity,
+             case m.kind when 'rececao' then 'Receção' when 'ajuste' then 'Ajuste'
+                         else case when m.quantity > 0 then 'Transferência (entrada)' else 'Transferência (saída)' end end,
+             concat_ws(' · ', (select 'de/para ' || w2.name from accessory_movements m2 join warehouses w2 on w2.id = m2.warehouse_id
+                               where m.group_id is not null and m2.group_id = m.group_id and m2.id <> m.id limit 1), m.notes, m.created_by),
+             null, null, m.created_at
+      from accessory_movements m
+      join accessory_stock_items s on s.id = m.item_id
+      left join warehouses w on w.id = m.warehouse_id
+      where m.kind <> 'contagem' and m.moved_at between ${from}::date and ${to}::date
+        and (${wh}::uuid is null or m.warehouse_id = ${wh}::uuid) and (${item}::uuid is null or m.item_id = ${item}::uuid)
+      union all
+      select k.moved_at::text, s.name, w.name, k.quantity,
+             case when k.quantity > 0 then 'Kit com equipamento (entrada)' else 'Kit com equipamento (saída)' end,
+             concat(case when k.quantity < 0 then 'para ' else 'de ' end, ow.name), k.intervention_id::text, null, k.created_at
+      from accessory_kit_transfer_moves k
+      join accessory_stock_items s on s.id = k.item_id
+      left join warehouses w on w.id = k.warehouse_id
+      left join warehouses ow on ow.id = k.other_wh
+      where k.moved_at between ${from}::date and ${to}::date
+        and (${wh}::uuid is null or k.warehouse_id = ${wh}::uuid) and (${item}::uuid is null or k.item_id = ${item}::uuid)
+    ) x
+    where (${f.type ?? ''} = '' or (${f.type ?? ''} = 'uso' and x.quantity < 0) or (${f.type ?? ''} = 'entradas' and x.quantity > 0))
+    order by date desc, created_at desc
+    limit 3000`
 }
