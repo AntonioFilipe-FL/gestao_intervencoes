@@ -699,6 +699,9 @@ where not exists (select 1 from gestao_interv.intervention_accessories ia
 -- Transferências de equipamento do A1/A2 para o armazém de um técnico (manuais ou de intervenções) levam os acessórios
 -- do kit: saem do A1/A2 e entram no técnico (n.º de IMEIs × quantidade do kit). A partir de 16/10/2026.
 -- Não se aplica quando a intervenção regista acessórios desse kit.
+-- transferência só do equipamento (sem os acessórios do kit)
+alter table gestao_interv.stock_movements add column if not exists no_kit boolean not null default false;
+
 create or replace view gestao_interv.accessory_kit_transfer_moves as
 with t as (
   select m.id, m.imei, m.moved_at, m.created_at, m.intervention_id, m.to_warehouse_id as to_wh,
@@ -712,7 +715,7 @@ with t as (
   from gestao_interv.stock_movements m
   join gestao_interv.warehouses fw on fw.id = m.from_warehouse_id
   join gestao_interv.warehouses tw on tw.id = m.to_warehouse_id
-  where m.kind = 'transferencia' and m.superseded_at is null
+  where m.kind = 'transferencia' and m.superseded_at is null and not m.no_kit
     and fw.type <> 'mobilizado' and tw.type <> 'mobilizado' and tw.active
     -- só a partir de 16/10/2026 (o histórico anterior acerta-se com contagens) e só do stock central (A1/A2)
     -- para o armazém de um técnico (armazém com o nome de um técnico)

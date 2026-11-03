@@ -56,7 +56,7 @@ const SECTIONS: Section[] = [
       <H>Transferência</H>
       <L items={[
         <>Origem <b>Automático</b>: a app vê onde está cada IMEI; pode-se escolher um ou vários armazéns de origem (com <i>ver IMEIs</i> em cada um). O destino é sempre um.</>,
-        <>Do A1/A2 para um técnico, os acessórios do kit vão também.</>,
+        <>Na transferência escolhe-se <b>Equipamento e acessórios</b> ou <b>Só o equipamento</b>. Do A1/A2 para um técnico, com a primeira opção, os acessórios do kit vão também; com <i>Só o equipamento</i>, ficam no armazém de origem.</>,
         <>Opção <b>Atualizar a matrícula na Intranet</b>: muda a matrícula para a nomenclatura do armazém de destino e, se escolhida, transfere para uma conta <i>Frotcom Lusitana…</i> (sem apagar dados). Formatos:
           <L items={[<><code>XX_Ay_ZZZ_12345</code> — RL, RN, LS, CG, TC, PG… (A1/A2 → <b>FL</b>); y = 1 Venda / 2 Aluguer; ZZZ = NOS (PT-Optimus) / VDF (PT-Vodafone); últimos 5 dígitos</>,
             <><code>RMA_Ay_ZZZ12345</code> · <code>ABATE_ZZZ12345</code> · <code>Trash_123456</code> (6 dígitos)</>,

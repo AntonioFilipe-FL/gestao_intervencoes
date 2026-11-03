@@ -34,6 +34,8 @@ export function StockActions({ warehouses, originWarehouses, equipment }: { ware
   const [shown, setShown] = useState<string | null>(null)
   // opção: atualizar a matrícula na Intranet (XX_Ay_…) e, opcionalmente, a conta
   const [intra, setIntra] = useState(false)
+  // transferência: equipamento + acessórios do kit, ou só o equipamento
+  const [withAcc, setWithAcc] = useState<'' | 'sim' | 'nao'>('')
   const [intraAcc, setIntraAcc] = useState('')
   const [accounts, setAccounts] = useState<{ id: string; name: string }[] | null>(null)
   useEffect(() => {
@@ -48,6 +50,7 @@ export function StockActions({ warehouses, originWarehouses, equipment }: { ware
     setLoc(null)
     setIntra(false)
     setIntraAcc('')
+    setWithAcc('')
     setOpen(k)
   }
 
@@ -71,7 +74,7 @@ export function StockActions({ warehouses, originWarehouses, equipment }: { ware
       const r =
         open === 'rececao'
           ? await registerReception({ warehouseId: f.to, modality: f.modality, equipmentId: f.equipment, imeis: f.imeis, date: f.date, notes: f.notes })
-          : await registerTransfer({ fromWarehouseId: isAuto ? undefined : f.from, fromWarehouseIds: isAuto ? picked : undefined, toWarehouseId: f.to, modality: f.modality, imeis: f.imeis, date: f.date, notes: f.notes })
+          : await registerTransfer({ fromWarehouseId: isAuto ? undefined : f.from, fromWarehouseIds: isAuto ? picked : undefined, toWarehouseId: f.to, modality: f.modality, imeis: f.imeis, date: f.date, notes: f.notes, withAccessories: withAcc !== 'nao' })
       if (!r.ok) return setMsg({ tone: 'err', text: r.error })
       const texts = [`${r.n} IMEI(s) registados.`, ...r.warnings]
       let tone: 'ok' | 'err' = 'ok'
@@ -172,6 +175,20 @@ export function StockActions({ warehouses, originWarehouses, equipment }: { ware
               <Input value={f.notes} onChange={(e) => set('notes')(e.target.value)} placeholder="Ex.: fatura, guia de remessa, técnico…" />
             </div>
             {open === 'transferencia' && (
+              <div className="space-y-1.5 border border-fc-dark-20 px-3 py-2">
+                <p className="fc-small font-semibold">O que transferir? *</p>
+                <label className="flex items-center gap-2 fc-small">
+                  <input type="radio" name="withAcc" checked={withAcc === 'sim'} onChange={() => setWithAcc('sim')} />
+                  Equipamento e acessórios (os acessórios do kit acompanham o equipamento)
+                </label>
+                <label className="flex items-center gap-2 fc-small">
+                  <input type="radio" name="withAcc" checked={withAcc === 'nao'} onChange={() => setWithAcc('nao')} />
+                  Só o equipamento
+                </label>
+                <p className="fc-small text-fc-dark-60">Os acessórios do kit só se movimentam nas transferências do A1/A2 para o armazém de um técnico.</p>
+              </div>
+            )}
+            {open === 'transferencia' && (
               <div className="space-y-2 border border-fc-dark-20 px-3 py-2">
                 <label className="flex items-center gap-2 fc-small font-semibold">
                   <input type="checkbox" checked={intra} onChange={(e) => setIntra(e.target.checked)} />
@@ -190,7 +207,7 @@ export function StockActions({ warehouses, originWarehouses, equipment }: { ware
           </div>
           <DialogFooter>
             <Button variant="inverse" onClick={() => setOpen(null)}>Fechar</Button>
-            <Button disabled={busy || n === 0} onClick={submit}>{busy ? 'A registar…' : `Registar ${n || ''} IMEI(s)`}</Button>
+            <Button disabled={busy || n === 0 || (open === 'transferencia' && !withAcc)} onClick={submit}>{busy ? 'A registar…' : `Registar ${n || ''} IMEI(s)`}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

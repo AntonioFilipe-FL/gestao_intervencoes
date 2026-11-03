@@ -172,6 +172,8 @@ export async function locateImeis(text: string) {
  */
 export async function registerTransfer(input: {
   fromWarehouseId?: string; fromWarehouseIds?: string[]; toWarehouseId: string; imeis: string; date: string; modality?: string; notes?: string
+  /** false = só o equipamento (os acessórios do kit não acompanham) */
+  withAccessories?: boolean
 }): Promise<Result> {
   try {
     const user = await requirePerm('stock', 'write')
@@ -195,6 +197,7 @@ export async function registerTransfer(input: {
     const rows = todo.map((imei) => ({
       imei, equipment_id: null, kind: 'transferencia', from_warehouse_id: whOf.get(imei)!, to_warehouse_id: input.toWarehouseId,
       modality: mod, moved_at: input.date || new Date().toISOString().slice(0, 10), notes: input.notes || null, created_by: user.email,
+      no_kit: input.withAccessories === false,
     }))
     await sql`insert into stock_movements ${sql(rows)}`
     revalidatePath('/stock')
