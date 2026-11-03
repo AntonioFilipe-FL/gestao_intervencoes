@@ -73,7 +73,8 @@ const SECTIONS: Section[] = [
       <L items={[<>Botão <b>Stock mínimo</b>: define-se por equipamento e armazém. Na tabela: <span className="text-[#d0312d]">●</span> igual ou abaixo do mínimo, <span className="text-[#f2b600]">●</span> até X% acima (margem definida pelo super admin, por omissão 20%).</>,
         <>Os admins recebem, uma vez por dia ao entrar, o aviso <b>Stock abaixo do mínimo</b> por armazém/técnico.</>]} />
       <H>Histórico de transferências</H>
-      <L items={[<>Lotes de receções, transferências e acertos agrupados; um movimento manual pode ser <b>anulado</b>.</>]} />
+      <L items={[<>Lotes de receções, transferências e acertos agrupados; um movimento manual pode ser <b>anulado</b>.</>,
+        <>Admin e super admin: um lote de <b>Ajuste / Dar saída</b> pode ser anulado de uma vez (<b>Anular ajuste</b>, ao abrir o lote). Os IMEIs voltam ao armazém anterior; os que entretanto tiveram outro movimento ficam como estão. O lote fica no histórico como &ldquo;já não conta&rdquo;.</>]} />
     </>,
   },
   {

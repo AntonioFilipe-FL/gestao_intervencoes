@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { sql } from '@/lib/db'
-import { requirePerm, requireUser } from '@/lib/auth'
+import { requireAdmin, requirePerm, requireUser } from '@/lib/auth'
 import { matchEquipment } from '@/lib/hardware'
 import { equipmentNamer } from '@/lib/equipment-namer'
 
@@ -324,6 +324,7 @@ export async function moveToInternalUse(imeis?: string[]) {
 
 export type MovementBatch = {
   key: string; created_at: string; moved_at: string; kind: string; from_wh: string | null; to_wh: string | null
+  from_id: string | null; to_id: string | null
   created_by: string | null; notes: string | null; n: number; superseded: number; imeis: { imei: string; equipment: string | null; modality: string | null; superseded: boolean }[]
 }
 
@@ -335,6 +336,7 @@ export async function getMovementBatches(f: { from?: string; to?: string; wh?: s
   return sql<MovementBatch[]>`
     select md5(m.created_at::text || coalesce(m.from_warehouse_id::text, '') || coalesce(m.to_warehouse_id::text, '') || m.kind) as key,
            m.created_at::text, min(m.moved_at)::text as moved_at, m.kind, wf.name as from_wh, wt.name as to_wh,
+           m.from_warehouse_id::text as from_id, m.to_warehouse_id::text as to_id,
            min(m.created_by) as created_by, min(m.notes) as notes, count(*)::int as n,
            count(*) filter (where m.superseded_at is not null)::int as superseded,
            json_agg(json_build_object('imei', m.imei, 'equipment', e.name, 'modality', m.modality, 'superseded', m.superseded_at is not null) order by m.imei) as imeis
@@ -351,6 +353,36 @@ export async function getMovementBatches(f: { from?: string; to?: string; wh?: s
     group by m.created_at, m.kind, m.from_warehouse_id, m.to_warehouse_id, wf.name, wt.name
     order by m.created_at desc
     limit 200`
+}
+
+/**
+ * Anula um lote de AJUSTE (ex.: "Dar saída" em massa): os movimentos ficam marcados como "já não conta" (ficam no histórico)
+ * e os IMEIs voltam à posição anterior. Só os IMEIs em que este ajuste ainda é o último movimento; os outros são ignorados.
+ * Só admin e super admin.
+ */
+export async function undoAdjustBatch(input: { createdAt: string; fromId: string | null; toId: string | null }) {
+  try {
+    const user = await requireAdmin()
+    const rows = await sql<{ id: string; imei: string; later: boolean }[]>`
+      select m.id, m.imei, exists (
+               select 1 from stock_movements o where o.imei = m.imei and o.superseded_at is null and o.id <> m.id
+                 and (o.moved_at > m.moved_at or (o.moved_at = m.moved_at and o.seq > m.seq))) as later
+      from stock_movements m
+      where m.created_at::text = ${input.createdAt} and m.kind = 'ajuste' and m.intervention_id is null and m.superseded_at is null
+        and m.from_warehouse_id is not distinct from ${input.fromId}::uuid and m.to_warehouse_id is not distinct from ${input.toId}::uuid`
+    if (!rows.length) throw new Error('Lote não encontrado ou já anulado.')
+    const todo = rows.filter((r) => !r.later)
+    if (todo.length) {
+      await sql`update stock_movements set superseded_at = now(),
+                notes = concat_ws(' · ', notes, ${`anulado por ${user.email}`}) where id = any(${todo.map((r) => r.id)})`
+    }
+    revalidatePath('/stock')
+    revalidatePath('/stock/transfers')
+    const skipped = rows.filter((r) => r.later).map((r) => r.imei)
+    return { ok: true as const, n: todo.length, skipped }
+  } catch (e) {
+    return { ok: false as const, error: (e as Error).message }
+  }
 }
 
 /* ---------------- Acerto de stock ---------------- */
