@@ -368,13 +368,13 @@ export async function undoAdjustBatch(input: { createdAt: string; fromId: string
                select 1 from stock_movements o where o.imei = m.imei and o.superseded_at is null and o.id <> m.id
                  and (o.moved_at > m.moved_at or (o.moved_at = m.moved_at and o.seq > m.seq))) as later
       from stock_movements m
-      where m.created_at::text = ${input.createdAt} and m.kind = 'ajuste' and m.intervention_id is null and m.superseded_at is null
+      where m.created_at::text = ${input.createdAt}::text and m.kind = 'ajuste' and m.intervention_id is null and m.superseded_at is null
         and m.from_warehouse_id is not distinct from ${input.fromId}::uuid and m.to_warehouse_id is not distinct from ${input.toId}::uuid`
     if (!rows.length) throw new Error('Lote não encontrado ou já anulado.')
     const todo = rows.filter((r) => !r.later)
     if (todo.length) {
       await sql`update stock_movements set superseded_at = now(),
-                notes = concat_ws(' · ', notes, ${`anulado por ${user.email}`}) where id = any(${todo.map((r) => r.id)})`
+                notes = concat_ws(' · ', notes, ${`anulado por ${user.email}`}::text) where id = any(${todo.map((r) => r.id)})`
     }
     revalidatePath('/stock')
     revalidatePath('/stock/transfers')
