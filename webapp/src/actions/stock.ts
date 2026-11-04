@@ -376,7 +376,7 @@ export async function undoAdjustBatch(input: { createdAt: string; fromId: string
     if (!rows.length) throw new Error('Lote não encontrado ou já anulado.')
     const todo = rows.filter((r) => !r.later)
     if (todo.length) {
-      await sql`update stock_movements set superseded_at = now(),
+      await sql`update stock_movements set superseded_at = now(), cancelled = true,
                 notes = concat_ws(' · ', notes, ${`anulado por ${user.email}`}::text) where id = any(${todo.map((r) => r.id)})`
     }
     revalidatePath('/stock')

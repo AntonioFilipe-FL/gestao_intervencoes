@@ -575,9 +575,15 @@ begin
   return n;
 end $$;
 
+-- anulado à mão (ex.: "Anular ajuste"): nunca volta a contar, nem pela reparação abaixo
+alter table gestao_interv.stock_movements add column if not exists cancelled boolean not null default false;
+-- repõe as anulações desfeitas pela reparação em versões anteriores (marcadas na nota "anulado por …")
+update gestao_interv.stock_movements set cancelled = true, superseded_at = coalesce(superseded_at, now())
+where not cancelled and intervention_id is null and notes like '%anulado por %';
+
 -- repara correções marcadas como substituídas por intervenções com data anterior (ex.: reimportação da Sheet)
 update gestao_interv.stock_movements m set superseded_at = null
-where m.is_correction and m.superseded_at is not null
+where m.is_correction and m.superseded_at is not null and not m.cancelled
   and not exists (
     select 1 from gestao_interv.interventions i
     where m.imei in (gestao_interv.imei_norm(i.imei), gestao_interv.imei_norm(i.spent_equipment_imei), gestao_interv.imei_norm(i.return_equipment_imei))
