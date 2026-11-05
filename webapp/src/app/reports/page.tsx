@@ -36,20 +36,23 @@ function StatsCard({ title, value, icon: Icon, description }: StatsCardProps) {
 }
 
 interface Props {
-  searchParams: Promise<{ etipo?: string; ctipo?: string }>
+  searchParams: Promise<{ etipo?: string; ctipo?: string; mes?: string; metipo?: string; mctipo?: string }>
 }
 
 export default async function ReportsPage({ searchParams }: Props) {
   if (!can(await requireUser(), 'reports')) redirect('/help')
   const p = await searchParams
   const valid = (t?: string) => (t && REPORT_TYPES.some((r) => r.toLowerCase() === t.toLowerCase()) ? t : undefined)
-  const etipo = valid(p.etipo), ctipo = valid(p.ctipo)
-  const { totals, byMonth, byTech, byEquipment, byClient, byMonthType } = await getStats({ equipmentType: etipo, clientType: ctipo })
-  const href = (q: { etipo?: string; ctipo?: string }) => {
-    const s = new URLSearchParams(Object.entries({ etipo, ctipo, ...q }).filter(([, v]) => v) as [string, string][])
-    return `/reports${s.size ? `?${s}` : ''}#${'etipo' in q ? 'por-equipamento' : 'por-cliente'}`
+  const etipo = valid(p.etipo), ctipo = valid(p.ctipo), metipo = valid(p.metipo), mctipo = valid(p.mctipo)
+  const { totals, byMonth, byTech, byEquipment, byClient, byMonthType, month: mes, mByEquipment, mByClient } =
+    await getStats({ equipmentType: etipo, clientType: ctipo, month: p.mes, mEquipmentType: metipo, mClientType: mctipo })
+  const anchor: Record<string, string> = { etipo: 'por-equipamento', ctipo: 'por-cliente', metipo: 'mes-equipamento', mctipo: 'mes-cliente' }
+  const href = (q: { etipo?: string; ctipo?: string; metipo?: string; mctipo?: string }) => {
+    const s = new URLSearchParams(Object.entries({ etipo, ctipo, metipo, mctipo, mes: p.mes, ...q }).filter(([, v]) => v) as [string, string][])
+    return `/reports${s.size ? `?${s}` : ''}#${anchor[Object.keys(q)[0]] ?? 'por-mes'}`
   }
-  const TypeFilter = ({ k, current }: { k: 'etipo' | 'ctipo'; current?: string }) => (
+  const mesLabel = new Date(`${mes}-01T12:00:00Z`).toLocaleString('pt-PT', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+  const TypeFilter = ({ k, current }: { k: 'etipo' | 'ctipo' | 'metipo' | 'mctipo'; current?: string }) => (
     <div className="flex flex-wrap gap-1.5">
       {[undefined, ...REPORT_TYPES].map((t) => (
         <Link
@@ -161,6 +164,33 @@ export default async function ReportsPage({ searchParams }: Props) {
         <Card id="por-cliente">
           <CardHeader><CardTitle>Intervenções por cliente (top 15, últimos 12 meses){ctipo ? ` · ${ctipo}` : ''}</CardTitle></CardHeader>
           <CardContent className="space-y-4"><TypeFilter k="ctipo" current={ctipo} /><StackedByType rows={byClient} /></CardContent>
+        </Card>
+      </div>
+
+      <Card id="por-mes">
+        <CardContent className="flex flex-wrap items-center gap-3 pt-5">
+          <span className="font-bold uppercase">Por mês</span>
+          <form className="flex items-center gap-2">
+            {etipo && <input type="hidden" name="etipo" value={etipo} />}
+            {ctipo && <input type="hidden" name="ctipo" value={ctipo} />}
+            {metipo && <input type="hidden" name="metipo" value={metipo} />}
+            {mctipo && <input type="hidden" name="mctipo" value={mctipo} />}
+            <input type="month" name="mes" defaultValue={mes}
+              className="h-[26px] rounded-[2px] border border-fc-dark-40 bg-fc-grey-80 px-2 text-[13px] outline-none focus:border-fc-light-60" />
+            <button type="submit" className="rounded-[2px] bg-fc-dark-100 px-3 py-1 text-[12px] uppercase text-white">Ver</button>
+          </form>
+          <span className="fc-small text-fc-dark-60">Escolha o mês/ano para os gráficos abaixo.</span>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <Card id="mes-equipamento">
+          <CardHeader><CardTitle>Intervenções por equipamento (top 15, {mesLabel}){metipo ? ` · ${metipo}` : ''}</CardTitle></CardHeader>
+          <CardContent className="space-y-4"><TypeFilter k="metipo" current={metipo} />{mByEquipment.length ? <StackedByType rows={mByEquipment} /> : <p className="text-fc-dark-60">Sem intervenções neste mês.</p>}</CardContent>
+        </Card>
+        <Card id="mes-cliente">
+          <CardHeader><CardTitle>Intervenções por cliente (top 15, {mesLabel}){mctipo ? ` · ${mctipo}` : ''}</CardTitle></CardHeader>
+          <CardContent className="space-y-4"><TypeFilter k="mctipo" current={mctipo} />{mByClient.length ? <StackedByType rows={mByClient} /> : <p className="text-fc-dark-60">Sem intervenções neste mês.</p>}</CardContent>
         </Card>
       </div>
     </div>

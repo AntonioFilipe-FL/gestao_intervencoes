@@ -161,7 +161,7 @@ export const REPORT_TYPES = [
   'Reinstalação', 'Troca De Viatura', 'Upgrade',
 ]
 
-export async function getStats(f: { equipmentType?: string; clientType?: string } = {}) {
+export async function getStats(f: { equipmentType?: string; clientType?: string; month?: string; mEquipmentType?: string; mClientType?: string } = {}) {
   await requireUser()
   const inTypes = sql`i.intervention_type_id in (select id from intervention_types where lower(btrim(name)) = any(${REPORT_TYPES.map(t => t.toLowerCase())}))`
   const [[totals], byMonth, byTech] = await Promise.all([
@@ -186,17 +186,19 @@ export async function getStats(f: { equipmentType?: string; clientType?: string 
     `,
   ])
   // Por equipamento (Equipamento Principal) e por cliente, últimos 12 meses, repartido por tipo
-  const byTypeOf = (dim: 'equipment' | 'client', onlyType?: string) => sql<{ name: string; type: string; count: number }[]>`
+  // month (YYYY-MM): só esse mês; sem month: últimos 12 meses
+  const byTypeOf = (dim: 'equipment' | 'client', onlyType?: string, month?: string) => sql<{ name: string; type: string; count: number }[]>`
     with base as (
       select ${dim === 'equipment' ? sql`coalesce(e.name, '(sem equipamento)')` : sql`coalesce(c.name, '(sem cliente)')`} as name, t.name as type
       from interventions i
       join intervention_types t on t.id = i.intervention_type_id
       ${dim === 'equipment' ? sql`left join equipment_list e on e.id = i.equipment_id` : sql`left join clients c on c.id = i.client_id`}
-      where ${inTypes} and i.intervention_date >= date_trunc('month', current_date) - interval '11 months'
+      where ${inTypes} and ${month ? sql`date_trunc('month', i.intervention_date) = ${month + '-01'}::date` : sql`i.intervention_date >= date_trunc('month', current_date) - interval '11 months'`}
         ${onlyType ? sql`and lower(t.name) = lower(${onlyType})` : sql``}
     ), top as (select name from base group by name order by count(*) desc limit 15)
     select b.name, b.type, count(*)::int as count from base b join top using (name) group by b.name, b.type`
-  const [byEquipment, byClient, byMonthType] = await Promise.all([
+  const month = f.month && /^\d{4}-\d{2}$/.test(f.month) ? f.month : new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Lisbon' }).slice(0, 7)
+  const [byEquipment, byClient, byMonthType, mByEquipment, mByClient] = await Promise.all([
     byTypeOf('equipment', f.equipmentType),
     byTypeOf('client', f.clientType),
     sql<{ name: string; type: string; count: number }[]>`
@@ -204,6 +206,8 @@ export async function getStats(f: { equipmentType?: string; clientType?: string 
       from interventions i join intervention_types t on t.id = i.intervention_type_id
       where ${inTypes} and i.intervention_date >= date_trunc('month', current_date) - interval '11 months'
       group by 1, 2 order by 1`,
+    byTypeOf('equipment', f.mEquipmentType, month),
+    byTypeOf('client', f.mClientType, month),
   ])
-  return { totals, byMonth, byTech, byEquipment, byClient, byMonthType }
+  return { totals, byMonth, byTech, byEquipment, byClient, byMonthType, month, mByEquipment, mByClient }
 }
