@@ -20,6 +20,26 @@ export type InterventionListItem = {
   intervention_type: { name: string } | null
 }
 
+export type InterventionFilters = { clientSearch?: string; techSearch?: string; plateSearch?: string; dateFrom?: string; dateTo?: string; billingFilter?: string; modalityFilter?: string }
+
+/** WHERE comum à lista de intervenções e à exportação para Excel (aliases: i, c, t) */
+function interventionWhere({ clientSearch = '', techSearch = '', plateSearch = '', dateFrom = '', dateTo = '', billingFilter = '', modalityFilter = '' }: InterventionFilters) {
+  const like = (s: string) => `%${s.replace(/[\\%_]/g, m => '\\' + m)}%`
+  const isDate = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d)
+  return sql`
+    where true
+    ${isDate(dateFrom) ? sql`and i.intervention_date >= ${dateFrom}::date` : sql``}
+    ${isDate(dateTo) ? sql`and i.intervention_date <= ${dateTo}::date` : sql``}
+    ${clientSearch ? sql`and c.name ilike ${like(clientSearch)}` : sql``}
+    ${techSearch ? sql`and t.name ilike ${like(techSearch)}` : sql``}
+    ${billingFilter ? sql`and lower(btrim(i.billing)) = 'sim'` : sql``}
+    ${modalityFilter === 'Venda' || modalityFilter === 'Aluguer' ? sql`and lower(btrim(i.venda_aluguer)) = lower(${modalityFilter})` : sql``}
+    ${billingFilter === 'pendente' ? sql`and i.billing_processed_at is null` : billingFilter === 'processado' ? sql`and i.billing_processed_at is not null` : sql``}
+    ${plateSearch ? sql`and (i.license_plate ilike ${like(plateSearch)} or i.imei ilike ${like(plateSearch)} or i.crm_vehicle ilike ${like(plateSearch)}
+           or i.spent_equipment_imei ilike ${like(plateSearch)} or i.return_equipment_imei ilike ${like(plateSearch)})` : sql``}
+  `
+}
+
 export async function getInterventions({
   page = 1,
   pageSize = 20,
@@ -49,20 +69,7 @@ export async function getInterventions({
 } = {}) {
   await requireUser()
   try {
-    const like = (s: string) => `%${s.replace(/[\\%_]/g, m => '\\' + m)}%`
-    const isDate = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d)
-    const where = sql`
-      where true
-      ${isDate(dateFrom) ? sql`and i.intervention_date >= ${dateFrom}::date` : sql``}
-      ${isDate(dateTo) ? sql`and i.intervention_date <= ${dateTo}::date` : sql``}
-      ${clientSearch ? sql`and c.name ilike ${like(clientSearch)}` : sql``}
-      ${techSearch ? sql`and t.name ilike ${like(techSearch)}` : sql``}
-      ${billingFilter ? sql`and lower(btrim(i.billing)) = 'sim'` : sql``}
-      ${modalityFilter === 'Venda' || modalityFilter === 'Aluguer' ? sql`and lower(btrim(i.venda_aluguer)) = lower(${modalityFilter})` : sql``}
-      ${billingFilter === 'pendente' ? sql`and i.billing_processed_at is null` : billingFilter === 'processado' ? sql`and i.billing_processed_at is not null` : sql``}
-      ${plateSearch ? sql`and (i.license_plate ilike ${like(plateSearch)} or i.imei ilike ${like(plateSearch)} or i.crm_vehicle ilike ${like(plateSearch)}
-             or i.spent_equipment_imei ilike ${like(plateSearch)} or i.return_equipment_imei ilike ${like(plateSearch)})` : sql``}
-    `
+    const where = interventionWhere({ clientSearch, techSearch, plateSearch, dateFrom, dateTo, billingFilter, modalityFilter })
     const from = sql`
       from interventions i
       left join clients c on c.id = i.client_id
@@ -210,4 +217,36 @@ export async function getStats(f: { equipmentType?: string; clientType?: string;
     byTypeOf('client', f.mClientType, month),
   ])
   return { totals, byMonth, byTech, byEquipment, byClient, byMonthType, month, mByEquipment, mByClient }
+}
+
+/** Intervenções para exportar para Excel (mesmos filtros da lista), com equipamentos e acessórios gastos/retomados */
+export async function getInterventionsForExport(f: InterventionFilters) {
+  await requireUser()
+  const where = interventionWhere(f)
+  return sql<Record<string, unknown>[]>`
+    select i.*, t.name as technician_name, c.name as client_name, it.name as type_name, e.name as equipment_name,
+      m.name as motive_name, b.name as bundle_name, p.name as platform_name, v.name as validated_by_name,
+      ws.name as exit_wh, we.name as entry_wh, se.name as spent_equipment_name, re.name as return_equipment_name,
+      coalesce((select json_agg(json_build_object('name', ac.name, 'quantity', ia.quantity) order by ac.name)
+                from intervention_accessories ia join accessories ac on ac.id = ia.accessory_id
+                where ia.intervention_id = i.id and ia.direction = 'gasto'), '[]') as acc_spent,
+      coalesce((select json_agg(json_build_object('name', ac.name, 'quantity', ia.quantity) order by ac.name)
+                from intervention_accessories ia join accessories ac on ac.id = ia.accessory_id
+                where ia.intervention_id = i.id and ia.direction = 'retomado'), '[]') as acc_returned
+    from interventions i
+    left join technicians t on t.id = i.technician_id
+    left join clients c on c.id = i.client_id
+    left join intervention_types it on it.id = i.intervention_type_id
+    left join equipment_list e on e.id = i.equipment_id
+    left join motives m on m.id = i.motive_id
+    left join bundles b on b.id = i.bundle_id
+    left join platforms p on p.id = i.platform_id
+    left join technicians v on v.id = i.validated_by
+    left join warehouses ws on ws.id = i.stock_exit_warehouse_id
+    left join warehouses we on we.id = i.stock_entry_warehouse_id
+    left join equipment_list se on se.id = i.spent_equipment_id
+    left join equipment_list re on re.id = i.return_equipment_id
+    ${where}
+    order by i.intervention_date desc, i.created_at desc
+    limit 20000`
 }

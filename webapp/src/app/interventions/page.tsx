@@ -117,6 +117,8 @@ export default async function InterventionsPage({ searchParams }: Props) {
               {hasFilters && (
                 <Link href="/interventions" className={buttonVariants({ variant: 'inverse' })}>Limpar</Link>
               )}
+              <a href={`/interventions/export?${new URLSearchParams(Object.entries({ client: clientSearch, tech: techSearch, plate: plateSearch, from: dateFrom, to: dateTo, fat: billingFilter, mod: modalityFilter }).filter(([, v]) => v))}`}
+                className={buttonVariants({ variant: 'inverse' })} title={`Exporta para Excel as ${count} intervenções deste filtro, com os equipamentos e acessórios gastos/retomados`}>Exportar Excel</a>
             </div>
           </form>
         </CardContent>
