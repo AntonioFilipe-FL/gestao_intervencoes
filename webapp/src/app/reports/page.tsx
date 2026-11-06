@@ -170,7 +170,8 @@ export default async function ReportsPage({ searchParams }: Props) {
       <Card id="por-mes">
         <CardContent className="flex flex-wrap items-center gap-3 pt-5">
           <span className="font-bold uppercase">Por mês</span>
-          <form className="flex items-center gap-2">
+          {/* âncora no action: depois de escolher o mês, a página volta a esta secção */}
+          <form action="/reports#por-mes" className="flex items-center gap-2">
             {etipo && <input type="hidden" name="etipo" value={etipo} />}
             {ctipo && <input type="hidden" name="ctipo" value={ctipo} />}
             {metipo && <input type="hidden" name="metipo" value={metipo} />}
