@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { UserPlus } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useNoticeTurn } from '@/lib/notice-queue'
 import { getNewIntranetAccounts, markNewAccountsSeen, resolveNewAccounts } from '@/actions/new-accounts'
 
 type Row = { id: string; name: string; full_name: string | null; first_seen_at: string }
@@ -15,12 +16,11 @@ export function NewAccountsNotice() {
   const [sel, setSel] = useState<string[]>([])
   const [busy, start] = useTransition()
   const [msg, setMsg] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null)
-  // espera um pouco para não abrir em cima dos outros avisos
   useEffect(() => {
-    const t = setTimeout(() => getNewIntranetAccounts().then((r) => { if (r) { setInfo(r); setSel(r.rows.map((x) => x.id)) } }).catch(() => {}), 3000)
-    return () => clearTimeout(t)
+    getNewIntranetAccounts().then((r) => { if (r) { setInfo(r); setSel(r.rows.map((x) => x.id)) } }).catch(() => {})
   }, [])
-  if (!info) return null
+  const turn = useNoticeTurn('new-accounts', !!info)
+  if (!info || !turn) return null
   const close = () => { void markNewAccountsSeen(info.now); setInfo(null) }
   const act = (action: 'create' | 'ignore') => start(async () => {
     const r = await resolveNewAccounts(sel, action)
@@ -32,7 +32,7 @@ export function NewAccountsNotice() {
   })
   const toggle = (id: string) => setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))
   return (
-    <Dialog open onOpenChange={(o) => !o && close()}>
+    <Dialog open disablePointerDismissal onOpenChange={(o, d) => !o && d.reason !== 'escape-key' && close()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle><UserPlus className="mr-2 inline size-5 align-[-4px]" />Contas novas na Intranet</DialogTitle>

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { PackageCheck } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useNoticeTurn } from '@/lib/notice-queue'
 import { getUnseenAutoReceptions, markAutoReceptionsSeen } from '@/actions/auto-reception'
 
 type Info = { lastId: number; n: number; byEquipment: Record<string, number>; byAccessory: Record<string, number> }
@@ -13,12 +14,13 @@ type Info = { lastId: number; n: number; byEquipment: Record<string, number>; by
 export function AutoReceptionNotice() {
   const [info, setInfo] = useState<Info | null>(null)
   useEffect(() => { getUnseenAutoReceptions().then((r) => r && setInfo(r)).catch(() => {}) }, [])
-  if (!info) return null
+  const turn = useNoticeTurn('auto-reception', !!info)
+  if (!info || !turn) return null
   const close = () => { void markAutoReceptionsSeen(info.lastId); setInfo(null) }
   const list = Object.entries(info.byEquipment).sort((a, b) => b[1] - a[1])
   const accList = Object.entries(info.byAccessory ?? {}).sort((a, b) => b[1] - a[1])
   return (
-    <Dialog open onOpenChange={(o) => !o && close()}>
+    <Dialog open disablePointerDismissal onOpenChange={(o, d) => !o && d.reason !== 'escape-key' && close()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle><PackageCheck className="mr-2 inline size-5 align-[-4px]" />Material novo recebido</DialogTitle>

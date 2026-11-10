@@ -5,20 +5,21 @@ import Link from 'next/link'
 import { AlertTriangle } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useNoticeTurn } from '@/lib/notice-queue'
 import { getLowStockNotice, markLowStockSeen, type LowStock } from '@/actions/low-stock'
 
 /** Pop-up para admins (uma vez por dia): equipamentos abaixo do stock mínimo por armazém/técnico */
 export function LowStockNotice() {
   const [info, setInfo] = useState<{ today: string; list: LowStock[] } | null>(null)
-  // espera um pouco para não abrir em cima do aviso de material recebido
-  useEffect(() => { const t = setTimeout(() => getLowStockNotice().then((r) => r && setInfo(r)).catch(() => {}), 1500); return () => clearTimeout(t) }, [])
-  if (!info) return null
+  useEffect(() => { getLowStockNotice().then((r) => r && setInfo(r)).catch(() => {}) }, [])
+  const turn = useNoticeTurn('low-stock', !!info)
+  if (!info || !turn) return null
   const close = () => { void markLowStockSeen(info.today); setInfo(null) }
   const byWh = new Map<string, LowStock[]>()
   for (const l of info.list) byWh.set(l.warehouse, [...(byWh.get(l.warehouse) ?? []), l])
   const reds = info.list.filter((l) => l.level === 'red').length
   return (
-    <Dialog open onOpenChange={(o) => !o && close()}>
+    <Dialog open disablePointerDismissal onOpenChange={(o, d) => !o && d.reason !== 'escape-key' && close()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle><AlertTriangle className="mr-2 inline size-5 align-[-4px] text-[#d0312d]" />Stock abaixo do mínimo</DialogTitle>

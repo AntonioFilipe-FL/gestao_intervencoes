@@ -122,7 +122,7 @@ const SECTIONS: Section[] = [
     id: 'outros', title: 'Outros',
     body: <L items={[
       <><b>Modo escuro</b>: ícone 🌙 / ☀️ na barra de topo, ao lado do email (fica guardado no browser).</>,
-      <>Avisos ao entrar: <b>Material novo recebido</b> e <b>Stock abaixo do mínimo</b> (admins), <b>Contas novas na Intranet</b> (super admin).</>,
+      <>Avisos ao entrar: <b>Material novo recebido</b> e <b>Stock abaixo do mínimo</b> (admins), <b>Contas novas na Intranet</b> (super admin). Aparece um de cada vez: o seguinte só surge depois de fechar o anterior, e só se fecham nos botões do aviso (não ao clicar fora).</>,
       <>Janelas e campos de IMEIs grandes têm scroll; as secções longas do Stock abrem-se ao clicar no título.</>,
       <>Só aparecem nesta ajuda os menus a que o seu perfil tem acesso. Se lhe faltar um menu ou um botão, peça ao super admin para ajustar o perfil.</>,
       <>Em caso de dúvida ou erro, contacte o administrador da aplicação.</>,
