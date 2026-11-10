@@ -6,7 +6,7 @@ import { requireUser } from '@/lib/auth'
 import { billingRecipients } from '@/lib/billing-notification'
 import { getClientOptions } from '@/lib/intranet'
 import { sql } from '@/lib/db'
-import { creatorRecordUrl } from '@/lib/creator-import'
+import { creatorRecordUrl, resolveRegisteredDrafts } from '@/lib/creator-import'
 import { matchEquipment } from '@/lib/hardware'
 import type { ReferenceData } from '@/types/database'
 import type { InterventionFormInput } from '@/lib/schemas/intervention'
@@ -16,6 +16,8 @@ export default async function NewInterventionPage({ searchParams }: { searchPara
   if (!can(user, 'interventions', 'write')) redirect('/interventions')
   // ?draft=<id>: pré-preenche a partir de um formulário do Creator por confirmar (só admin)
   const { draft: draftId } = await searchParams
+  // os formulários cuja intervenção já foi registada à mão saem da lista antes de abrir
+  if (draftId) await resolveRegisteredDrafts().catch(() => 0)
   const [draft] = draftId && /^[0-9a-f-]{36}$/i.test(draftId) && user.role === 'admin'
     ? await sql<{ id: string; form_values: Record<string, string>; notes: string[]; form_type: string | null; id_record: string | null; creator_id: string; ticket: string | null }[]>`
         select id, form_values, notes, form_type, id_record, creator_id, ticket from intervention_drafts where id = ${draftId} and status = 'pending'`

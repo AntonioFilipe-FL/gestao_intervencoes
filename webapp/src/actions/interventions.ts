@@ -28,6 +28,23 @@ export async function createIntervention(input: unknown, draftId?: string) {
     if (!parsed.success) {
       return { success: false as const, error: parsed.error.issues.map(i => i.message).join('; ') }
     }
+    // formulário do Creator por confirmar: não deixa gravar se a intervenção já estiver registada
+    // (mesma data e mesmo IMEI ou matrícula) — o formulário fica resolvido e ligado a essa intervenção
+    if (draftId && /^[0-9a-f-]{36}$/i.test(draftId)) {
+      const d = parsed.data
+      const [dup] = await sql<{ id: string }[]>`
+        select i.id from interventions i
+        where i.intervention_date = ${d.intervention_date}::date
+          and ((gestao_interv.imei_norm(${d.imei ?? ''}) is not null and gestao_interv.imei_norm(${d.imei ?? ''}) in
+                 (gestao_interv.imei_norm(i.imei), gestao_interv.imei_norm(i.spent_equipment_imei), gestao_interv.imei_norm(i.return_equipment_imei)))
+            or (gestao_interv.plate_norm(${d.license_plate ?? ''}) is not null and gestao_interv.plate_norm(${d.license_plate ?? ''}) = gestao_interv.plate_norm(i.license_plate)))
+        order by i.created_at limit 1`
+      if (dup) {
+        await sql`update intervention_drafts set status = 'done', intervention_id = ${dup.id}, resolved_at = now(), resolved_by = 'auto: já registada' where id = ${draftId} and status = 'pending'`
+        revalidatePath('/interventions/drafts')
+        return { success: false as const, error: 'Esta intervenção já está registada (mesma data e mesmo IMEI ou matrícula). O formulário foi retirado da lista “Por confirmar”; não foi gravado nada.' }
+      }
+    }
     const client_id = await resolveClientId(parsed.data.client_id)
     // validação = criação do registo: data de hoje e validador = técnico com o email de quem está autenticado
     const [validator] = await sql<{ id: string }[]>`select id from technicians where lower(email) = lower(${user.email}) limit 1`
