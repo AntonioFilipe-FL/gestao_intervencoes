@@ -19,7 +19,7 @@ const REPORTS: Record<string, string> = {
 }
 /** página do Creator que mostra o formulário de cada tipo (nome da página no endereço #Page:…) */
 const PDF_PAGES: Record<string, string> = {
-  'Troca de Viatura': 'PDF_Troca_de_Viatura',
+  'Troca de Viatura': 'PDF_Troca_de_Viatura', 'Upgrade': 'PDF_Upgrade', 'Instalação': 'PDF_Instalacao', 'Reinstalação': 'PDF_Reinstalacao', 'Desinstalação': 'PDF_Desinstalacao', 'Anomalia/Avaria': 'Anomalia_Avaria', 'Assistências': 'PDF_Assistencia', 'Entrega/Recolha': 'PDF_Entrega_Recolha',
 }
 /** tipo de formulário → tipo de intervenção da app, quando o "Tipo de Intervenção" do Creator não existe na app */
 const TYPE_FALLBACK: Record<string, string> = {
