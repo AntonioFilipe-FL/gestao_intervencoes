@@ -21,7 +21,7 @@ const merge = (lines: AccessoryLine[]) => {
   return [...m.entries()].map(([accessory_id, quantity]) => ({ accessory_id, quantity }))
 }
 
-export async function createIntervention(input: unknown) {
+export async function createIntervention(input: unknown, draftId?: string) {
   try {
     const user = await requirePerm('interventions', 'write')
     const parsed = interventionSchema.safeParse(input)
@@ -48,6 +48,9 @@ export async function createIntervention(input: unknown) {
       if (lines.length) await tx`insert into intervention_accessories ${tx(lines)}`
       await tx`select gestao_interv.sync_intervention_stock(${row.id})`
       await tx`select gestao_interv.supersede_corrections(${row.id})`
+      // veio de um formulário do Creator por confirmar: fica resolvido
+      if (draftId && /^[0-9a-f-]{36}$/i.test(draftId))
+        await tx`update intervention_drafts set status = 'done', intervention_id = ${row.id}, resolved_at = now(), resolved_by = ${user.email} where id = ${draftId}`
       return row.id as string
     })
 
@@ -59,6 +62,7 @@ export async function createIntervention(input: unknown) {
     }
 
     revalidatePath('/interventions')
+    revalidatePath('/interventions/drafts')
     revalidatePath('/reports')
     revalidatePath('/stock')
     return { success: true as const, id, emailWarning }

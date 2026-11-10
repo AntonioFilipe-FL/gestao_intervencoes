@@ -32,9 +32,11 @@ interface Props {
   initial?: { id: string; values: InterventionFormInput; billingNotified: boolean }
   /** técnico/validador associado ao email de quem está autenticado */
   validator?: { id: string; name: string } | null
+  /** nova intervenção pré-preenchida a partir de um formulário do Creator por confirmar */
+  prefill?: { draftId: string; values: Partial<InterventionFormInput>; notes: string[] }
 }
 
-export function InterventionForm({ referenceData, billingRecipients, clientOptions, initial, validator }: Props) {
+export function InterventionForm({ referenceData, billingRecipients, clientOptions, initial, validator, prefill }: Props) {
   const editing = !!initial
   const router = useRouter()
   const [loading, setLoading] = useState(false)
@@ -69,6 +71,7 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
       return_modality: '',
       accessories_spent: [],
       accessories_returned: [],
+      ...(prefill?.values ?? {}),
     },
   })
 
@@ -204,7 +207,7 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
   const onSubmit = async (values: InterventionFormValues) => {
     setLoading(true)
     try {
-      const result = initial ? await updateIntervention(initial.id, values) : await createIntervention(values)
+      const result = initial ? await updateIntervention(initial.id, values) : await createIntervention(values, prefill?.draftId)
       if (!result.success) throw new Error(result.error)
       if (result.emailWarning) alert(result.emailWarning)
       router.push(`/interventions/${result.id}`)
@@ -222,6 +225,15 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
         <h1>{editing ? 'Editar intervenção' : 'Nova intervenção'}</h1>
         <p className="fc-small text-fc-dark-60">Os campos assinalados com * são obrigatórios.</p>
       </div>
+      {prefill && (
+        <div className="border border-[#c98a00] bg-[#f2b600]/10 px-4 py-3">
+          <p className="font-bold">Intervenção por confirmar — formulário do Zoho Creator</p>
+          <p className="fc-small text-fc-dark-60">Reveja os campos preenchidos, escolha os acessórios e o que faltar, e grave. Só ao gravar é que a intervenção é registada e o stock é movimentado.</p>
+          <ul className="mt-2 grid grid-cols-1 gap-x-6 fc-small md:grid-cols-2">
+            {prefill.notes.map((n, i) => <li key={i} className={n.startsWith('⚠') ? 'font-semibold text-[#b31d25]' : ''}>{n}</li>)}
+          </ul>
+        </div>
+      )}
 
       {/* Seção 1: Informações Básicas */}
       <Card>

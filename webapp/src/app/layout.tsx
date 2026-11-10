@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { AutoReceptionNotice } from "@/components/AutoReceptionNotice";
 import { LowStockNotice } from "@/components/LowStockNotice";
 import { NewAccountsNotice } from "@/components/NewAccountsNotice";
+import { PendingDraftsNotice } from "@/components/PendingDraftsNotice";
 
 // Tipografia do FROTCOM Styleguide: Lato (light, regular, bold)
 const lato = Lato({
@@ -35,6 +36,7 @@ export default async function RootLayout({
       </head>
       <body className="flex min-h-full flex-col bg-fc-grey-100 text-fc-dark-100">
         {user && <Navbar user={user} />}
+        {user?.role === "admin" && <PendingDraftsNotice />}
         {user?.role === "admin" && <AutoReceptionNotice />}
         {user?.role === "admin" && <LowStockNotice />}
         {user?.superadmin && <NewAccountsNotice />}

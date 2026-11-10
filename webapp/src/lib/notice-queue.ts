@@ -6,7 +6,7 @@ import { useEffect, useSyncExternalStore } from 'react'
  * Fila dos avisos de entrada (pop-ups): só um visível de cada vez.
  * O seguinte só aparece depois de o atual ser fechado; entre os que esperam, sai primeiro o de menor ordem.
  */
-const ORDER = ['auto-reception', 'low-stock', 'new-accounts']
+const ORDER = ['drafts', 'auto-reception', 'low-stock', 'new-accounts']
 const waiting = new Set<string>()
 let active: string | null = null
 const listeners = new Set<() => void>()

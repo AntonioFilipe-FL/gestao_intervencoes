@@ -63,9 +63,14 @@ export default async function InterventionsPage({ searchParams }: Props) {
         subtitle={`${count.toLocaleString('pt-PT')} registos${hasFilters ? ' encontrados' : ''}`}
         actions={
           can(user, 'interventions', 'write') && (
-            <Link href="/interventions/new" className={buttonVariants({ size: 'lg' })}>
-              Nova intervenção
-            </Link>
+            <>
+              {user?.role === 'admin' && (
+                <Link href="/interventions/drafts" className={buttonVariants({ size: 'lg', variant: 'inverse' })}>Por confirmar</Link>
+              )}
+              <Link href="/interventions/new" className={buttonVariants({ size: 'lg' })}>
+                Nova intervenção
+              </Link>
+            </>
           )
         }
       />

@@ -862,3 +862,26 @@ insert into role_permissions (role, module, level) values
 on conflict (role, module) do nothing;
 -- o papel passa a ser qualquer perfil da tabela roles
 alter table profiles drop constraint if exists profiles_role_check;
+
+-- ===== Formulários do Zoho Creator importados como intervenções POR CONFIRMAR =====
+-- Ficam fora da tabela interventions (não mexem em stock, relatórios nem faturação) até um admin rever e gravar.
+create table if not exists gestao_interv.intervention_drafts (
+  id              uuid primary key default gen_random_uuid(),
+  creator_id      text not null unique,          -- ID do registo em "Todos os formulários"
+  form_type       text,                          -- Instalação, Assistências, …
+  id_record       text,                          -- ID do registo no formulário desse tipo
+  intervention_date date,
+  client_name     text,
+  technician_name text,
+  license_plate   text,
+  imei            text,
+  ticket          text,
+  form_values     jsonb not null default '{}',   -- campos já convertidos para o formulário de intervenção
+  notes           jsonb not null default '[]',   -- informação do formulário para rever (material, observações…)
+  status          text not null default 'pending' check (status in ('pending', 'done', 'dismissed')),
+  intervention_id uuid references gestao_interv.interventions(id) on delete set null,
+  created_at      timestamptz not null default now(),
+  resolved_at     timestamptz,
+  resolved_by     text
+);
+create index if not exists intervention_drafts_status_idx on gestao_interv.intervention_drafts (status);
