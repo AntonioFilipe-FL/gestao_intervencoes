@@ -218,6 +218,7 @@ export default async function InterventionDetailsPage({ params }: Props) {
               <DetailItem label="Viatura CRM" value={intervention.crm_vehicle && <LinkText value={intervention.crm_vehicle} />} />
               <DetailItem label="Contrato / Adenda" value={intervention.contract_addendum && <LinkText value={intervention.contract_addendum} />} />
               <DetailItem label="Formulário Zoho" value={intervention.zoho_form && <LinkText value={intervention.zoho_form} />} />
+              <DetailItem label="Ticket" value={intervention.ticket} />
             </CardContent>
           </Card>
         </div>

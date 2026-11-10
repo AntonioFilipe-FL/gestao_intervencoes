@@ -863,6 +863,9 @@ on conflict (role, module) do nothing;
 -- o papel passa a ser qualquer perfil da tabela roles
 alter table profiles drop constraint if exists profiles_role_check;
 
+-- n.º do ticket (Zoho Desk) associado à intervenção
+alter table gestao_interv.interventions add column if not exists ticket text;
+
 -- ===== Formulários do Zoho Creator importados como intervenções POR CONFIRMAR =====
 -- Ficam fora da tabela interventions (não mexem em stock, relatórios nem faturação) até um admin rever e gravar.
 create table if not exists gestao_interv.intervention_drafts (

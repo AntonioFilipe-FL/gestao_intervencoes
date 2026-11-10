@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { sql } from '@/lib/db'
 import { getCurrentUser, requireAdmin } from '@/lib/auth'
-import { importCreatorForms } from '@/lib/creator-import'
+import { importCreatorForms, resolveRegisteredDrafts } from '@/lib/creator-import'
 
 export type DraftRow = {
   id: string; form_type: string | null; intervention_date: string | null; client_name: string | null; technician_name: string | null
@@ -15,6 +15,7 @@ export async function getPendingDrafts(): Promise<DraftRow[]> {
   const user = await getCurrentUser()
   if (!user || user.role !== 'admin') return []
   try {
+    await resolveRegisteredDrafts() // os que entretanto foram registados à mão saem da lista
     return await sql<DraftRow[]>`
       select id, form_type, intervention_date::text, client_name, technician_name, license_plate, imei, ticket, created_at::text
       from intervention_drafts where status = 'pending' order by intervention_date nulls last, created_at`

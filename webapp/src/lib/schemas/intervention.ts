@@ -81,6 +81,7 @@ export const interventionSchema = z.object({
   crm_vehicle: text,
   contract_addendum: text,
   zoho_form: text,
+  ticket: text, // n.º do ticket (Zoho Desk)
 
   // Armazéns
   stock_exit_warehouse_id: optionalId,

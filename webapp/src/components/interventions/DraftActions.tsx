@@ -16,7 +16,7 @@ export function ImportDraftsButton() {
       <Button variant="inverse" disabled={busy} onClick={() => start(async () => {
         const r = await importDraftsNow()
         setMsg(r.ok
-          ? { ok: !r.errors.length, text: `${r.found} formulário(s) por validar no Creator · ${r.created} novo(s) importado(s)${r.errors.length ? ` · ${r.errors.length} com erro (${r.errors[0]})` : ''}` }
+          ? { ok: !r.errors.length, text: `${r.found} formulário(s) por validar no Creator · ${r.created} novo(s) importado(s)${r.already ? ` · ${r.already} já registado(s) retirado(s)` : ''}${r.errors.length ? ` · ${r.errors.length} com erro (${r.errors[0]})` : ''}` }
           : { ok: false, text: r.error })
         router.refresh()
       })}>{busy ? 'A importar do Creator…' : 'Importar agora'}</Button>

@@ -888,6 +888,10 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
               <Input id="zoho_form" {...register('zoho_form')} />
               <OpenLink name="zoho_form" />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ticket">Ticket</Label>
+              <Input id="ticket" {...register('ticket')} placeholder="N.º do ticket" />
+            </div>
           </div>
         </CardContent>
       </Card>

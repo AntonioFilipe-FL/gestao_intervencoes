@@ -23,6 +23,13 @@ const TYPE_FALLBACK: Record<string, string> = {
   'Reinstalação': 'Reinstalação', 'Desinstalação': 'Desinstalação',
 }
 
+/** Link para abrir o formulário no Creator (registo do formulário do seu tipo; senão, o resumo em "Todos os formulários") */
+export function creatorRecordUrl(formType: string | null, idRecord: string | null, creatorId: string) {
+  const rep = formType ? REPORTS[formType] : undefined
+  const base = `https://creatorapp.zoho.eu/${OWNER}/${APP}/record-summary`
+  return rep && idRecord ? `${base}/${rep}/${idRecord}` : `${base}/${SUMMARY}/${creatorId}`
+}
+
 export const creatorConfigured = () =>
   !!(process.env.ZOHO_CLIENT_ID && process.env.ZOHO_CLIENT_SECRET && process.env.ZOHO_CREATOR_REFRESH_TOKEN)
 
@@ -59,6 +66,23 @@ function dateOf(v: unknown): string | null {
   return null
 }
 
+/**
+ * Formulários por confirmar cuja intervenção JÁ foi registada na app (à mão): mesma data e mesmo IMEI ou matrícula.
+ * Ficam resolvidos (ligados a essa intervenção) e deixam de aparecer para gravar outra vez. Devolve quantos.
+ */
+export async function resolveRegisteredDrafts() {
+  const r = await sql`
+    update intervention_drafts d set status = 'done', intervention_id = x.id, resolved_at = now(), resolved_by = 'auto: já registada'
+    from (
+      select distinct on (d2.id) d2.id as draft_id, i.id
+      from intervention_drafts d2 join interventions i on i.intervention_date = d2.intervention_date
+        and ((d2.imei is not null and d2.imei in (gestao_interv.imei_norm(i.imei), gestao_interv.imei_norm(i.spent_equipment_imei), gestao_interv.imei_norm(i.return_equipment_imei)))
+          or (nullif(gestao_interv.plate_norm(d2.license_plate), '') is not null and gestao_interv.plate_norm(d2.license_plate) = gestao_interv.plate_norm(i.license_plate)))
+      where d2.status = 'pending' order by d2.id, i.created_at
+    ) x where d.id = x.draft_id and d.status = 'pending' returning d.id`
+  return r.length
+}
+
 /** Lê os formulários "Por validar" e cria as intervenções por confirmar que ainda não existem. */
 export async function importCreatorForms() {
   if (!creatorConfigured()) throw new Error('Falta a variável ZOHO_CREATOR_REFRESH_TOKEN (ou ZOHO_CLIENT_ID / ZOHO_CLIENT_SECRET).')
@@ -79,7 +103,7 @@ export async function importCreatorForms() {
   const pending = rows.filter((x) => /por validar/i.test(disp(x.Estado)))
   const known = new Set((await sql<{ creator_id: string }[]>`select creator_id from intervention_drafts where creator_id = any(${pending.map((x) => String(x.ID))})`).map((k) => k.creator_id))
   const todo = pending.filter((x) => !known.has(String(x.ID))).slice(0, 150)
-  if (!todo.length) return { found: pending.length, created: 0, errors: [] as string[] }
+  if (!todo.length) return { found: pending.length, created: 0, already: await resolveRegisteredDrafts(), errors: [] as string[] }
 
   const [techs, types, clients, whs] = await Promise.all([
     sql<{ id: string; name: string }[]>`select id, name from technicians where active`,
@@ -122,7 +146,8 @@ export async function importCreatorForms() {
       set('intervention_date', date); set('technician_id', tech?.id); set('client_id', client?.id); set('intervention_type_id', type?.id)
       set('license_plate', plate)
       const ticket = disp(d.Ticket_field) || disp(s.N_do_Ticket)
-      set('zoho_form', [formType, ticket && `Ticket ${ticket}`].filter(Boolean).join(' · '))
+      set('zoho_form', creatorRecordUrl(formType, s.IdRecord ? String(s.IdRecord) : null, String(s.ID)))
+      set('ticket', ticket)
       if (/desinstala/i.test(formType)) {
         // equipamento retirado da viatura → entra no armazém do técnico
         set('imei', assisted); set('return_equipment_imei', assisted); set('stock_entry_warehouse_id', assisted ? techWh : '')
@@ -163,5 +188,5 @@ export async function importCreatorForms() {
       errors.push(`${String(s.ID)}: ${(e as Error).message.slice(0, 120)}`)
     }
   }
-  return { found: pending.length, created, errors }
+  return { found: pending.length, created, already: await resolveRegisteredDrafts(), errors }
 }
