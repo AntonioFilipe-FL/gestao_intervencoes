@@ -52,6 +52,23 @@ async function buildPrefill(draft: Draft, ref: ReferenceData) {
     .filter((n) => !/^Com assinatura:/.test(n) && !/^Tipo de intervenção \(Creator\): \d+$/.test(n))
     .map((n) => n.replace(/: true$/, ': Sim').replace(/: false$/, ': Não'))
 
+  // --- sem IMEI no formulário (ex.: Troca de Viatura, Upgrade sem troca): o equipamento da viatura segundo a Intranet ---
+  if (!values.imei) {
+    const oldPlate = draft.notes.find((n) => n.startsWith('Matrícula antiga:'))?.replace(/^[^:]+:\s*/, '') ?? ''
+    for (const [plate, label] of [[draft.form_values.license_plate ?? '', 'matrícula'], [oldPlate, 'matrícula antiga']] as const) {
+      if (plate.replace(/[^A-Za-z0-9]/g, '').length < 6) continue
+      const found = await sql<{ imei: string }[]>`
+        select imei from devices where active and gestao_interv.plate_norm(license_plate) = gestao_interv.plate_norm(${plate}) limit 2`
+      if (found.length === 1) {
+        values.imei = found[0].imei
+        draft.form_values.imei = found[0].imei
+        notes.push(`IMEI ${found[0].imei} obtido pela ${label} ${plate} na Intranet (o formulário não traz IMEI) — confirmar.`)
+        break
+      }
+    }
+    if (!values.imei) notes.push('⚠ O formulário não traz IMEI e não foi encontrado pela matrícula na Intranet — escolher no formulário.')
+  }
+
   // --- acessórios gastos sugeridos pelo texto do formulário ---
   const material = draft.notes.filter((n) => /^(Material gasto|Descrição\/quantidades do material|Acessórios substituídos|Ligações efetuadas):/.test(n)).join(' ')
   const text = `${draft.form_values.action_description ?? ''} ${material}`

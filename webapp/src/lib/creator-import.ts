@@ -17,6 +17,10 @@ const REPORTS: Record<string, string> = {
   'Reinstalação': 'Copy_of_Formul_rio_de_reinstala_o_Report', 'Desinstalação': 'Formul_rio_de_desinstala_o_Report',
   'Anomalia/Avaria': 'Formul_rio_de_anomalia_Report', 'Entrega/Recolha': 'Formul_rio_de_Entrega_Recolha_Report',
 }
+/** página do Creator que mostra o formulário de cada tipo (nome da página no endereço #Page:…) */
+const PDF_PAGES: Record<string, string> = {
+  'Troca de Viatura': 'PDF_Troca_de_Viatura',
+}
 /** tipo de formulário → tipo de intervenção da app, quando o "Tipo de Intervenção" do Creator não existe na app */
 const TYPE_FALLBACK: Record<string, string> = {
   'Instalação': 'Instalação', 'Assistências': 'Assistência', 'Troca de Viatura': 'Troca de Viatura', 'Upgrade': 'Upgrade',
@@ -25,9 +29,13 @@ const TYPE_FALLBACK: Record<string, string> = {
 
 /** Link para abrir o formulário no Creator (registo do formulário do seu tipo; senão, o resumo em "Todos os formulários") */
 export function creatorRecordUrl(formType: string | null, idRecord: string | null, creatorId: string) {
+  // página "PDF" do formulário de cada tipo: #Page:<página>?idFormulario=<registo do formulário>&IDFORMAPROV=<registo em Todos os formulários>
+  const page = formType ? PDF_PAGES[formType] : undefined
+  const app = `https://creatorapp.zoho.eu/${OWNER}/${APP}`
+  if (page && idRecord) return `${app}/#Page:${page}?idFormulario=${idRecord}&IDFORMAPROV=${creatorId}&allow=true`
+  // tipo sem página conhecida: abre o resumo do registo
   const rep = formType ? REPORTS[formType] : undefined
-  const base = `https://creatorapp.zoho.eu/${OWNER}/${APP}/record-summary`
-  return rep && idRecord ? `${base}/${rep}/${idRecord}` : `${base}/${SUMMARY}/${creatorId}`
+  return rep && idRecord ? `${app}/record-summary/${rep}/${idRecord}` : `${app}/record-summary/${SUMMARY}/${creatorId}`
 }
 
 export const creatorConfigured = () =>
