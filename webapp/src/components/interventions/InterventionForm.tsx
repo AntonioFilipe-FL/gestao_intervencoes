@@ -155,7 +155,9 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
     return () => { cancel = true; clearTimeout(t) }
   }, [plate, interventionDate, initial?.id])
   // ao editar, a matrícula já gravada não volta a preencher os IMEIs (só se for alterada)
-  const initialPlate = useRef(initial ? (initial.values.license_plate ?? '') : null)
+  // ao editar, ou num formulário do Creator por confirmar, a matrícula que já vem preenchida não sugere material:
+  // o gasto/retomado é o que está no registo/formulário (só volta a sugerir se a matrícula for alterada)
+  const initialPlate = useRef(initial ? (initial.values.license_plate ?? '') : prefill ? (prefill.values.license_plate ?? '') : null)
 
   // Matrícula → IMEI atual (Intranet) para o material gasto e IMEI anterior para o material retomado.
   // Só preenche campos vazios, para não apagar o que o utilizador escreveu.
@@ -203,6 +205,32 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
       setValue('report_projeto', client.report_projeto_contrato || '')
     }
   }
+
+  // Formulário do Creator por confirmar: completa o que o formulário normal preenche ao escolher cliente / IMEI
+  // (Venda/Aluguer, NOS/VDF, conta e matrícula da Intranet, equipamento principal, gasto e retomado)
+  const prefilled = useRef(false)
+  useEffect(() => {
+    if (!prefill || prefilled.current) return
+    prefilled.current = true
+    const v = prefill.values
+    if (v.client_id) handleClientChange(v.client_id, () => {})
+    void (async () => {
+      if (v.imei) {
+        const r = await getImeiIntranetInfo(v.imei).catch(() => null)
+        if (r?.account && !getValues('intranet_account')) setValue('intranet_account', r.account, { shouldDirty: true })
+        if (r?.plate && !getValues('intranet_license_plate')) setValue('intranet_license_plate', r.plate, { shouldDirty: true })
+        const eq = matchEq(r?.model)
+        if (eq && !getValues('equipment_id')) setValue('equipment_id', eq.id, { shouldDirty: true })
+      }
+      for (const [imeiKey, field] of [['spent_equipment_imei', 'spent_equipment_id'], ['return_equipment_imei', 'return_equipment_id']] as const) {
+        const imei = v[imeiKey]
+        if (!imei) continue
+        const r = await getImeiIntranetInfo(imei).catch(() => null)
+        fillMaterialEquipment(field, r?.model)
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const onSubmit = async (values: InterventionFormValues) => {
     setLoading(true)

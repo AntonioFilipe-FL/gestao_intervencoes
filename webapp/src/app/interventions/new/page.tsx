@@ -26,7 +26,13 @@ export default async function NewInterventionPage({ searchParams }: { searchPara
   return (
     <div>
       <InterventionForm referenceData={referenceData} billingRecipients={billingRecipients()} clientOptions={clientOptions} validator={validator ?? null}
-        prefill={draft ? { draftId: draft.id, values: draft.form_values, notes: draft.notes } : undefined} />
+        prefill={draft ? {
+          draftId: draft.id, values: draft.form_values,
+          // notas legíveis: sem identificadores internos nem "Com assinatura"; true/false → Sim/Não
+          notes: draft.notes
+            .filter((n) => !/^Com assinatura:/.test(n) && !/^Tipo de intervenção \(Creator\): \d+$/.test(n))
+            .map((n) => n.replace(/: true$/, ': Sim').replace(/: false$/, ': Não')),
+        } : undefined} />
     </div>
   )
 }

@@ -148,7 +148,7 @@ export async function importCreatorForms() {
       note('IMEI instalado', d.IMEI_do_equipamento_instalado); note('IMEI assistido', d.IMEI_do_equipamento_assistido); note('IMEI novo', d.IMEI_EquiNovo)
       note('Substituição de acessório', d.SubsAcessorio); note('Acessórios substituídos', d.AcessoriosSubs)
       note('Material gasto', d.MaterialGasto ?? d.MatGasto); note('Descrição/quantidades do material', d.DescricaoQtdMatGasto ?? d.DescrQtds)
-      note('Ligações efetuadas', d.LigEfetuadas); note('Com assinatura', d.Com_assinatura)
+      note('Ligações efetuadas', d.LigEfetuadas)
       if (!tech) notes.push('⚠ Técnico não reconhecido — escolher no formulário.')
       if (!client) notes.push('⚠ Cliente não reconhecido — escolher no formulário.')
       if (!type) notes.push('⚠ Tipo de intervenção não reconhecido — escolher no formulário.')
