@@ -77,8 +77,10 @@ export default async function StockPage({ searchParams }: Props) {
       <PageHeader
         title="Stock material"
         subtitle={isAdmin ? 'Equipamentos em stock por IMEI. Receções e transferências registam-se aqui; as intervenções descontam (IMEI gasto) e acrescentam (IMEI retomado) automaticamente.' : 'Equipamentos em stock por armazém.'}
-        actions={isAdmin && (
+        actions={(
           <>
+            <Link href="/stock/mobilized" className={buttonVariants({ size: 'lg', variant: 'inverse' })}>Mobilizado por cliente</Link>
+            {isAdmin && <>
             <Link href="/stock/transfers" className={buttonVariants({ size: 'lg', variant: 'inverse' })}>Histórico de transferências</Link>
             <a href={`/stock/export${p.wh ? `?wh=${p.wh}` : ''}`} className={buttonVariants({ size: 'lg', variant: 'inverse' })}>
               <FileSpreadsheet /> Exportar Excel{selectedWhName ? ` (${selectedWhName})` : ''}
@@ -86,6 +88,7 @@ export default async function StockPage({ searchParams }: Props) {
             <StockActions warehouses={warehouses} originWarehouses={allWarehouses} equipment={equipment} />
             <StockAdjust warehouses={warehouses} />
             <StockMinimums warehouses={warehouses} equipment={equipment} minimums={minimums} margin={margin} />
+            </>}
           </>
         )}
       />

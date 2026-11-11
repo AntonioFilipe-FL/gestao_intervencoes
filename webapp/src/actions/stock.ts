@@ -622,3 +622,30 @@ export async function changeModality(input: { imeis: string; modality: string; d
     return { ok: false, error: (e as Error).message }
   }
 }
+
+export type MobilizedItem = {
+  imei: string; equipment: string; modality: string | null; moved_at: string
+  client_id: string | null; client: string | null; plate: string | null
+  /** de onde vem o cliente: a intervenção que mobilizou o IMEI ou, sem ela, o cliente da Intranet */
+  via: 'intervencao' | 'intranet' | null
+}
+
+/** IMEIs no armazém "Instalado Aluguer (Mobilizado)" com o cliente e o equipamento (matriz cliente x equipamento) */
+export async function getMobilizedItems() {
+  await requirePerm('stock', 'read')
+  const eqName = await equipmentNamer()
+  const rows = await sql<(Omit<MobilizedItem, 'equipment'> & { equipment: string | null; hardware: string | null })[]>`
+    select c.imei, e.name as equipment, d.model as hardware, c.modality, c.moved_at::text,
+           coalesce(ic.id, dc.id) as client_id, coalesce(ic.name, dc.name) as client,
+           nullif(btrim(coalesce(i.license_plate, d.license_plate)), '') as plate,
+           case when ic.id is not null then 'intervencao' when dc.id is not null then 'intranet' end as via
+    from stock_current c
+    left join equipment_list e on e.id = c.equipment_id
+    left join devices d on d.imei = c.imei
+    left join clients dc on dc.id = d.client_id
+    left join interventions i on i.id = c.intervention_id
+    left join clients ic on ic.id = i.client_id
+    where c.warehouse_id = gestao_interv.mobilized_wh()
+    order by c.moved_at desc`
+  return rows.map(({ hardware, equipment, ...r }) => ({ ...r, equipment: eqName(hardware) ?? equipment ?? hardware ?? '(sem equipamento)' })) as MobilizedItem[]
+}
