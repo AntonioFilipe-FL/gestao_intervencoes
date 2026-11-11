@@ -9,6 +9,8 @@ import { SettingsTable } from '@/components/settings/SettingsTable'
 import { isAdmin, canSettings } from '@/actions/users'
 import { getRoles } from '@/actions/roles'
 import { RoleManagement } from '@/components/settings/RoleManagement'
+import { AccessorySynonyms } from '@/components/settings/AccessorySynonyms'
+import { getAccessorySynonyms } from '@/actions/accessory-synonyms'
 import { getCurrentUser } from '@/lib/auth'
 import { getStockMinMargin } from '@/lib/stock-settings'
 import { SuperAdminSettings } from '@/components/settings/SuperAdminSettings'
@@ -110,6 +112,9 @@ export default async function SettingsPage({
 
             <TabsContent value="accessories">
               <SettingsTable title="Lista de Acessórios" table="accessories" items={data.accessories} catalog />
+              <div className="mt-8">
+                <AccessorySynonyms rows={await getAccessorySynonyms().catch(() => [])} accessories={(data.accessories ?? []).filter((a) => a.active)} />
+              </div>
             </TabsContent>
 
             <TabsContent value="intervention_types">

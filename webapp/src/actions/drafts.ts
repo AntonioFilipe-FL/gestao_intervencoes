@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { sql } from '@/lib/db'
 import { getCurrentUser, requireAdmin } from '@/lib/auth'
 import { importCreatorForms, resolveRegisteredDrafts } from '@/lib/creator-import'
+import { runJob } from '@/lib/jobs'
 
 export type DraftRow = {
   id: string; form_type: string | null; intervention_date: string | null; client_name: string | null; technician_name: string | null
@@ -36,7 +37,7 @@ export async function dismissDraft(id: string) {
 export async function importDraftsNow() {
   try {
     await requireAdmin()
-    const r = await importCreatorForms()
+    const r = await runJob('creator-import', importCreatorForms)
     revalidatePath('/interventions/drafts')
     return { ok: true as const, ...r }
   } catch (e) { return { ok: false as const, error: (e as Error).message } }

@@ -1,3 +1,4 @@
+import { sql } from '@/lib/db'
 import { can } from '@/lib/permissions'
 import { getInterventionById } from '@/services/database'
 import { requireUser } from '@/lib/auth'
@@ -58,6 +59,11 @@ export default async function InterventionDetailsPage({ params }: Props) {
   const [user, intervention] = await Promise.all([requireUser(), getInterventionById(id)])
 
   if (!can(user, 'interventions')) redirect('/help')
+  // histórico de alterações (só admin / super admin)
+  const history = user.role === 'admin' && /^[0-9a-f-]{36}$/i.test(id)
+    ? await sql<{ id: string; changed_at: string; changed_by: string | null; changes: { label: string; old: string; new: string }[] }[]>`
+        select id, changed_at::text, changed_by, changes from intervention_history where intervention_id = ${id} order by changed_at desc limit 50`.catch(() => [])
+    : []
   if (!intervention) {
     notFound()
   }
@@ -223,6 +229,34 @@ export default async function InterventionDetailsPage({ params }: Props) {
           </Card>
         </div>
       </div>
+
+      {history.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Histórico de alterações</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {history.map((h) => (
+              <div key={h.id} className="border border-fc-dark-20">
+                <p className="bg-fc-grey-80 px-3 py-1 fc-small font-semibold">
+                  {new Date(h.changed_at).toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon', dateStyle: 'short', timeStyle: 'short' })} · {h.changed_by ?? '—'}
+                </p>
+                <table className="w-full text-[13px]">
+                  <tbody>
+                    {h.changes.map((c, i) => (
+                      <tr key={i} className="border-t border-fc-dark-10 align-top">
+                        <td className="w-52 px-3 py-1 font-semibold">{c.label}</td>
+                        <td className="px-3 py-1 text-fc-dark-60 line-through">{c.old || '(vazio)'}</td>
+                        <td className="px-3 py-1">{c.new || '(vazio)'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

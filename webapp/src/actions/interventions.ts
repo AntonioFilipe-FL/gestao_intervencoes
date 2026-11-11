@@ -7,6 +7,7 @@ import { interventionSchema, toDbValues, type AccessoryLine } from '@/lib/schema
 import { isBillable, notifyBilling, isBillingEmailEnabled } from '@/lib/billing-notification'
 import { headers } from 'next/headers'
 import { resolveClientId } from '@/lib/intranet'
+import { recordInterventionChanges } from '@/lib/intervention-history'
 
 async function appUrl() {
   if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, '')
@@ -106,8 +107,14 @@ export async function updateIntervention(id: string, input: unknown) {
     const returned = merge(parsed.data.accessories_returned)
 
     const before = await sql.begin(async tx => {
-      const [prev] = await tx`select billing, billing_notified_at from interventions where id = ${id} for update`
+      const [prev] = await tx`select * from interventions where id = ${id} for update`
       if (!prev) throw new Error('Registo não encontrado.')
+      // histórico: o que mudou nesta edição (antes de substituir os acessórios)
+      const old = await tx<{ accessory_id: string; quantity: number; direction: string }[]>`select accessory_id, quantity, direction from intervention_accessories where intervention_id = ${id}`
+      // num savepoint: se o histórico falhar (ex.: tabela ainda não criada), a edição grava-se na mesma
+      await tx.savepoint((sp) => recordInterventionChanges(sp, id, user.email, prev, { ...rest, client_id },
+        { spent: old.filter((l) => l.direction === 'gasto'), returned: old.filter((l) => l.direction === 'retomado') }, { spent, returned }))
+        .catch((e) => console.error('Histórico da intervenção não registado:', e))
       await tx`update interventions set ${tx(values)} where id = ${id}`
       await tx`delete from intervention_accessories where intervention_id = ${id}`
       const lines = [

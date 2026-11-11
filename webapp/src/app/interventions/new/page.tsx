@@ -101,12 +101,21 @@ async function buildPrefill(draft: Draft, ref: ReferenceData) {
   }
   // 3) lista "quantidade + material" do formulário (ex.: "1 relé 24v, 2 sensores de porta, 24 mt cabo duplo")
   const qty = new Map<string, number>()
+  const synonyms = await sql<{ term: string; accessory_id: string | null }[]>`select term, accessory_id from accessory_synonyms`.catch(() => [])
   const notFound: string[] = []
   const tokens = (v: string) => v.split(/[^A-Za-zÀ-ÿ0-9]+/).map(fold).filter((t) => t.length >= 2).map((t) => (t.length > 3 ? t.replace(/(es|s)$/, '') : t))
   const listText = draft.notes.filter((n) => /^(Descrição\/quantidades do material|Material gasto):/.test(n)).map((n) => n.replace(/^[^:]+:\s*/, '')).join(', ')
   for (const raw of listText.split(/[,;\n]+|\s+e\s+/).map((x) => x.trim()).filter(Boolean)) {
     const m = raw.match(/^(\d{1,3})\s*(?:x|un\.?|unid\.?|mts?|metros?|m)?\s+(.+)$/i)
     if (!m) continue
+    // sinónimo definido em Configurações › Acessórios (texto igual ou contido no item) — ganha a tudo o resto
+    const fitem = fold(m[2])
+    const syn = synonyms.find((x) => x.term === fitem) ?? synonyms.filter((x) => x.term.length >= 4 && fitem.includes(x.term)).sort((x, y) => y.term.length - x.term.length)[0]
+    if (syn) {
+      const a = syn.accessory_id && accessories.find((x) => x.id === syn.accessory_id)
+      if (a) { picked.set(a.id, a.name); qty.set(a.id, Math.min(99, (qty.get(a.id) ?? 0) + Number(m[1]))) }
+      continue // sinónimo "sem stock": ignora o item
+    }
     const want = tokens(m[2])
     if (!want.length) continue
     // candidatos: acessórios cujo nome contém todas as palavras do item (por prefixo)
@@ -117,7 +126,7 @@ async function buildPrefill(draft: Draft, ref: ReferenceData) {
     else if (best.length) doubts.push(`⚠ “${raw}” — escolher qual nos acessórios gastos (${best.slice(0, 4).map((c) => c.a.name).join(', ')}${best.length > 4 ? '…' : ''}).`)
     else notFound.push(raw)
   }
-  if (notFound.length) doubts.push(`⚠ Sem correspondência na lista de acessórios (escolher à mão, se for material com stock): ${notFound.join(', ')}`)
+  if (notFound.length) doubts.push(`⚠ Sem correspondência na lista de acessórios: ${notFound.join(', ')} — escolher à mão; para a app aprender, acrescente o sinónimo em Configurações › Acessórios.`)
 
   // --- equipamento gasto: sai do armazém onde ESTÁ; a modalidade passa a ser a do cliente ao gravar ---
   const tech = (ref.technicians ?? []).find((t) => t.id === draft.form_values.technician_id)

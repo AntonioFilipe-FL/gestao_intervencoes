@@ -5,9 +5,12 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "prestart": "node scripts/apply-schema-start.mjs",
     "start": "next start",
     "lint": "eslint",
     "db:schema": "tsx scripts/apply-schema.ts",
+    "db:backup": "tsx scripts/backup-db.ts",
+    "test:stock": "tsx scripts/test-stock-rules.ts",
     "migrate": "tsx migrate.ts",
     "migrate:dry": "tsx migrate.ts --dry-run"
   },

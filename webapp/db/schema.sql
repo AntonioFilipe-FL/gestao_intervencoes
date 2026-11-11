@@ -66,6 +66,7 @@ create table if not exists clients (
   created_at              timestamptz not null default now()
 );
 -- nomes únicos só entre clientes não ligados à Intranet (os ligados usam o nome da Intranet, que pode repetir-se: venda/aluguer)
+alter table clients add column if not exists intranet_account_id text; -- (definida mais abaixo; aqui para o índice numa base de dados nova)
 drop index if exists gestao_interv.clients_name_uq;
 create unique index if not exists clients_name_unlinked_uq on clients (lower(name)) where intranet_account_id is null;
 create index if not exists clients_name_idx on clients (lower(name));
@@ -888,3 +889,23 @@ create table if not exists gestao_interv.intervention_drafts (
   resolved_by     text
 );
 create index if not exists intervention_drafts_status_idx on gestao_interv.intervention_drafts (status);
+
+-- Sinónimos de acessórios: como os técnicos escrevem o material nos formulários ("iman", "calhas") → acessório da lista.
+-- accessory_id nulo = material sem stock na app (ignorar).
+create table if not exists gestao_interv.accessory_synonyms (
+  term         text primary key,                 -- texto normalizado (minúsculas, sem acentos nem espaços)
+  label        text not null,                    -- como foi escrito
+  accessory_id uuid references gestao_interv.accessories(id) on delete cascade,
+  created_by   text,
+  created_at   timestamptz not null default now()
+);
+
+-- Histórico de alterações das intervenções (uma linha por edição, com os campos que mudaram)
+create table if not exists gestao_interv.intervention_history (
+  id              uuid primary key default gen_random_uuid(),
+  intervention_id uuid not null references gestao_interv.interventions(id) on delete cascade,
+  changed_at      timestamptz not null default now(),
+  changed_by      text,
+  changes         jsonb not null                 -- [{ field, label, old, new }]
+);
+create index if not exists intervention_history_interv_idx on gestao_interv.intervention_history (intervention_id, changed_at desc);

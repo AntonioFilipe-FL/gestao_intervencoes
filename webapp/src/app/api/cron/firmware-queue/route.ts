@@ -1,6 +1,8 @@
 import { timingSafeEqual } from 'crypto'
 import { processFirmwareQueue } from '@/lib/firmware-queue'
 
+import { runJob } from '@/lib/jobs'
+
 export const dynamic = 'force-dynamic'
 
 /**
@@ -13,7 +15,7 @@ export async function POST(req: Request) {
   const a = Buffer.from(got), b = Buffer.from(secret)
   if (!secret || a.length !== b.length || !timingSafeEqual(a, b)) return new Response('Sem permissão', { status: 401 })
   try {
-    return Response.json(await processFirmwareQueue())
+    return Response.json(await runJob('firmware-queue', processFirmwareQueue))
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 500 })
   }

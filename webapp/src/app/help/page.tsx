@@ -25,6 +25,7 @@ const SECTIONS: Section[] = [
       <L items={[
         <>Em <b>Novo registo</b> preenche-se o cliente, técnico, tipo, matrícula e IMEI. Ao escolher o IMEI, a conta e a matrícula da Intranet são preenchidas automaticamente.</>,
         <><b>Material gasto</b> (saída) e <b>material retomado</b> (entrada) movimentam o stock: o IMEI gasto sai do armazém de saída; o retomado entra no armazém de entrada.</>,
+        <>No detalhe de uma intervenção, admin e super admin veem o <b>Histórico de alterações</b>: o que mudou em cada edição, quem e quando.</>,
         <><b>Por confirmar</b> (admin e super admin): ao final do dia a app importa do Zoho Creator os formulários <i>Por validar</i> e deixa-os como intervenções por confirmar, já preenchidas (data, técnico, cliente, matrícula, IMEI, tipo, descrição). Aparecem num aviso ao entrar e em <i>Intervenções → Por confirmar</i>. Em <b>Rever e gravar</b> confirma-se o que veio do formulário, escolhem-se os acessórios e grava-se — só nesse momento a intervenção é registada e o stock mexe. <b>Dispensar</b> retira um formulário da lista. Saem da lista sozinhos os formulários cuja intervenção já foi registada à mão (mesma data e mesmo IMEI ou matrícula) e os que deixaram de estar <i>Por validar</i> no Creator.</>,
         <>Ao escolher um equipamento, os acessórios do <b>kit</b> são sugeridos (exceto em assistências, onde os acessórios ficam na viatura).</>,
         <>Nas <b>Entregas / Entradas de Material</b> podem colar-se vários IMEIs em <i>IMEIs adicionais</i>; o kit dos equipamentos entra automaticamente se não for registado à mão.</>,
@@ -105,6 +106,7 @@ const SECTIONS: Section[] = [
       <>Tabelas de referência: técnicos, clientes (com Venda/Aluguer), equipamentos (e kits), acessórios, tipos, motivos, armazéns, bundles.</>,
       <><b>Intranet</b>: sincronização de contas e IMEIs; associar contas novas a clientes.</>,
       <><b>Email</b>: envio automático à financeira (ligar/desligar).</>,
+      <>Em <b>Acessórios</b>, os <b>Sinónimos</b> dizem a que acessório corresponde o que os técnicos escrevem nos formulários (ex.: “iman”); servem para sugerir os acessórios gastos nas intervenções por confirmar.</>,
       <>Os <b>Utilizadores</b> e os <b>Perfis</b> só são geridos pelo super admin. Com perfil de leitura nas Configurações vê-se as tabelas, mas não se altera nada.</>,
     ]} />,
   },
@@ -113,6 +115,7 @@ const SECTIONS: Section[] = [
     body: <L items={[
       <><b>Utilizadores</b>: adicionar/remover acessos, atribuir o perfil e tornar alguém super admin (retirar só por script).</>,
       <><b>Histórico de atualizações</b>: em <i>Atualização Equipamento</i>, por baixo do formulário, a lista dos pedidos de firmware e CAN chip enviados (data, IMEI, versões, resultado e quem pediu), com a conta Intranet e filtros por IMEI/conta/utilizador, tipo e datas. Abre-se no botão <i>Ver histórico de atualizações</i> (não carrega sozinho, para a página abrir depressa); ao abrir, a app confirma na Intranet os pedidos pendentes: <i>Atualizado</i> (a versão pedida já está instalada), <i>Falhou na Intranet</i> ou <i>Enviado · pendente</i>, com o aviso <i>não comunica desde…</i> quando o equipamento está sem comunicar. Os pedidos só seguem para a Intranet com a <b>ignição desligada</b>; com a ignição ligada ficam <i>Em espera</i> e são enviados automaticamente quando desligar (expiram ao fim de 7 dias).</>,
+      <><b>Tarefas automáticas</b>: se a importação do Creator ou o envio de firmware em espera falharem ou deixarem de correr, aparece um aviso ao entrar. A base de dados atualiza-se sozinha em cada deploy.</>,
       <><b>Perfis</b>: criar, renomear e apagar perfis e definir, em cada menu, <i>Sem acesso</i>, <i>Ler</i> ou <i>Ler e escrever</i>. O Administrador tem sempre tudo; os perfis base não se apagam, nem um perfil com utilizadores.</>,
       <><b>Margem do stock mínimo</b> (aviso amarelo).</>,
       <><b>Matrículas na Intranet</b>: escolher armazéns e/ou IMEIs, marcar os pretendidos, <b>Testar com 1</b> e atualizar; opcionalmente transferir para qualquer conta Intranet. Mesmos formatos da transferência (ver Stock material). Tudo fica registado.</>,
