@@ -12,6 +12,7 @@
     "db:backup": "tsx scripts/backup-db.ts",
     "db:restore": "tsx scripts/restore-db.ts",
     "test:stock": "tsx scripts/test-stock-rules.ts",
+    "test:restore": "tsx scripts/test-restore.ts",
     "migrate": "tsx migrate.ts",
     "migrate:dry": "tsx migrate.ts --dry-run"
   },

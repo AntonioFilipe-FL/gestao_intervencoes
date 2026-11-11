@@ -6,6 +6,8 @@ export const JOBS = {
   'creator-import': { label: 'Importação dos formulários do Creator', maxAgeHours: 26 },
   'firmware-queue': { label: 'Envio das atualizações de firmware em espera', maxAgeHours: 2 },
   'db-backup': { label: 'Cópia de segurança diária para o Google Drive', maxAgeHours: 26 },
+  // corre-se à mão ou agendada: npm run test:restore -- --fresh --record (ver scripts/test-restore.ts)
+  'restore-test': { label: 'Teste mensal de reposição da cópia de segurança', maxAgeHours: 24 * 35 },
 } as const
 export type JobName = keyof typeof JOBS
 type JobState = { at: string; ok: boolean; error?: string; result?: unknown }

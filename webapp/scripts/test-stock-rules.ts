@@ -168,6 +168,31 @@ async function main() {
     await tx`insert into intervention_accessories (intervention_id, accessory_id, direction, quantity) values (${iAcc.id}, ${acc.id}, 'gasto', 1)`
     check('11. Acessório gasto numa intervenção: sai 1 un. do armazém de saída', (await accQty(whTech.id)) - t2, -1)
 
+    // ---------- 12. Contas internas da Frotcom: "Suspended" NÃO é interna (os equipamentos continuam instalados nos clientes) ----------
+    const internal = async (account: string) => (await one(tx<{ r: boolean }[]>`select gestao_interv.is_internal_account(${account}) as r`)).r
+    const acc0 = 'TEST-' + tag
+    const mkAccount = async (suffix: string, name: string) => {
+      const id = `${acc0}-${suffix}`
+      await tx`insert into clients (name, intranet_account_id, intranet_short_name) values (${name + ' ' + tag}, ${id}, ${name})`
+      return id
+    }
+    check('12a. Conta "Frotcom Lusitana" é interna', await internal(await mkAccount('a', 'Frotcom Lusitana')), true)
+    check('12b. Conta "Frotcom Lusitana - Transit" é interna', await internal(await mkAccount('b', 'Frotcom Lusitana - Transit')), true)
+    const accSusp = await mkAccount('c', 'Frotcom Lusitana - Suspended')
+    check('12c. Conta "Frotcom Lusitana - Suspended" NÃO é interna', await internal(accSusp), false)
+    check('12d. Conta de um cliente normal não é interna', await internal(await mkAccount('d', 'Cliente Normal')), false)
+    // também para contas ainda por associar (intranet_pending)
+    await tx`insert into intranet_pending (intranet_account_id, name, full_name) values (${acc0 + '-e'}, 'Frotcom Lusitana - Suspended', 'Frotcom Lusitana - Suspended')`
+    await tx`insert into intranet_pending (intranet_account_id, name, full_name) values (${acc0 + '-f'}, 'Frotcom Lusitana - RMA', 'Frotcom Lusitana - RMA')`
+    check('12e. Suspended ainda por associar (intranet_pending) NÃO é interna', await internal(acc0 + '-e'), false)
+    check('12f. Outra conta Frotcom por associar é interna', await internal(acc0 + '-f'), true)
+    check('12g. Conta desconhecida / nula não é interna', [await internal('nao-existe-' + tag), (await one(tx<{ r: boolean }[]>`select gestao_interv.is_internal_account(null) as r`)).r], [false, false])
+    // um IMEI numa conta Suspended conta como instalado (como a consulta "instalados" do stock)
+    const s = newImei()
+    await tx`insert into devices (imei, intranet_account_id, license_plate, active) values (${s}, ${accSusp}, 'SS-00-SS', true)`
+    const [inst] = await tx<{ installed: boolean }[]>`select (d.active and nullif(btrim(d.license_plate), '') is not null and not gestao_interv.is_internal_account(d.intranet_account_id)) as installed from devices d where d.imei = ${s}`
+    check('12h. IMEI com matrícula numa conta Suspended conta como instalado (não é stock interno)', inst.installed, true)
+
     void instB
     throw new Rollback() // desfaz tudo: não fica nada gravado
   }).catch((e) => { if (!(e instanceof Rollback)) throw e })

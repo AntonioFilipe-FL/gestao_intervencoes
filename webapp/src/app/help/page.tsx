@@ -38,6 +38,7 @@ const SECTIONS: Section[] = [
         <><b>Venda</b>: o equipamento instalado sai do stock. <b>Aluguer</b>: fica no armazém <i>Instalado Aluguer (Mobilizado)</i>.</>,
         <><b>Desinstalação</b> sem armazém de entrada: Aluguer → sai do Mobilizado e entra no armazém do técnico; Venda → o equipamento é do cliente e sai do stock (se ainda lá estivesse).</>,
         <>Clientes de Venda/Aluguer: a modalidade da intervenção define o destino do equipamento. Defina a modalidade de cada cliente em Configurações › Clientes.</>,
+        <><b>Contas internas da Intranet</b> (Frotcom Lusitana, Frotcom Lusitana - Transit, demopt, testing): os IMEIs lá não contam como instalados. <b>Exceção: Frotcom Lusitana - Suspended</b> — é uma conta interna, mas os equipamentos continuam instalados nos clientes; por isso contam como instalados numa viatura e ficam no <i>Instalado Aluguer (Mobilizado)</i>, nunca como stock interno.</>,
       ]} />
     </>,
   },
