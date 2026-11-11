@@ -36,7 +36,7 @@ function StatsCard({ title, value, icon: Icon, description }: StatsCardProps) {
 }
 
 interface Props {
-  searchParams: Promise<{ etipo?: string; ctipo?: string; mes?: string; metipo?: string; mctipo?: string }>
+  searchParams: Promise<{ sec?: string; etipo?: string; ctipo?: string; mes?: string; metipo?: string; mctipo?: string }>
 }
 
 export default async function ReportsPage({ searchParams }: Props) {
@@ -46,9 +46,13 @@ export default async function ReportsPage({ searchParams }: Props) {
   const etipo = valid(p.etipo), ctipo = valid(p.ctipo), metipo = valid(p.metipo), mctipo = valid(p.mctipo)
   const { totals, byMonth, byTech, byEquipment, byClient, byMonthType, month: mes, mByEquipment, mByClient } =
     await getStats({ equipmentType: etipo, clientType: ctipo, month: p.mes, mEquipmentType: metipo, mClientType: mctipo })
+  // separadores: cada um mostra só a sua parte do relatório
+  const SECS = [['resumo', 'Resumo'], ['tipo', 'Por tipo e mês'], ['equip', 'Equipamento e cliente (12 meses)'], ['mes', 'Por mês']] as const
+  const sec = SECS.some(([k]) => k === p.sec) ? p.sec! : 'resumo'
+  const secOf: Record<string, string> = { etipo: 'equip', ctipo: 'equip', metipo: 'mes', mctipo: 'mes' }
   const anchor: Record<string, string> = { etipo: 'por-equipamento', ctipo: 'por-cliente', metipo: 'mes-equipamento', mctipo: 'mes-cliente' }
   const href = (q: { etipo?: string; ctipo?: string; metipo?: string; mctipo?: string }) => {
-    const s = new URLSearchParams(Object.entries({ etipo, ctipo, metipo, mctipo, mes: p.mes, ...q }).filter(([, v]) => v) as [string, string][])
+    const s = new URLSearchParams(Object.entries({ sec: secOf[Object.keys(q)[0]] ?? sec, etipo, ctipo, metipo, mctipo, mes: p.mes, ...q }).filter(([, v]) => v) as [string, string][])
     return `/reports${s.size ? `?${s}` : ''}#${anchor[Object.keys(q)[0]] ?? 'por-mes'}`
   }
   const mesLabel = new Date(`${mes}-01T12:00:00Z`).toLocaleString('pt-PT', { month: 'long', year: 'numeric', timeZone: 'UTC' })
@@ -81,7 +85,17 @@ export default async function ReportsPage({ searchParams }: Props) {
         <h1>Relatórios e estatísticas</h1>
         <p className="fc-small text-fc-dark-60">Visão geral da operação e métricas de desempenho. Contam só intervenções técnicas: Assistência, Desinstalação, Instalação (incl. Try and Buy), Reinstalação, Troca de Viatura e Upgrade.</p>
       </div>
+      <div className="flex flex-wrap gap-1.5 border-b border-fc-dark-20">
+        {SECS.map(([k, label]) => (
+          <Link key={k} href={`/reports?${new URLSearchParams(Object.entries({ sec: k, etipo, ctipo, metipo, mctipo, mes: p.mes }).filter(([, v]) => v) as [string, string][])}`}
+            className={cn('-mb-px border-b-2 px-4 py-2 text-[12px] font-bold uppercase',
+              sec === k ? 'border-fc-red text-fc-dark-100' : 'border-transparent text-fc-dark-60 hover:text-fc-dark-100')}>
+            {label}
+          </Link>
+        ))}
+      </div>
 
+      {sec === 'resumo' && (<>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatsCard 
           title="Total Intervenções" 
@@ -150,12 +164,16 @@ export default async function ReportsPage({ searchParams }: Props) {
           </CardContent>
         </Card>
       </div>
+      </>)}
 
+      {sec === 'tipo' && (<>
       <Card>
         <CardHeader><CardTitle>Intervenções por tipo e mês (últimos 12 meses)</CardTitle></CardHeader>
         <CardContent><StackedByType rows={byMonthType} keepOrder label={monthLabel} table /></CardContent>
       </Card>
+      </>)}
 
+      {sec === 'equip' && (<>
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Card id="por-equipamento">
           <CardHeader><CardTitle>Intervenções por equipamento (top 15, últimos 12 meses){etipo ? ` · ${etipo}` : ''}</CardTitle></CardHeader>
@@ -166,12 +184,15 @@ export default async function ReportsPage({ searchParams }: Props) {
           <CardContent className="space-y-4"><TypeFilter k="ctipo" current={ctipo} /><StackedByType rows={byClient} /></CardContent>
         </Card>
       </div>
+      </>)}
 
+      {sec === 'mes' && (<>
       <Card id="por-mes">
         <CardContent className="flex flex-wrap items-center gap-3 pt-5">
           <span className="font-bold uppercase">Por mês</span>
           {/* âncora no action: depois de escolher o mês, a página volta a esta secção */}
-          <form action="/reports#por-mes" className="flex items-center gap-2">
+          <form action="/reports" className="flex items-center gap-2">
+            <input type="hidden" name="sec" value="mes" />
             {etipo && <input type="hidden" name="etipo" value={etipo} />}
             {ctipo && <input type="hidden" name="ctipo" value={ctipo} />}
             {metipo && <input type="hidden" name="metipo" value={metipo} />}
@@ -194,6 +215,7 @@ export default async function ReportsPage({ searchParams }: Props) {
           <CardContent className="space-y-4"><TypeFilter k="mctipo" current={mctipo} />{mByClient.length ? <StackedByType rows={mByClient} /> : <p className="text-fc-dark-60">Sem intervenções neste mês.</p>}</CardContent>
         </Card>
       </div>
+      </>)}
     </div>
   )
 }
