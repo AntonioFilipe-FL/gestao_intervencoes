@@ -524,12 +524,16 @@ create unique index if not exists technicians_email_uq on technicians (lower(ema
 
 -- Contas internas da Frotcom (ex.: "Frotcom Lusitana", "Frotcom Lusitana - Transit", e a conta de demonstração "demopt"): os IMEIs lá não contam como instalados
 create or replace function gestao_interv.is_internal_account(p_account text) returns boolean language sql stable as $$
+  -- "Frotcom Lusitana - Suspended" é uma conta interna, mas os equipamentos CONTINUAM INSTALADOS nos clientes:
+  -- para o stock não conta como interna (ficam no Instalado Aluguer / contam como instalados numa viatura)
   select p_account is not null and exists (
     select 1 from gestao_interv.clients c where c.intranet_account_id = p_account
       and (c.name ~* '(frotcom lusitana|^demopt$|^testing$)' or c.intranet_short_name ~* '(frotcom lusitana|^demopt$|^testing$)')
+      and coalesce(c.name, '') !~* 'suspended' and coalesce(c.intranet_short_name, '') !~* 'suspended'
     union all
     select 1 from gestao_interv.intranet_pending p where p.intranet_account_id = p_account
-      and (p.name ~* '(frotcom lusitana|^demopt$|^testing$)' or p.full_name ~* '(frotcom lusitana|^demopt$|^testing$)'))
+      and (p.name ~* '(frotcom lusitana|^demopt$|^testing$)' or p.full_name ~* '(frotcom lusitana|^demopt$|^testing$)')
+      and coalesce(p.name, '') !~* 'suspended' and coalesce(p.full_name, '') !~* 'suspended')
 $$;
 
 -- Correções manuais do stock (“Dar saída” pela Intranet): deixam de contar quando, depois delas,
