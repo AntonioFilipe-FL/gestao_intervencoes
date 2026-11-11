@@ -109,9 +109,16 @@ export async function importCreatorForms() {
     if (!cursor) break
   }
   const pending = rows.filter((x) => /por validar/i.test(disp(x.Estado)))
+  // sincroniza com o Creator: o que deixou de estar "Por validar" lá sai da lista; se voltar a "Por validar", reaparece
+  const AUTO_GONE = 'auto: já não está Por validar no Creator'
+  const ids = pending.map((x) => String(x.ID))
+  const gone = (await sql`update intervention_drafts set status = 'dismissed', resolved_at = now(), resolved_by = ${AUTO_GONE}
+    where status = 'pending' and not (creator_id = any(${ids})) returning id`).length
+  await sql`update intervention_drafts set status = 'pending', resolved_at = null, resolved_by = null
+    where status = 'dismissed' and resolved_by = ${AUTO_GONE} and creator_id = any(${ids})`
   const known = new Set((await sql<{ creator_id: string }[]>`select creator_id from intervention_drafts where creator_id = any(${pending.map((x) => String(x.ID))})`).map((k) => k.creator_id))
   const todo = pending.filter((x) => !known.has(String(x.ID))).slice(0, 150)
-  if (!todo.length) return { found: pending.length, created: 0, already: await resolveRegisteredDrafts(), errors: [] as string[] }
+  if (!todo.length) return { found: pending.length, created: 0, gone, already: await resolveRegisteredDrafts(), errors: [] as string[] }
 
   const [techs, types, clients, whs] = await Promise.all([
     sql<{ id: string; name: string }[]>`select id, name from technicians where active`,
@@ -196,5 +203,5 @@ export async function importCreatorForms() {
       errors.push(`${String(s.ID)}: ${(e as Error).message.slice(0, 120)}`)
     }
   }
-  return { found: pending.length, created, already: await resolveRegisteredDrafts(), errors }
+  return { found: pending.length, created, gone, already: await resolveRegisteredDrafts(), errors }
 }
