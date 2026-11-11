@@ -4,7 +4,7 @@ import { sql } from '@/lib/db'
 import { decryptSecret } from '@/lib/crypto'
 
 /** Cópias de segurança diárias para o Google Drive do super admin (pasta própria; a app só vê os ficheiros que criou). */
-const FOLDER_NAME = 'Gestão de Intervenções - Cópias de segurança'
+const FOLDER_NAME = 'Backup_Gestao_Interv'
 const KEEP = 30
 const DRIVE = 'https://www.googleapis.com/drive/v3'
 

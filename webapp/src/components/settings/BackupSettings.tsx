@@ -19,7 +19,7 @@ export function BackupSettings({ status, ok, error }: { status: Status; ok?: boo
         <h2>Cópias de segurança</h2>
         <p className="fc-small text-fc-dark-60">
           Uma vez por dia, a app guarda todos os dados (intervenções, stock, acessórios, configurações) num ficheiro comprimido no Google Drive,
-          na pasta &ldquo;Gestão de Intervenções - Cópias de segurança&rdquo;. Ficam as 30 mais recentes; as antigas vão para o lixo do Drive.
+          na pasta &ldquo;Backup_Gestao_Interv&rdquo;. Ficam as 30 mais recentes; as antigas vão para o lixo do Drive.
           A app só tem acesso aos ficheiros que ela própria cria.
         </p>
       </div>
