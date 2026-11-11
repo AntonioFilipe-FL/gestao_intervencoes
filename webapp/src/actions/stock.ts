@@ -625,26 +625,35 @@ export async function changeModality(input: { imeis: string; modality: string; d
 
 export type MobilizedItem = {
   imei: string; equipment: string; modality: string | null; moved_at: string
+  /** chave do cliente: a conta da Intranet (várias fichas de cliente podem partilhar a mesma conta) ou, sem conta, a ficha do cliente */
   client_id: string | null; client: string | null; plate: string | null
-  /** de onde vem o cliente: a intervenção que mobilizou o IMEI ou, sem ela, o cliente da Intranet */
-  via: 'intervencao' | 'intranet' | null
+  /** de onde vem o cliente: a conta Intranet do IMEI ou, sem ela, a intervenção que o mobilizou */
+  via: 'intranet' | 'intervencao' | null
 }
 
-/** IMEIs no armazém "Instalado Aluguer (Mobilizado)" com o cliente e o equipamento (matriz cliente x equipamento) */
+/** IMEIs no armazém "Instalado Aluguer (Mobilizado)" com o cliente (nome da Intranet) e o equipamento (matriz cliente x equipamento) */
 export async function getMobilizedItems() {
   await requirePerm('stock', 'read')
   const eqName = await equipmentNamer()
   const rows = await sql<(Omit<MobilizedItem, 'equipment'> & { equipment: string | null; hardware: string | null })[]>`
     select c.imei, e.name as equipment, d.model as hardware, c.modality, c.moved_at::text,
-           coalesce(ic.id, dc.id) as client_id, coalesce(ic.name, dc.name) as client,
+           case when ia.account_id is not null then 'a:' || ia.account_id
+                when ic.id is not null then 'c:' || ic.id::text end as client_id,
+           coalesce(ia.name, ic.intranet_short_name, ic.name) as client,
            nullif(btrim(coalesce(i.license_plate, d.license_plate)), '') as plate,
-           case when ic.id is not null then 'intervencao' when dc.id is not null then 'intranet' end as via
+           case when ia.account_id is not null then 'intranet' when ic.id is not null then 'intervencao' end as via
     from stock_current c
     left join equipment_list e on e.id = c.equipment_id
     left join devices d on d.imei = c.imei
-    left join clients dc on dc.id = d.client_id
     left join interventions i on i.id = c.intervention_id
     left join clients ic on ic.id = i.client_id
+    left join lateral (
+      select d.intranet_account_id as account_id,
+             coalesce((select coalesce(x.intranet_short_name, x.name) from clients x where x.intranet_account_id = d.intranet_account_id
+                       order by (x.intranet_short_name is null), x.name limit 1),
+                      (select coalesce(p.name, p.full_name) from intranet_pending p where p.intranet_account_id = d.intranet_account_id)) as name
+      where d.intranet_account_id is not null
+    ) ia on true
     where c.warehouse_id = gestao_interv.mobilized_wh()
     order by c.moved_at desc`
   return rows.map(({ hardware, equipment, ...r }) => ({ ...r, equipment: eqName(hardware) ?? equipment ?? hardware ?? '(sem equipamento)' })) as MobilizedItem[]

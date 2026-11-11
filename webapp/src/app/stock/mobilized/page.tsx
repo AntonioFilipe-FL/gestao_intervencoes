@@ -43,7 +43,7 @@ export default async function MobilizedPage({ searchParams }: Props) {
     colTot.set(i.equipment, (colTot.get(i.equipment) ?? 0) + 1)
   }
   const noClient = items.filter((i) => !i.client_id).length
-  const viaIntranet = items.filter((i) => i.via === 'intranet').length
+  const viaIntranet = items.filter((i) => i.via === 'intervencao').length
 
   const href = (q: { oc?: string; oe?: string }) => {
     const s = new URLSearchParams(Object.entries({ client: p.client, eq: p.eq, ...q }).filter(([, v]) => v) as [string, string][])
@@ -82,7 +82,7 @@ export default async function MobilizedPage({ searchParams }: Props) {
 
       <p className="fc-small text-fc-dark-60">
         {n(items.length)} equipamento(s) em {n(rows.filter((r) => r.key !== NONE).length)} cliente(s).
-        {viaIntranet > 0 && <> {n(viaIntranet)} com o cliente obtido da Intranet (sem intervenção que o mobilizasse).</>}
+        {viaIntranet > 0 && <> {n(viaIntranet)} sem conta na Intranet, com o cliente da intervenção que os mobilizou.</>}
         {noClient > 0 && <> <b className="text-[#b31d25]">{n(noClient)} sem cliente atribuído</b> — a corrigir.</>}
       </p>
 
@@ -137,7 +137,7 @@ export default async function MobilizedPage({ searchParams }: Props) {
                   <TableRow key={i.imei}>
                     <TableCell className="font-mono text-[12px]"><Link href={`/stock?imei=${i.imei}#movimentos`} className={link}>{i.imei}</Link></TableCell>
                     <TableCell>{i.equipment}</TableCell>
-                    <TableCell>{i.client ?? <span className="text-[#b31d25]">Sem cliente atribuído</span>}{i.via === 'intranet' && <span className="fc-small text-fc-dark-60"> (Intranet)</span>}</TableCell>
+                    <TableCell>{i.client ?? <span className="text-[#b31d25]">Sem cliente atribuído</span>}{i.via === 'intervencao' && <span className="fc-small text-fc-dark-60"> (pela intervenção)</span>}</TableCell>
                     <TableCell>{i.plate ?? '—'}</TableCell>
                     <TableCell>{i.modality ?? '—'}</TableCell>
                     <TableCell>{fmtDate(i.moved_at)}</TableCell>
