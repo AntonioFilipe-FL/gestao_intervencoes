@@ -39,8 +39,9 @@ async function main() {
     const counts: Record<string, number> = {}
     for (const t of tables) {
       let n = 0
-      await sql`select * from ${sql('gestao_interv')}.${sql(t)}`.cursor(2000, async (rows) => {
-        for (const row of rows) { await write({ table: t, row }); n++ }
+      // to_jsonb no Postgres: valores exatos (datas com microssegundos, números grandes), sem passar por tipos do JavaScript
+      await sql<{ row: unknown }[]>`select to_jsonb(x) as row from ${sql('gestao_interv')}.${sql(t)} x`.cursor(2000, async (rows) => {
+        for (const r of rows) { await write({ table: t, row: r.row }); n++ }
       })
       counts[t] = n
       console.log(`  ${t}: ${n}`)

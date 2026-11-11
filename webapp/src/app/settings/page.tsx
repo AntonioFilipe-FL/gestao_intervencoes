@@ -10,6 +10,8 @@ import { isAdmin, canSettings } from '@/actions/users'
 import { getRoles } from '@/actions/roles'
 import { RoleManagement } from '@/components/settings/RoleManagement'
 import { AccessorySynonyms } from '@/components/settings/AccessorySynonyms'
+import { BackupSettings } from '@/components/settings/BackupSettings'
+import { getBackupStatus } from '@/lib/backup'
 import { getAccessorySynonyms } from '@/actions/accessory-synonyms'
 import { getCurrentUser } from '@/lib/auth'
 import { getStockMinMargin } from '@/lib/stock-settings'
@@ -26,7 +28,7 @@ import { listAutoCreatedClients, countAutoCreatedClients, getLastSync, getLinked
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; sender_ok?: string; sender_error?: string }>
+  searchParams: Promise<{ tab?: string; sender_ok?: string; sender_error?: string; drive_ok?: string; drive_error?: string }>
 }) {
   const params = await searchParams
   const data = await getReferenceData(false)
@@ -72,6 +74,8 @@ export default async function SettingsPage({
               <TabsContent value="superadmin">
                 <div className="space-y-8">
                   <SuperAdminSettings margin={margin} />
+                  <hr className="border-fc-dark-20" />
+                  <BackupSettings status={await getBackupStatus()} ok={params.drive_ok === '1'} error={params.drive_error} />
                   <hr className="border-fc-dark-20" />
                   <IntranetPlates warehouses={await sql<{ id: string; name: string }[]>`select id, name from warehouses where active and type <> 'mobilizado' order by name`} />
                 </div>

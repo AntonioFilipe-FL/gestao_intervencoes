@@ -3,7 +3,7 @@ import crypto from 'crypto'
 
 export const OAUTH_STATE_COOKIE = 'gi_oauth_state'
 export const OAUTH_VERIFIER_COOKIE = 'gi_oauth_verifier'
-/** 'login' (entrada normal) ou 'sender' (ligar a conta de envio de emails) */
+/** 'login' (entrada normal), 'sender' (ligar a conta de envio de emails) ou 'drive' (ligar o Google Drive das cópias de segurança) */
 export const OAUTH_PURPOSE_COOKIE = 'gi_oauth_purpose'
 
 /** Conta de onde saem os emails automáticos */
@@ -11,6 +11,9 @@ export const senderEmail = () => (process.env.BILLING_EMAIL_FROM || 'logistica@p
 
 /** Permissão para enviar emails em nome do utilizador (não dá acesso à leitura da caixa de correio). */
 export const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send'
+
+/** Permissão para criar ficheiros no Google Drive — só dá acesso aos ficheiros criados pela própria app. */
+export const DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 
 /** URL pública da app (no Railway: https://<serviço>.up.railway.app ou domínio próprio) */
 export function appUrl(request: Request) {
@@ -32,7 +35,7 @@ export function createPkce() {
 }
 
 /** URL de autorização Google. purpose 'login' = entrar na app; 'sender' = autorizar envio de emails pela conta de envio */
-export function authorizationUrl(request: Request, state: string, challenge: string, purpose: 'login' | 'sender' = 'login') {
+export function authorizationUrl(request: Request, state: string, challenge: string, purpose: 'login' | 'sender' | 'drive' = 'login', hint?: string) {
   const url = new URL('https://accounts.google.com/o/oauth2/v2/auth')
   const common = {
     client_id: process.env.AUTH_GOOGLE_ID!,
@@ -51,7 +54,9 @@ export function authorizationUrl(request: Request, state: string, challenge: str
           prompt: 'consent select_account',
           login_hint: senderEmail(),
         }
-      : { ...common, scope: 'openid email profile', prompt: 'select_account' }
+      : purpose === 'drive'
+        ? { ...common, scope: `openid email ${DRIVE_FILE_SCOPE}`, access_type: 'offline', prompt: 'consent select_account', ...(hint ? { login_hint: hint } : {}) }
+        : { ...common, scope: 'openid email profile', prompt: 'select_account' }
   ).toString()
   return url.toString()
 }
@@ -79,5 +84,6 @@ export async function exchangeCode(request: Request, code: string, verifier: str
   if (!info.ok) throw new Error(`Google userinfo: ${info.status}`)
   const user = (await info.json()) as { email: string; email_verified: boolean; name?: string; picture?: string }
   const canSend = (tokens.scope ?? '').split(' ').includes(GMAIL_SEND_SCOPE)
-  return { ...user, refreshToken: canSend ? tokens.refresh_token : undefined }
+  const scopes = (tokens.scope ?? '').split(' ')
+  return { ...user, refreshToken: canSend ? tokens.refresh_token : undefined, driveRefreshToken: scopes.includes(DRIVE_FILE_SCOPE) ? tokens.refresh_token : undefined }
 }

@@ -30,6 +30,7 @@ export async function GET(request: Request) {
   }
 
   if (purpose === 'sender') return connectSender(request, base, code, verifier)
+  if (purpose === 'drive') return connectDrive(request, base, code, verifier)
 
   try {
     const user = await exchangeCode(request, code, verifier)
@@ -74,5 +75,29 @@ async function connectSender(request: Request, base: string, code: string, verif
   } catch (e) {
     console.error('Erro a ligar conta de envio:', e)
     return back(`sender_error=${encodeURIComponent('Não foi possível concluir a autorização Google.')}`)
+  }
+}
+
+/** Guarda a autorização do Google Drive para as cópias de segurança (só o super admin, com a sua própria conta). */
+async function connectDrive(request: Request, base: string, code: string, verifier: string) {
+  const back = (q: string) => NextResponse.redirect(`${base}/settings?tab=superadmin&${q}`)
+  try {
+    const me = await getCurrentUser()
+    if (!me?.superadmin) return NextResponse.redirect(`${base}/login`)
+    const account = await exchangeCode(request, code, verifier)
+    const email = account.email?.toLowerCase()
+    if (email !== me.email.toLowerCase()) return back(`drive_error=${encodeURIComponent(`Entrou com ${email}; use a sua conta (${me.email}).`)}`)
+    if (!account.driveRefreshToken) return back(`drive_error=${encodeURIComponent('A permissão do Google Drive não foi concedida.')}`)
+    const rows = [
+      { key: 'backup_drive_email', value: email },
+      { key: 'backup_drive_token', value: encryptSecret(account.driveRefreshToken) },
+      { key: 'backup_drive_folder', value: null }, // pasta criada na primeira cópia
+    ].map((r) => ({ ...r, updated_by: me.email }))
+    await sql`insert into app_settings ${sql(rows)}
+              on conflict (key) do update set value = excluded.value, updated_at = now(), updated_by = excluded.updated_by`
+    return back('drive_ok=1')
+  } catch (e) {
+    console.error('Erro a ligar o Google Drive:', e)
+    return back(`drive_error=${encodeURIComponent('Não foi possível concluir a autorização Google.')}`)
   }
 }

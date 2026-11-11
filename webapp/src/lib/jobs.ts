@@ -5,6 +5,7 @@ import { sql } from '@/lib/db'
 export const JOBS = {
   'creator-import': { label: 'Importação dos formulários do Creator', maxAgeHours: 26 },
   'firmware-queue': { label: 'Envio das atualizações de firmware em espera', maxAgeHours: 2 },
+  'db-backup': { label: 'Cópia de segurança diária para o Google Drive', maxAgeHours: 26 },
 } as const
 export type JobName = keyof typeof JOBS
 type JobState = { at: string; ok: boolean; error?: string; result?: unknown }

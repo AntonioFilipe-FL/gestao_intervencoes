@@ -8,13 +8,21 @@ import { getCurrentUser } from '@/lib/auth'
  *   /auth/google?purpose=sender → (só admins) ligar a conta de envio de emails (logistica@)
  */
 export async function GET(request: Request) {
-  const purpose = new URL(request.url).searchParams.get('purpose') === 'sender' ? 'sender' : 'login'
+  const asked = new URL(request.url).searchParams.get('purpose')
+  const purpose = asked === 'sender' ? 'sender' : asked === 'drive' ? 'drive' : 'login'
+  let hint: string | undefined
+  // 'drive': só o super admin liga o Google Drive das cópias de segurança, com a sua própria conta
+  if (purpose === 'drive') {
+    const user = await getCurrentUser()
+    if (!user?.superadmin) return NextResponse.redirect(new URL('/settings', request.url))
+    hint = user.email
+  }
   if (purpose === 'sender') {
     const user = await getCurrentUser()
     if (user?.role !== 'admin') return NextResponse.redirect(new URL('/settings', request.url))
   }
   const { state, verifier, challenge } = createPkce()
-  const response = NextResponse.redirect(authorizationUrl(request, state, challenge, purpose))
+  const response = NextResponse.redirect(authorizationUrl(request, state, challenge, purpose, hint))
   const opts = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
