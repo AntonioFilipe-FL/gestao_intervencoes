@@ -6,7 +6,7 @@ import { decryptSecret } from '@/lib/crypto'
 /** Cópias de segurança diárias para o Google Drive do super admin (pasta própria; a app só vê os ficheiros que criou). */
 const FOLDER_NAME = 'Backup_Gestao_Interv'
 const KEEP = 30
-const DRIVE = 'https://www.googleapis.com/drive/v3'
+export const DRIVE = 'https://www.googleapis.com/drive/v3'
 
 export async function getBackupStatus() {
   const rows = await sql<{ key: string; value: string | null; updated_at: Date }[]>`
@@ -17,7 +17,7 @@ export async function getBackupStatus() {
   return { connected: !!get('backup_drive_token')?.value, email: get('backup_drive_email')?.value ?? null, last }
 }
 
-async function driveToken() {
+export async function driveToken() {
   const [t] = await sql<{ value: string | null }[]>`select value from app_settings where key = 'backup_drive_token'`
   if (!t?.value) throw new Error('O Google Drive das cópias de segurança ainda não foi ligado (Configurações → Super admin).')
   const res = await fetch('https://oauth2.googleapis.com/token', {
@@ -55,7 +55,7 @@ async function dumpDatabase() {
   return { data: Buffer.concat(chunks), rows: Object.values(counts).reduce((a, b) => a + b, 0), tables: tables.length }
 }
 
-async function driveJson(token: string, url: string, init: RequestInit = {}) {
+export async function driveJson(token: string, url: string, init: RequestInit = {}) {
   const r = await fetch(url, { ...init, cache: 'no-store', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(init.headers ?? {}) } })
   const text = await r.text()
   if (!r.ok) throw new Error(`Google Drive: HTTP ${r.status} ${text.slice(0, 200)}`)
@@ -63,7 +63,7 @@ async function driveJson(token: string, url: string, init: RequestInit = {}) {
 }
 
 /** Pasta das cópias no Drive (criada na primeira vez; recriada se tiver sido apagada) */
-async function backupFolder(token: string) {
+export async function backupFolder(token: string) {
   const [f] = await sql<{ value: string | null }[]>`select value from app_settings where key = 'backup_drive_folder'`
   if (f?.value) {
     const ok = await driveJson(token, `${DRIVE}/files/${f.value}?fields=id,trashed`).then((x) => x.id && !x.trashed).catch(() => false)

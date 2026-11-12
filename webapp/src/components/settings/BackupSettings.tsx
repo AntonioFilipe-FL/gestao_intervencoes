@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button, buttonVariants } from '@/components/ui/button'
-import { runBackupNow } from '@/actions/jobs'
+import { runBackupNow, runRestoreTestNow } from '@/actions/jobs'
 
 type Status = { connected: boolean; email: string | null; last: { at: string; ok: boolean; error?: string; result?: { file?: string; mb?: number; rows?: number } } | null }
 
@@ -42,6 +42,13 @@ export function BackupSettings({ status, ok, error }: { status: Status; ok?: boo
           setMsg(r.ok ? { ok: true, text: `Cópia guardada no Drive: ${r.file} (${r.mb} MB, ${r.rows.toLocaleString('pt-PT')} registos).` } : { ok: false, text: r.error })
           router.refresh()
         })}>{busy ? 'A fazer a cópia… (pode demorar um minuto)' : 'Fazer cópia agora'}</Button>
+        <Button variant="inverse" disabled={busy || !status.connected} title="Descarrega a cópia mais recente do Drive, repõe-na numa base de dados temporária e confere tudo"
+          onClick={() => start(async () => {
+            setMsg(null)
+            const r = await runRestoreTestNow()
+            setMsg(r.ok ? { ok: true, text: `Reposição testada: ${r.file} — ${r.rows.toLocaleString('pt-PT')} registos em ${r.tables} tabelas conferem (${r.seconds} s).` } : { ok: false, text: `Teste de reposição falhou: ${r.error}` })
+            router.refresh()
+          })}>{busy ? 'A trabalhar…' : 'Testar reposição'}</Button>
         {msg && <span className={`fc-small ${msg.ok ? 'text-[#4b850d]' : 'text-[#b31d25]'}`}>{msg.text}</span>}
       </div>
     </div>

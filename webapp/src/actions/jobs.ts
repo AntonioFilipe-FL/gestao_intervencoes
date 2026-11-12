@@ -21,3 +21,15 @@ export async function runBackupNow() {
     return { ok: true as const, ...r }
   } catch (e) { return { ok: false as const, error: (e as Error).message } }
 }
+
+/** Testa agora a reposição da cópia mais recente do Drive numa base temporária (só super admin) */
+export async function runRestoreTestNow() {
+  try {
+    const user = await getCurrentUser()
+    if (!user?.superadmin) throw new Error('Sem permissões: apenas o super admin.')
+    const { runRestoreTest } = await import('@/lib/restore-test')
+    const { runJob } = await import('@/lib/jobs')
+    const r = await runJob('restore-test', runRestoreTest)
+    return { ok: true as const, ...r }
+  } catch (e) { return { ok: false as const, error: (e as Error).message } }
+}
