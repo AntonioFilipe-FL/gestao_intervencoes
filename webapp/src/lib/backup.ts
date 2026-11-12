@@ -46,7 +46,10 @@ async function dumpDatabase() {
   for (const t of tables) {
     let n = 0
     // to_jsonb no Postgres: valores exatos (datas com microssegundos), para a reposição ficar igual ao original
-    await sql<{ row: unknown }[]>`select to_jsonb(x) as row from ${sql('gestao_interv')}.${sql(t)} x`.cursor(2000, async (rows) => { for (const r of rows) { await write({ table: t, row: r.row }); n++ } })
+    // iterador do cursor (sequencial): a contagem só fica feita depois de todas as linhas escritas
+    for await (const rows of sql<{ row: unknown }[]>`select to_jsonb(x) as row from ${sql('gestao_interv')}.${sql(t)} x`.cursor(2000)) {
+      for (const r of rows) { await write({ table: t, row: r.row }); n++ }
+    }
     counts[t] = n
   }
   await write({ end: true, counts })
