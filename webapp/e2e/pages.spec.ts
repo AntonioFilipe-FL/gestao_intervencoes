@@ -9,6 +9,7 @@ const PAGES: [string, RegExp | null][] = [
   ['/stock/mobilized', /Mobilizado por cliente/i],
   ['/stock/transfers', /Hist.rico de transfer/i],
   ['/accessories', /Stock de acess.rios/i],
+  ['/accessories/usage', /Utiliza..o de acess.rios/i],
   ['/equipment-update', null],
   ['/reports', null],
   ['/settings', null],
@@ -30,5 +31,7 @@ for (const [path, title] of PAGES) {
 
 test('a Ajuda documenta a exceção da conta Suspended', async ({ page }) => {
   await page.goto('/help')
+  // as secções da Ajuda estão fechadas (só a 1.ª abre): abre todas
+  await page.locator('details').evaluateAll((ds) => ds.forEach((d) => d.setAttribute('open', '')))
   await expect(page.getByText('Frotcom Lusitana - Suspended').first()).toBeVisible()
 })

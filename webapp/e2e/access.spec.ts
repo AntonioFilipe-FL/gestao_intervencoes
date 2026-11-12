@@ -1,21 +1,23 @@
 import { anon, expect } from './fixtures'
 
 anon.describe('Acesso sem sessão', () => {
-  for (const p of ['/', '/stock', '/stock/mobilized', '/interventions', '/settings', '/reports']) {
+  for (const p of ['/', '/stock', '/stock/mobilized', '/interventions', '/interventions/drafts', '/accessories/usage', '/settings', '/reports']) {
     anon(`${p} → /login`, async ({ page }) => {
       await page.goto(p)
       await expect(page).toHaveURL(/\/login$/)
     })
   }
-  anon('as exportações exigem sessão', async ({ request }) => {
-    const r = await request.get('/stock/mobilized/export', { maxRedirects: 0 })
-    expect([302, 303, 307, 308]).toContain(r.status())
-    expect(r.headers()['location'] ?? '').toContain('/login')
-  })
+  for (const ex of ['/stock/mobilized/export', '/interventions/export']) {
+    anon(`a exportação ${ex} exige sessão`, async ({ request }) => {
+      const r = await request.get(ex, { maxRedirects: 0 })
+      expect([302, 303, 307, 308]).toContain(r.status())
+      expect(r.headers()['location'] ?? '').toContain('/login')
+    })
+  }
 })
 
 anon.describe('Tarefas automáticas (/api/cron) — CRON_SECRET', () => {
-  for (const job of ['firmware-queue', 'creator-import', 'db-backup']) {
+  for (const job of ['firmware-queue', 'creator-import', 'db-backup', 'restore-test']) {
     anon(`${job}: sem cabeçalho → 401`, async ({ request }) => {
       expect((await request.post(`/api/cron/${job}`)).status()).toBe(401)
     })
