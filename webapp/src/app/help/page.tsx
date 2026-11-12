@@ -50,6 +50,7 @@ const SECTIONS: Section[] = [
         <>A tabela <b>Por equipamento e armazém</b> mostra quantidades; clicar num número abre a lista desses IMEIs. O equipamento é sempre o do hardware da Intranet.</>,
         <><b>IMEIs em stock</b> e <b>Últimos movimentos</b> abrem-se ao clicar no título. Clicar num IMEI mostra o histórico dele.</>,
         <><b>Exportar Excel</b> gera a lista de IMEIs (atualiza da Intranet antes, se necessário).</>,
+        <><b>Mobilizado por cliente</b>: matriz cliente × equipamento do armazém <i>Instalado Aluguer (Mobilizado)</i>, com o nome do cliente na Intranet. Filtra-se por cliente e por equipamento; clicar numa quantidade mostra os IMEIs (quem tem escrita) e <b>Exportar Excel</b> gera a matriz e a lista de IMEIs com os filtros ativos.</>,
         <>Aviso <b>instalados na Intranet</b>: IMEIs que estão em stock mas a Intranet mostra numa viatura de cliente — <b>Dar saída</b> usa a modalidade da conta do cliente (Aluguer → Mobilizado; Venda → sai do stock).</>,
         <>Aviso <b>Uso Interno</b>: IMEIs nas contas de demonstração/teste (demopt, testing) que devem estar no armazém Uso Interno.</>
       ]} />

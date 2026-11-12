@@ -3,7 +3,9 @@ import Link from 'next/link'
 import { can } from '@/lib/permissions'
 import { requireUser } from '@/lib/auth'
 import { getMobilizedItems } from '@/actions/stock'
+import { filterMobilized, NO_CLIENT as NONE } from '@/lib/mobilized'
 import { PageHeader } from '@/components/page-header'
+import { FileSpreadsheet } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Input } from '@/components/ui/input'
@@ -15,8 +17,6 @@ interface Props { searchParams: Promise<{ client?: string; eq?: string; oc?: str
 
 const n = (v: number) => v.toLocaleString('pt-PT')
 const fmtDate = (d: string) => d.slice(0, 10).split('-').reverse().join('/')
-const NONE = '_none'
-const fold = (v: string) => v.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 
 export default async function MobilizedPage({ searchParams }: Props) {
   const p = await searchParams
@@ -27,8 +27,7 @@ export default async function MobilizedPage({ searchParams }: Props) {
 
   // filtros: cliente (texto) e equipamento (lista)
   const equipments = [...new Set(all.map((i) => i.equipment))].sort((a, b) => a.localeCompare(b, 'pt'))
-  const items = all.filter((i) =>
-    (!p.client?.trim() || fold(i.client ?? 'sem cliente atribuido').includes(fold(p.client.trim()))) && (!p.eq || i.equipment === p.eq))
+  const items = filterMobilized(all, p)
 
   const clientKey = (i: { client_id: string | null }) => i.client_id ?? NONE
   const clients = new Map<string, { key: string; name: string }>()
@@ -53,6 +52,7 @@ export default async function MobilizedPage({ searchParams }: Props) {
     ? items.filter((i) => (!p.oc || clientKey(i) === p.oc) && (!p.oe || i.equipment === p.oe))
     : null
   const openTitle = [p.oc ? (clients.get(p.oc)?.name ?? '') : 'Todos os clientes', p.oe ?? 'todos os equipamentos'].join(' · ')
+  const exportQuery = new URLSearchParams(Object.entries({ client: p.client, eq: p.eq }).filter(([, v]) => v) as [string, string][]).toString()
   const link = 'text-fc-light-100 hover:text-fc-light-60'
 
   return (
@@ -60,7 +60,12 @@ export default async function MobilizedPage({ searchParams }: Props) {
       <PageHeader
         title="Mobilizado por cliente"
         subtitle="Equipamentos no armazém Instalado Aluguer (Mobilizado), por cliente e por equipamento. Clique numa quantidade para ver os IMEIs."
-        actions={<Link href="/stock" className={buttonVariants({ variant: 'inverse', size: 'lg' })}>Voltar ao Stock</Link>}
+        actions={<>
+          <a href={`/stock/mobilized/export${exportQuery ? `?${exportQuery}` : ''}`} className={buttonVariants({ size: 'lg', variant: 'inverse' })}>
+            <FileSpreadsheet /> Exportar Excel
+          </a>
+          <Link href="/stock" className={buttonVariants({ variant: 'inverse', size: 'lg' })}>Voltar ao Stock</Link>
+        </>}
       />
       <Card>
         <CardContent className="py-4">
