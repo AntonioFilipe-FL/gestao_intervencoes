@@ -842,6 +842,13 @@ alter table gestao_interv.firmware_upgrade_log add column if not exists queued b
 alter table gestao_interv.firmware_upgrade_log add column if not exists reason text;
 alter table gestao_interv.firmware_upgrade_log add column if not exists sent_at timestamptz;
 create index if not exists firmware_upgrade_log_queued_idx on gestao_interv.firmware_upgrade_log (queued) where queued;
+-- pedidos recusados por quota da Intranet (HTTP 429, nov/2026): voltam à fila, se não houve depois outro pedido aceite/em espera
+update gestao_interv.firmware_upgrade_log l set queued = true, error = null
+where not l.ok and not l.queued and l.error like 'HTTP 429%' and l.created_at > now() - interval '7 days'
+  and l.firmware_id is not null and l.requested is not null
+  and not exists (select 1 from gestao_interv.firmware_upgrade_log o where o.imei = l.imei and o.kind = l.kind and o.id <> l.id
+                  and (o.queued or o.ok) and o.created_at >= l.created_at);
+
 
 -- ===== Perfis configuráveis (RBAC por menu) =====
 create table if not exists roles (

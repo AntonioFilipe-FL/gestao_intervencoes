@@ -33,6 +33,8 @@ export async function processFirmwareQueue() {
     })), kind)
     for (const x of res) {
       const r = good.find((g) => g.imei === x.imei)!
+      // quota da Intranet esgotada (HTTP 429): continua em espera para a próxima execução
+      if (!x.ok && /HTTP 429/.test(x.error ?? '')) continue
       await sql`update firmware_upgrade_log set queued = false, ok = ${x.ok}, error = ${x.error ?? null}, sent_at = now() where id = ${r.id}`
       if (x.ok) sent++
     }

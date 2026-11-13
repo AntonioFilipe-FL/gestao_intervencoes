@@ -17,7 +17,10 @@ export type FirmwareRow = {
   account: string | null; lastStatus: string | null; lastDate: string | null; lastComm?: string | null; ignition?: boolean | null
 }
 
-async function previewCore(input: { accountIds: string[]; imeis: string; kind?: FirmwareKind; models?: string[] }): Promise<FirmwareRow[]> {
+/** Máximo de equipamentos lidos na Intranet de cada vez (a API aceita ~100 pedidos/minuto; cada equipamento gasta 2) */
+const READ_MAX = 50
+
+async function previewCore(input: { accountIds: string[]; imeis: string; kind?: FirmwareKind; models?: string[]; lastOp?: boolean }): Promise<FirmwareRow[]> {
   const can = input.kind === 'canadapter'
   const MODELS = can ? CAN_MODELS : FIRMWARE_MODELS
   const list = [...new Set(input.imeis.split(/[\s,;]+/).map((x) => x.trim()).filter((x) => /^\d{14,15}$/.test(x)).map((x) => (x.length === 14 ? '0' + x : x)))]
@@ -58,15 +61,15 @@ async function previewCore(input: { accountIds: string[]; imeis: string; kind?: 
     const keep = base.filter((r) => list.includes(r.imei) || models.includes(modelOf(r) ?? ''))
     base.length = 0; base.push(...keep)
   }
-  // só se lê na Intranet os modelos abrangidos (máx. 300 de cada vez)
-  const toRead = base.filter((r) => allowedRow(r)).map((r) => r.imei).slice(0, 300)
-  const [infoList, ign] = await Promise.all([getFirmwareInfo(toRead, can ? 'canadapter' : 'device'), getIgnition(toRead)])
+  // só se lê na Intranet os modelos abrangidos (máx. READ_MAX de cada vez)
+  const toRead = base.filter((r) => allowedRow(r)).map((r) => r.imei).slice(0, READ_MAX)
+  const [infoList, ign] = await Promise.all([getFirmwareInfo(toRead, can ? 'canadapter' : 'device', { lastOp: input.lastOp }), getIgnition(toRead)])
   const info = new Map(infoList.map((i) => [i.imei, i]))
   const out: FirmwareRow[] = base.map((r) => {
     const i = info.get(r.imei)
     let issue: string | null = null
     if (!allowedRow(r)) issue = `Modelo não abrangido (${MODELS.join(', ')})`
-    else if (!i) issue = 'Não lido (limite de 300 por pré-visualização)'
+    else if (!i) issue = `Não lido (limite de ${READ_MAX} por pré-visualização)`
     else if (i.error) issue = i.error
     const cur = can ? i?.canFirmware : i?.firmware, av = can ? i?.canAvailable : i?.available, avId = can ? i?.canAvailableId : i?.availableId
     if (!issue && (!avId || !av)) issue = 'Sem atualização disponível'
@@ -96,7 +99,7 @@ export async function applyFirmware(input: { imeis: string[]; kind?: FirmwareKin
     // evita pedidos repetidos (ex.: duplo clique): ignora IMEIs enviados há menos de 15 min ou já em espera
     const recent = new Set((await sql<{ imei: string }[]>`select imei from firmware_upgrade_log
       where kind = ${kind} and imei = any(${input.imeis}) and (queued or (ok and created_at > now() - interval '15 minutes'))`).map((r) => r.imei))
-    const rows = (await previewCore({ accountIds: [], imeis: input.imeis.filter((i) => !recent.has(i)).join('\n'), kind })).filter((r) => !r.issue && r.availableId && r.available)
+    const rows = (await previewCore({ accountIds: [], imeis: input.imeis.filter((i) => !recent.has(i)).join('\n'), kind, lastOp: false })).filter((r) => !r.issue && r.availableId && r.available)
     if (!rows.length && recent.size) throw new Error('Estes equipamentos já têm o pedido enviado ou em espera.')
     if (!rows.length) throw new Error('Nada a atualizar (sem atualização disponível ou modelo não abrangido).')
     const reason = `Atualização de ${kind === 'canadapter' ? 'CAN chip' : 'firmware'} via Gestão de Intervenções (${user.email})`
@@ -106,13 +109,15 @@ export async function applyFirmware(input: { imeis: string[]; kind?: FirmwareKin
     const now = one.filter((r) => r.ignition === false)
     const wait = one.filter((r) => r.ignition !== false)
     const res = await requestFirmwareUpgrades(now.map((r) => ({ imei: r.imei, firmwareId: r.availableId!, requested: r.available!, previous: r.firmware, reason })), kind)
-    const logRow = (r: FirmwareRow, x: { ok: boolean; error?: string } | null) => ({
+    // quota da Intranet esgotada (HTTP 429) mesmo depois de esperar: não é erro do pedido — fica em espera e a tarefa automática envia
+    const quota = (x: { ok: boolean; error?: string }) => !x.ok && /HTTP 429/.test(x.error ?? '')
+    const logRow = (r: FirmwareRow, x0: { ok: boolean; error?: string } | null) => { const x = x0 && quota(x0) ? null : x0; return ({
       imei: r.imei, kind, previous: r.firmware, requested: r.available, firmware_id: r.availableId, ok: x?.ok ?? false, error: x?.error ?? null,
       created_by: user.email, account: r.account, last_comm: r.lastComm ?? null, queued: !x, reason, sent_at: x ? new Date() : null,
-    })
+    }) }
     const logs = [...res.map((x) => logRow(now.find((y) => y.imei === x.imei)!, x)), ...wait.map((r) => logRow(r, null))]
     if (logs.length) await sql`insert into firmware_upgrade_log ${sql(logs)}`
-    return { ok: true as const, done: res.filter((x) => x.ok).length, queued: wait.length, failed: res.filter((x) => !x.ok) }
+    return { ok: true as const, done: res.filter((x) => x.ok).length, queued: wait.length + res.filter(quota).length, failed: res.filter((x) => !x.ok && !quota(x)) }
   } catch (e) {
     return { ok: false as const, error: (e as Error).message }
   }
@@ -133,7 +138,7 @@ export async function refreshFirmwareResults(): Promise<RefreshInfo> {
   const pend = await sql<{ id: string; imei: string; kind: 'device' | 'canadapter'; requested: string | null; created_at: Date }[]>`
     select distinct on (imei, kind) id, imei, kind, requested, created_at from firmware_upgrade_log
     where ok and result is null and created_at > now() - interval '60 days'
-    order by imei, kind, created_at desc limit 150`
+    order by imei, kind, created_at desc limit 40` // 2 pedidos à Intranet por equipamento (limite ~100/minuto)
   if (!pend.length) return info0
   info0.checked = pend.length
   for (const kind of ['device', 'canadapter'] as const) {

@@ -18,9 +18,43 @@ type Json = Record<string, unknown>
 
 let loginPartnerId: string | null = null
 
+/**
+ * Limite da API da Intranet: 100 pedidos por minuto por utilizador (acima disso responde HTTP 429).
+ * Todos os pedidos à Intranet passam por aqui: no máximo INTRANET_RATE_PER_MIN (por omissão 80) em cada 60 s,
+ * com folga para outros usos da mesma conta; se mesmo assim vier 429, espera e tenta de novo (até 3 vezes).
+ */
+const RATE_PER_MIN = Math.max(10, Number(process.env.INTRANET_RATE_PER_MIN) || 80)
+const recent: number[] = []
+let gate: Promise<void> = Promise.resolve()
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+function throttle() {
+  // fila: cada pedido espera pelo anterior, para a contagem não ser ultrapassada por pedidos em paralelo
+  const turn = gate.then(async () => {
+    for (;;) {
+      const now = Date.now()
+      while (recent.length && now - recent[0] >= 60_000) recent.shift()
+      if (recent.length < RATE_PER_MIN) { recent.push(now); return }
+      await sleep(60_000 - (now - recent[0]) + 50)
+    }
+  })
+  gate = turn.catch(() => {})
+  return turn
+}
+export async function intranetFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    await throttle()
+    const res = await fetch(url, { cache: 'no-store', ...init })
+    if (res.status !== 429 || attempt >= 3) return res
+    // quota esgotada (ex.: outra sessão a usar a mesma conta): espera o indicado pela Intranet ou ~1 minuto
+    const wait = Number(res.headers.get('retry-after'))
+    await res.text().catch(() => '')
+    await sleep((Number.isFinite(wait) && wait > 0 ? Math.min(wait, 120) : 61) * 1000)
+  }
+}
+
 async function login(): Promise<string> {
   if (!intranetConfigured()) throw new Error('Faltam as variáveis INTRANET_USER / INTRANET_PASSWORD.')
-  const res = await fetch(`${baseUrl()}/api/authorize`, {
+  const res = await intranetFetch(`${baseUrl()}/api/authorize`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username: process.env.INTRANET_USER, password: process.env.INTRANET_PASSWORD }),
@@ -35,12 +69,12 @@ async function login(): Promise<string> {
 }
 
 async function logout(token: string) {
-  await fetch(`${baseUrl()}/api/authorize?api_key=${encodeURIComponent(token)}`, { method: 'DELETE' }).catch(() => {})
+  await intranetFetch(`${baseUrl()}/api/authorize?api_key=${encodeURIComponent(token)}`, { method: 'DELETE' }).catch(() => {})
 }
 
 async function getJson(path: string, token: string): Promise<unknown> {
   const url = `${baseUrl()}${path}${path.includes('?') ? '&' : '?'}api_key=${encodeURIComponent(token)}`
-  const res = await fetch(url, { headers: { 'Content-Type': 'application/json' }, cache: 'no-store' })
+  const res = await intranetFetch(url, { headers: { 'Content-Type': 'application/json' }, cache: 'no-store' })
   if (res.status === 204) return []
   if (!res.ok) throw new Error(`Intranet ${path}: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`)
   return res.json()
@@ -728,13 +762,13 @@ export async function updateIntranetDevices(items: IntranetDeviceUpdate[]): Prom
       if (!Object.keys(body).some((k) => k.toLowerCase() === 'pin')) body.pin = '----'
       const url = `${baseUrl()}/api/devices/${encodeURIComponent(vid)}?uniqueLicensePlate=false&api_key=${encodeURIComponent(token)}`
       const json = JSON.stringify(body)
-      let res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json-patch+json' }, body: json, cache: 'no-store' })
-      if (res.status === 415) res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: json, cache: 'no-store' })
+      let res = await intranetFetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json-patch+json' }, body: json, cache: 'no-store' })
+      if (res.status === 415) res = await intranetFetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: json, cache: 'no-store' })
       if (!res.ok) { out.push({ imei: it.imei, ok: false, before, error: `HTTP ${res.status} ${(await res.text()).slice(0, 200)}` }); continue }
       // mudança de conta: pedido próprio (POST /api/devices/transfer), sem apagar dados (clearData: false)
       let transferError: string | null = null
       if (it.accountId && String(before.accountId ?? '') !== String(it.accountId)) {
-        const tr = await fetch(`${baseUrl()}/api/devices/transfer?api_key=${encodeURIComponent(token)}`, {
+        const tr = await intranetFetch(`${baseUrl()}/api/devices/transfer?api_key=${encodeURIComponent(token)}`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
           body: JSON.stringify({ vehicleIds: [/^\d+$/.test(vid) ? Number(vid) : vid], destinationAccountId: String(it.accountId),
             transferNotes: 'Transferido pela app Gestão de Intervenções', clearData: false }),
@@ -815,7 +849,8 @@ export type FirmwareInfo = {
 }
 
 /** Lê nos detalhes de cada equipamento (Intranet) a versão de firmware e a atualização disponível */
-export async function getFirmwareInfo(imeis: string[], kind: 'device' | 'canadapter' = 'device'): Promise<FirmwareInfo[]> {
+/** opts.lastOp = false: não lê o último pedido (poupa 1 pedido à Intranet por IMEI) */
+export async function getFirmwareInfo(imeis: string[], kind: 'device' | 'canadapter' = 'device', opts: { lastOp?: boolean } = {}): Promise<FirmwareInfo[]> {
   if (!imeis.length) return []
   const token = await login()
   try {
@@ -842,7 +877,7 @@ export async function getFirmwareInfo(imeis: string[], kind: 'device' | 'canadap
             lastUpgrade: pick(d, ['lastFirmwareUpgrade']),
             canFirmware: pick(d, ['canAdapterFirmwareVersion']), canAvailable: pick(d, ['canAdapterAvailableUpgrade']),
             canAvailableId: num(pick(d, ['canAdapterAvailableUpgradeFirmwareId'])),
-            lastOp: await lastOperation(imei, kind, token),
+            lastOp: opts.lastOp === false ? null : await lastOperation(imei, kind, token),
             lastComm: lastCommOf(d),
           })
         } catch (e) {
@@ -911,7 +946,7 @@ export async function requestFirmwareUpgrades(items: { imei: string; firmwareId:
   try {
     const out: { imei: string; ok: boolean; error?: string }[] = []
     for (const it of items) {
-      const res = await fetch(`${baseUrl()}/api/devices/details/operations${kind === 'canadapter' ? '/canadapter' : ''}?api_key=${encodeURIComponent(token)}`, {
+      const res = await intranetFetch(`${baseUrl()}/api/devices/details/operations${kind === 'canadapter' ? '/canadapter' : ''}?api_key=${encodeURIComponent(token)}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
         body: JSON.stringify({ imei: it.imei, reason: it.reason, requestedFirmwareVersion: it.requested, previousFirmwareVersion: it.previous ?? '', firmwareId: it.firmwareId }),
       })

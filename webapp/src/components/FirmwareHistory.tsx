@@ -77,7 +77,7 @@ export function FirmwareHistory({ rows, params, check }: { rows: FirmwareLogRow[
                 <td className="px-3 py-1.5">{r.previous ?? '—'}</td>
                 <td className="px-3 py-1.5">{r.requested ?? '—'}</td>
                 <td className="px-3 py-1.5">{r.queued
-                  ? <span className="font-semibold text-[#c98a00]" title="É enviado automaticamente quando a ignição desligar (expira ao fim de 7 dias)">Em espera · ignição ligada</span>
+                  ? <span className="font-semibold text-[#c98a00]" title="É enviado automaticamente quando a ignição estiver desligada e a Intranet aceitar pedidos (expira ao fim de 7 dias)">Em espera</span>
                   : r.ok
                   ? r.result === 'updated'
                     ? <span className="font-semibold text-[#4b850d]" title={r.result_at ? `Confirmado em ${fmt(r.result_at)}` : ''}>Atualizado{r.current_version ? ` (${r.current_version})` : ''}</span>

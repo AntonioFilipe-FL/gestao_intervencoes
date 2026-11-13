@@ -40,7 +40,7 @@ export function FirmwareUpgrade() {
     start(async () => {
       const r = await applyFirmware({ imeis: list, kind })
       if (!r.ok) return setMsg({ tone: 'err', text: r.error })
-      setMsg({ tone: r.failed.length ? 'err' : 'ok', text: `${r.done} pedido(s) enviado(s) à Intranet.${r.queued ? ` ${r.queued} em espera (ignição ligada): são enviados automaticamente quando a ignição desligar.` : ''}${r.failed.length ? ` Falharam ${r.failed.length}: ${r.failed.slice(0, 5).map((f) => `${f.imei} (${f.error})`).join('; ')}` : ''}` })
+      setMsg({ tone: r.failed.length ? 'err' : 'ok', text: `${r.done} pedido(s) enviado(s) à Intranet.${r.queued ? ` ${r.queued} em espera (ignição ligada ou Intranet ocupada): são enviados automaticamente pela tarefa de 15 em 15 minutos, com a ignição desligada.` : ''}${r.failed.length ? ` Falharam ${r.failed.length}: ${r.failed.slice(0, 5).map((f) => `${f.imei} (${f.error})`).join('; ')}` : ''}` })
     })
   }
 
@@ -86,7 +86,7 @@ export function FirmwareUpgrade() {
               className={`px-2.5 py-1 fc-small font-semibold ${models.includes(m) ? 'bg-fc-dark-100 text-white' : 'border border-fc-dark-20'}`}>{m}</button>
           ))}
         </div>
-        <p className="fc-small text-fc-dark-60">Sem conta nem IMEIs: todos os equipamentos ativos destes modelos (sem os que já têm pedido pendente, em espera ou já atualizados). Com contas: filtra os equipamentos dessas contas. São lidos no máximo 300 de cada vez; depois de pedir, volte a pré-visualizar para os seguintes.</p>
+        <p className="fc-small text-fc-dark-60">Sem conta nem IMEIs: todos os equipamentos ativos destes modelos (sem os que já têm pedido pendente, em espera ou já atualizados). Com contas: filtra os equipamentos dessas contas. São lidos no máximo 50 de cada vez (a Intranet só aceita cerca de 100 pedidos por minuto; pode demorar 1 a 2 minutos); depois de pedir, volte a pré-visualizar para os seguintes.</p>
       </div>
       <Button disabled={busy || (!accs.length && !imeis.trim() && !models.length)} onClick={preview}>{busy && !rows ? 'A ler a Intranet…' : 'Pré-visualizar'}</Button>
 
