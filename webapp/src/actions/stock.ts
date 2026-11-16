@@ -121,10 +121,27 @@ export async function registerReception(input: {
 
     // equipamento: o escolhido; senão, o da correspondência do hardware da Intranet (se houver)
     const devices = await sql<{ imei: string; model: string | null }[]>`select imei, model from devices where imei = any(${imeis})`
-    const already = await sql<{ imei: string; warehouse: string }[]>`
-      select c.imei, w.name as warehouse from stock_current c join warehouses w on w.id = c.warehouse_id where c.imei = any(${imeis})`
+    const already = await sql<{ imei: string; warehouse_id: string; warehouse: string }[]>`
+      select c.imei, c.warehouse_id, w.name as warehouse from stock_current c join warehouses w on w.id = c.warehouse_id where c.imei = any(${imeis})`
     const warnings: string[] = []
-    if (already.length) warnings.push(`${already.length} IMEI(s) já estavam em stock (foram movidos para este armazém): ${already.slice(0, 5).map((a) => `${a.imei} (${a.warehouse})`).join(', ')}`)
+    // repetidas: o IMEI já está neste armazém, ou já teve a receção automática (Intranet) para este armazém → não se regista outra vez
+    const autoHere = await sql<{ imei: string }[]>`
+      select distinct imei from stock_movements
+      where imei = any(${imeis}) and kind = 'rececao' and created_by = 'auto:rececao-intranet'
+        and to_warehouse_id = ${input.warehouseId} and superseded_at is null`
+    const dupSet = new Set([...already.filter((a) => a.warehouse_id === input.warehouseId).map((a) => a.imei), ...autoHere.map((a) => a.imei)])
+    const dups = imeis.filter((i) => dupSet.has(i))
+    const autoSet = new Set(autoHere.map((a) => a.imei))
+    const autoDups = dups.filter((i) => autoSet.has(i)), hereDups = dups.filter((i) => !autoSet.has(i))
+    const list = (l: string[]) => `${l.slice(0, 5).join(', ')}${l.length > 5 ? '…' : ''}`
+    const dupMsgs = [
+      ...(autoDups.length ? [`A receção ${autoDups.length === 1 ? 'deste IMEI' : `destes ${autoDups.length} IMEIs`} já foi feita automaticamente (receção automática da Intranet) neste armazém: ${list(autoDups)}`] : []),
+      ...(hereDups.length ? [`${hereDups.length} IMEI(s) já ${hereDups.length === 1 ? 'está' : 'estão'} em stock neste armazém: ${list(hereDups)}`] : []),
+    ]
+    if (dups.length === imeis.length) throw new Error(`${dupMsgs.join('. ')}. Nada foi registado.`)
+    if (dups.length) warnings.push(`Não registados — ${dupMsgs.join('. ')}.`)
+    const moved = already.filter((a) => !dupSet.has(a.imei))
+    if (moved.length) warnings.push(`${moved.length} IMEI(s) já estavam em stock (foram movidos para este armazém): ${moved.slice(0, 5).map((a) => `${a.imei} (${a.warehouse})`).join(', ')}`)
     const unknown = imeis.filter((i) => !devices.some((d) => d.imei === i))
     if (unknown.length) warnings.push(`${unknown.length} IMEI(s) não existem na Intranet: ${unknown.slice(0, 5).join(', ')}${unknown.length > 5 ? '…' : ''}`)
 
@@ -134,7 +151,7 @@ export async function registerReception(input: {
     ])
     const eqFor = (imei: string) =>
       input.equipmentId || matchEquipment(devices.find((d) => d.imei === imei)?.model, equipment, mappings)?.item.id || null
-    const rows = imeis.map((imei) => ({
+    const rows = imeis.filter((i) => !dupSet.has(i)).map((imei) => ({
       imei, equipment_id: eqFor(imei), kind: 'rececao', from_warehouse_id: null, to_warehouse_id: input.warehouseId,
       modality: input.modality, moved_at: input.date || new Date().toISOString().slice(0, 10), notes: input.notes || null, created_by: user.email,
     }))
