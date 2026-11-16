@@ -38,7 +38,8 @@ async function previewCore(input: { accountIds: string[]; imeis: string; kind?: 
     left join stock_current c on c.imei = d.imei
     left join warehouses w on w.id = c.warehouse_id
     left join equipment_list e on e.id = c.equipment_id
-    left join clients dc on dc.intranet_account_id = d.intranet_account_id
+    left join lateral (select x.intranet_short_name, x.name from clients x where x.intranet_account_id = d.intranet_account_id
+                       order by x.intranet_short_name is null, x.intranet_synced_at nulls last, x.created_at limit 1) dc on true -- uma conta pode ter vários clientes (venda/aluguer): só um, para não repetir linhas
     left join intranet_pending p on p.intranet_account_id = d.intranet_account_id
     where d.active and (${input.accountIds.length ? sql`d.intranet_account_id = any(${input.accountIds})` : sql`false`}
            or ${list.length ? sql`d.imei = any(${list})` : sql`false`}

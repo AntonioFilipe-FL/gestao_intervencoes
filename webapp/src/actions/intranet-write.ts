@@ -44,7 +44,8 @@ async function previewCore(input: { warehouseIds: string[]; imeis: string }): Pr
     from stock_current c
     join warehouses w on w.id = c.warehouse_id
     left join devices d on d.imei = c.imei
-    left join clients dc on dc.intranet_account_id = d.intranet_account_id
+    left join lateral (select x.intranet_short_name, x.name from clients x where x.intranet_account_id = d.intranet_account_id
+                       order by x.intranet_short_name is null, x.intranet_synced_at nulls last, x.created_at limit 1) dc on true -- uma conta pode ter vários clientes (venda/aluguer): só um, para não repetir linhas
     left join intranet_pending p on p.intranet_account_id = d.intranet_account_id
     where (${input.warehouseIds.length ? sql`c.warehouse_id = any(${input.warehouseIds})` : sql`false`}
            or ${list.length ? sql`c.imei = any(${list})` : sql`false`})
@@ -56,7 +57,9 @@ async function previewCore(input: { warehouseIds: string[]; imeis: string }): Pr
     for (const r of rows) if (got.has(r.imei)) r.gsm = got.get(r.imei) ?? null
   }
   const seen = new Set(rows.map((r) => r.imei))
-  const out: PlateRow[] = rows.map((r) => {
+  // segurança extra: um IMEI só uma vez
+  const uniq = [...new Map(rows.map((r) => [r.imei, r])).values()]
+  const out: PlateRow[] = uniq.map((r) => {
     let issue: string | null = null
     const trash = /trash|^\s*abate/i.test(r.warehouse ?? '') // não precisam de modalidade
     if (!r.in_intranet) issue = 'Não existe na Intranet'

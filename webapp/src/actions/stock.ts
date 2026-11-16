@@ -561,7 +561,8 @@ export async function getRecentRmaAccountDevices() {
   const rows = await sql<{ imei: string; model: string | null; shipped_on: string | null; account: string | null }[]>`
     select d.imei, d.model, d.shipped_on::text, coalesce(c.intranet_short_name, c.name, p.name) as account
     from devices d
-    left join clients c on c.intranet_account_id = d.intranet_account_id
+    left join lateral (select x.intranet_short_name, x.name from clients x where x.intranet_account_id = d.intranet_account_id
+                       order by x.intranet_short_name is null, x.intranet_synced_at nulls last, x.created_at limit 1) c on true -- uma conta pode ter vários clientes (venda/aluguer): só um, para não repetir linhas
     left join intranet_pending p on p.intranet_account_id = d.intranet_account_id
     where d.active and d.imei ~ '^[0-9]{15}$'
       and d.shipped_on >= current_date - 30 and d.shipped_on <= current_date + 1
