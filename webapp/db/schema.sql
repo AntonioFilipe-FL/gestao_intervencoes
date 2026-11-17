@@ -920,3 +920,8 @@ create table if not exists gestao_interv.intervention_history (
   changes         jsonb not null                 -- [{ field, label, old, new }]
 );
 create index if not exists intervention_history_interv_idx on gestao_interv.intervention_history (intervention_id, changed_at desc);
+
+-- lista de "Conta Intranet" do formulário: a conta Suspended (nov/2026)
+insert into gestao_interv.intranet_accounts (name)
+select 'Frotcom Lusitana - Suspended'
+where not exists (select 1 from gestao_interv.intranet_accounts where lower(btrim(name)) = 'frotcom lusitana - suspended');

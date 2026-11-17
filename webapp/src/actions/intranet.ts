@@ -212,7 +212,9 @@ export async function getImeiIntranetInfo(imei: string): Promise<{ account: stri
                     (select c.name from clients c where c.intranet_account_id = d.intranet_account_id limit 1)) as name
     from devices d where d.imei = ${i} limit 1`
   if (!d) return null
-  return { account: d.account_id ? (d.internal ? d.name : 'Conta do cliente') : null, plate: d.plate, model: d.model }
+  // contas da Frotcom (incluindo a "Frotcom Lusitana - Suspended", que para o stock não conta como interna): mostra o nome da conta
+  const frotcom = d.internal || /^\s*frotcom lusitana/i.test(d.name ?? '')
+  return { account: d.account_id ? (frotcom ? d.name : 'Conta do cliente') : null, plate: d.plate, model: d.model }
 }
 
 export type LaterIntervention = {
