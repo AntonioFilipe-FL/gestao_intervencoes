@@ -30,11 +30,10 @@ export default async function AccessoriesStockPage({ searchParams }: Props) {
   ])
   const NONE = '__none__'
   const key = (wh: string | null) => wh ?? NONE
-  // colunas: armazéns com algum movimento (e "Sem armazém" se existir)
-  const usedWh = new Set(rows.map((r) => key(r.warehouse_id)))
+  // colunas: armazéns com algum movimento (a coluna "Sem armazém" foi retirada; não conta para o total)
+  const usedWh = new Set(rows.filter((r) => r.warehouse_id !== null || r.quantity !== 0).map((r) => key(r.warehouse_id)))
   const cols = [
     ...warehouses.filter((w) => usedWh.has(w.id)).map((w) => ({ id: w.id, name: w.name })),
-    ...(usedWh.has(NONE) ? [{ id: NONE, name: 'Sem armazém' }] : []),
   ].filter((c) => !p.wh || c.id === p.wh)
   const qty = new Map(rows.map((r) => [`${r.item_id}|${key(r.warehouse_id)}`, r.quantity]))
   const counted = new Map(rows.filter((r) => r.counted_at).map((r) => [`${r.item_id}|${key(r.warehouse_id)}`, r.counted_at!]))
