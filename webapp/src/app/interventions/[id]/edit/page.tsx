@@ -5,6 +5,7 @@ import { requireUser } from '@/lib/auth'
 import { getReferenceData } from '@/services/database'
 import { getClientOptions } from '@/lib/intranet'
 import { billingRecipients } from '@/lib/billing-notification'
+import { supportRecipients } from '@/lib/support-notification'
 import { InterventionForm } from '@/components/interventions/InterventionForm'
 import { interventionSchema, type InterventionFormInput } from '@/lib/schemas/intervention'
 
@@ -48,8 +49,9 @@ export default async function EditInterventionPage({ params }: Props) {
     <InterventionForm
       referenceData={referenceData}
       billingRecipients={billingRecipients()}
+      supportRecipients={supportRecipients()}
       clientOptions={clientOptions}
-      initial={{ id, values, billingNotified: !!row.billing_notified_at }}
+      initial={{ id, values, billingNotified: !!row.billing_notified_at, supportNotified: !!row.support_notified_at }}
     />
   )
 }

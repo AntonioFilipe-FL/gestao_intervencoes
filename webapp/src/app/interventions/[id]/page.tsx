@@ -178,6 +178,14 @@ export default async function InterventionDetailsPage({ params }: Props) {
               <DetailItem label="Serviços" value={intervention.services_status} />
               <DetailItem label="Serviços da conta (Driving Behavior / sensor de porta)" value={intervention.account_services} />
               <DetailItem label="WOW" value={intervention.wow} />
+              <DetailItem label="Observações Gerais" value={intervention.observations} />
+              {(intervention.support_email || intervention.support_notified_at || intervention.support_notify_error) && (
+                <>
+                  <DetailItem label="Enviar ao suporte?" value={intervention.support_email} />
+                  <BillingEmailStatus kind="support" id={intervention.id} notifiedAt={intervention.support_notified_at}
+                    notifiedBy={intervention.support_notified_by} error={intervention.support_notify_error} canSend={can(user, 'interventions', 'write')} />
+                </>
+              )}
             </CardContent>
           </Card>
 

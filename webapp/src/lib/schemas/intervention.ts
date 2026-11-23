@@ -70,6 +70,7 @@ export const interventionSchema = z.object({
 
   // Outros
   observations: text,
+  support_email: text, // 'Sim' = enviar as Observações Gerais ao suporte
   wow: text,
   services_status: text,
   account_services: text, // Serviços da conta (driving behavior / sensor de porta)

@@ -8,6 +8,7 @@ import { isBillable, notifyBilling, isBillingEmailEnabled } from '@/lib/billing-
 import { headers } from 'next/headers'
 import { resolveClientId } from '@/lib/intranet'
 import { recordInterventionChanges } from '@/lib/intervention-history'
+import { notifySupport } from '@/lib/support-notification'
 
 async function appUrl() {
   if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, '')
@@ -46,6 +47,8 @@ export async function createIntervention(input: unknown, draftId?: string) {
         return { success: false as const, error: 'Esta intervenção já está registada (mesma data e mesmo IMEI ou matrícula). O formulário foi retirado da lista “Por confirmar”; não foi gravado nada.' }
       }
     }
+    if (isBillable(parsed.data.support_email) && !parsed.data.observations?.trim())
+      return { success: false as const, error: 'Para enviar ao suporte, escreva as Observações Gerais.' }
     const client_id = await resolveClientId(parsed.data.client_id)
     // validação = criação do registo: data de hoje e validador = técnico com o email de quem está autenticado
     const [validator] = await sql<{ id: string }[]>`select id from technicians where lower(email) = lower(${user.email}) limit 1`
@@ -78,6 +81,11 @@ export async function createIntervention(input: unknown, draftId?: string) {
       const r = await notifyBilling(id, user, await appUrl())
       if (!r.ok) emailWarning = `O registo foi gravado, mas o email à financeira não foi enviado: ${r.error}`
     }
+    // Enviar ao suporte = Sim → email com as Observações Gerais
+    if (isBillable(parsed.data.support_email)) {
+      const r = await notifySupport(id, user, await appUrl())
+      if (!r.ok) emailWarning = [emailWarning, `O email ao suporte não foi enviado: ${r.error}`].filter(Boolean).join('\n')
+    }
 
     revalidatePath('/interventions')
     revalidatePath('/interventions/drafts')
@@ -99,6 +107,8 @@ export async function updateIntervention(id: string, input: unknown) {
     if (!parsed.success) {
       return { success: false as const, error: parsed.error.issues.map(i => i.message).join('; ') }
     }
+    if (isBillable(parsed.data.support_email) && !parsed.data.observations?.trim())
+      return { success: false as const, error: 'Para enviar ao suporte, escreva as Observações Gerais.' }
     const client_id = await resolveClientId(parsed.data.client_id)
     // a data de validação é a da criação do registo: não muda ao editar
     const { validation_date: _vd, ...rest } = toDbValues(parsed.data) // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -124,7 +134,7 @@ export async function updateIntervention(id: string, input: unknown) {
       if (lines.length) await tx`insert into intervention_accessories ${tx(lines)}`
       await tx`select gestao_interv.sync_intervention_stock(${id})`
       await tx`select gestao_interv.supersede_corrections(${id})`
-      return prev as { billing: string | null; billing_notified_at: string | null }
+      return prev as { billing: string | null; billing_notified_at: string | null; observations: string | null; support_notified_at: string | null }
     })
 
     // só envia quando o registo PASSA a Faturar = Sim e ainda não tinha sido enviado
@@ -133,6 +143,12 @@ export async function updateIntervention(id: string, input: unknown) {
     if (isBillable(parsed.data.billing) && !isBillable(before.billing ?? undefined) && !before.billing_notified_at && (await isBillingEmailEnabled())) {
       const r = await notifyBilling(id, user, await appUrl())
       if (!r.ok) emailWarning = `As alterações foram gravadas, mas o email à financeira não foi enviado: ${r.error}`
+    }
+    // suporte: envia se ainda não foi enviado, ou se as Observações Gerais mudaram desde o envio
+    const obsChanged = (before.observations ?? '').trim() !== (parsed.data.observations ?? '').trim()
+    if (isBillable(parsed.data.support_email) && (!before.support_notified_at || obsChanged)) {
+      const r = await notifySupport(id, user, await appUrl())
+      if (!r.ok) emailWarning = [emailWarning, `O email ao suporte não foi enviado: ${r.error}`].filter(Boolean).join('\n')
     }
 
     revalidatePath('/interventions')
@@ -190,4 +206,12 @@ export async function setBillingProcessed(id: string, processed: boolean) {
   } catch (e) {
     return { ok: false as const, error: (e as Error).message }
   }
+}
+
+/** Reenvia manualmente o email ao suporte (Observações Gerais) */
+export async function resendSupportEmail(id: string) {
+  const user = await requirePerm('interventions', 'write')
+  const r = await notifySupport(id, user, await appUrl())
+  revalidatePath(`/interventions/${id}`)
+  return r
 }

@@ -925,3 +925,10 @@ create index if not exists intervention_history_interv_idx on gestao_interv.inte
 insert into gestao_interv.intranet_accounts (name)
 select 'Frotcom Lusitana - Suspended'
 where not exists (select 1 from gestao_interv.intranet_accounts where lower(btrim(name)) = 'frotcom lusitana - suspended');
+
+-- Email ao suporte (Observações Gerais) — "Enviar ao suporte? = Sim" no registo
+alter table gestao_interv.interventions
+  add column if not exists support_email        text,
+  add column if not exists support_notified_at  timestamptz,
+  add column if not exists support_notified_by  text,
+  add column if not exists support_notify_error text;

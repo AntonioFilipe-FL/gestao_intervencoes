@@ -4,6 +4,7 @@ import { getReferenceData } from '@/services/database'
 import { InterventionForm } from '@/components/interventions/InterventionForm'
 import { requireUser } from '@/lib/auth'
 import { billingRecipients } from '@/lib/billing-notification'
+import { supportRecipients } from '@/lib/support-notification'
 import { getClientOptions } from '@/lib/intranet'
 import { sql } from '@/lib/db'
 import { creatorRecordUrl, resolveRegisteredDrafts } from '@/lib/creator-import'
@@ -32,7 +33,7 @@ export default async function NewInterventionPage({ searchParams }: { searchPara
 
   return (
     <div>
-      <InterventionForm referenceData={referenceData} billingRecipients={billingRecipients()} clientOptions={clientOptions} validator={validator ?? null}
+      <InterventionForm referenceData={referenceData} billingRecipients={billingRecipients()} supportRecipients={supportRecipients()} clientOptions={clientOptions} validator={validator ?? null}
         prefill={prefill} />
     </div>
   )

@@ -26,17 +26,19 @@ interface Props {
   referenceData: ReferenceData
   /** destinatários do email automático (variável BILLING_EMAIL_TO) */
   billingRecipients: string[]
+  /** destinatários do email ao suporte (variável SUPPORT_EMAIL_TO) */
+  supportRecipients?: string[]
   /** clientes com o nome da Intranet (ver getClientOptions) */
   clientOptions: ClientOption[]
   /** ao editar: id do registo e valores atuais */
-  initial?: { id: string; values: InterventionFormInput; billingNotified: boolean }
+  initial?: { id: string; values: InterventionFormInput; billingNotified: boolean; supportNotified?: boolean }
   /** técnico/validador associado ao email de quem está autenticado */
   validator?: { id: string; name: string } | null
   /** nova intervenção pré-preenchida a partir de um formulário do Creator por confirmar */
   prefill?: { draftId: string; values: Partial<InterventionFormInput>; notes: string[] }
 }
 
-export function InterventionForm({ referenceData, billingRecipients, clientOptions, initial, validator, prefill }: Props) {
+export function InterventionForm({ referenceData, billingRecipients, supportRecipients = [], clientOptions, initial, validator, prefill }: Props) {
   const editing = !!initial
   const router = useRouter()
   const [loading, setLoading] = useState(false)
@@ -861,6 +863,28 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
             <div className="space-y-1.5">
               <Label htmlFor="observations">Observações Gerais</Label>
               <Textarea id="observations" {...register('observations')} />
+              <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-[10rem_1fr]">
+                <div className="space-y-1.5">
+                  <Label>Enviar ao suporte?</Label>
+                  <Controller
+                    name="support_email"
+                    control={control}
+                    render={({ field }) => (
+                      <SearchableSelect id="support_email" options={[{ value: 'Sim', label: 'Sim' }, { value: 'Não', label: 'Não' }]}
+                        value={field.value ?? ''} onChange={field.onChange} placeholder="Sim / Não..." />
+                    )}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="support_recipients">Email ao suporte</Label>
+                  <Input id="support_recipients" value={supportRecipients.join(', ')} readOnly tabIndex={-1} className="bg-fc-grey-100 text-fc-dark-60" />
+                </div>
+              </div>
+              <p className="fc-small text-fc-dark-60">
+                {initial?.supportNotified
+                  ? 'Já foi enviado ao suporte; ao gravar só é enviado de novo se as Observações Gerais mudarem.'
+                  : 'Com "Sim", as Observações Gerais (e o resumo do registo) são enviadas ao suporte ao gravar.'}
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="services_status">Serviços Ativo/Desativo</Label>
