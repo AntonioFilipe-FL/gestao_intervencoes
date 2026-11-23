@@ -3,6 +3,7 @@ import { getSenderStatus } from '@/lib/gmail'
 import { senderEmail } from '@/lib/google'
 import { billingRecipients, isBillingEmailEnabled } from '@/lib/billing-notification'
 import { BillingEmailToggle } from '@/components/settings/BillingEmailToggle'
+import { isSupportEmailEnabled, supportRecipients } from '@/lib/support-notification'
 import { sql } from '@/lib/db'
 
 const fmt = (d: Date) => d.toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Lisbon' })
@@ -13,6 +14,8 @@ export async function EmailSettings({ ok, error }: { ok?: boolean; error?: strin
   const expected = senderEmail()
   const enabled = await isBillingEmailEnabled()
   const [changed] = await sql<{ updated_at: Date; updated_by: string | null }[]>`select updated_at, updated_by from app_settings where key = 'billing_email_enabled'`
+  const supportOn = await isSupportEmailEnabled()
+  const [supChanged] = await sql<{ updated_at: Date; updated_by: string | null }[]>`select updated_at, updated_by from app_settings where key = 'support_email_enabled'`
 
   return (
     <div className="max-w-2xl space-y-5">
@@ -35,6 +38,26 @@ export async function EmailSettings({ ok, error }: { ok?: boolean; error?: strin
           )}
         </div>
         <BillingEmailToggle enabled={enabled} />
+      </div>
+
+      <div className="space-y-1 pt-2">
+        <h2>Email ao suporte</h2>
+        <p className="fc-small text-fc-dark-60">
+          Ao gravar um registo com <b>Enviar ao suporte? = Sim</b>, as Observações Gerais (e o resumo do registo) são enviadas para {supportRecipients().join(', ')}.
+          Sai da mesma conta de envio; as respostas vão para quem registou.
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-4 border border-fc-dark-20 px-4 py-3">
+        <div className="flex-1 space-y-0.5">
+          <p>
+            Envio ao suporte:{' '}
+            {supportOn ? <b className="text-[#4b850d]">ON</b> : <b className="text-[#b31d25]">OFF — não são enviados emails</b>}
+          </p>
+          {supChanged && (
+            <p className="fc-small text-fc-dark-60">Alterado {fmt(supChanged.updated_at)}{supChanged.updated_by ? ` por ${supChanged.updated_by}` : ''}</p>
+          )}
+        </div>
+        <BillingEmailToggle kind="support" enabled={supportOn} />
       </div>
 
       {ok && <p className="bg-fc-success/20 px-3 py-2 text-[#4b850d]">Conta de envio ligada com sucesso.</p>}

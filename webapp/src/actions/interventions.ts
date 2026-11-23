@@ -8,7 +8,7 @@ import { isBillable, notifyBilling, isBillingEmailEnabled } from '@/lib/billing-
 import { headers } from 'next/headers'
 import { resolveClientId } from '@/lib/intranet'
 import { recordInterventionChanges } from '@/lib/intervention-history'
-import { notifySupport } from '@/lib/support-notification'
+import { isSupportEmailEnabled, notifySupport } from '@/lib/support-notification'
 
 async function appUrl() {
   if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, '')
@@ -82,7 +82,7 @@ export async function createIntervention(input: unknown, draftId?: string) {
       if (!r.ok) emailWarning = `O registo foi gravado, mas o email à financeira não foi enviado: ${r.error}`
     }
     // Enviar ao suporte = Sim → email com as Observações Gerais
-    if (isBillable(parsed.data.support_email)) {
+    if (isBillable(parsed.data.support_email) && (await isSupportEmailEnabled())) {
       const r = await notifySupport(id, user, await appUrl())
       if (!r.ok) emailWarning = [emailWarning, `O email ao suporte não foi enviado: ${r.error}`].filter(Boolean).join('\n')
     }
@@ -146,7 +146,7 @@ export async function updateIntervention(id: string, input: unknown) {
     }
     // suporte: envia se ainda não foi enviado, ou se as Observações Gerais mudaram desde o envio
     const obsChanged = (before.observations ?? '').trim() !== (parsed.data.observations ?? '').trim()
-    if (isBillable(parsed.data.support_email) && (!before.support_notified_at || obsChanged)) {
+    if (isBillable(parsed.data.support_email) && (!before.support_notified_at || obsChanged) && (await isSupportEmailEnabled())) {
       const r = await notifySupport(id, user, await appUrl())
       if (!r.ok) emailWarning = [emailWarning, `O email ao suporte não foi enviado: ${r.error}`].filter(Boolean).join('\n')
     }
@@ -211,6 +211,8 @@ export async function setBillingProcessed(id: string, processed: boolean) {
 /** Reenvia manualmente o email ao suporte (Observações Gerais) */
 export async function resendSupportEmail(id: string) {
   const user = await requirePerm('interventions', 'write')
+  if (!(await isSupportEmailEnabled()))
+    return { ok: false as const, error: 'O envio de emails ao suporte está desligado (Configurações › Email).' }
   const r = await notifySupport(id, user, await appUrl())
   revalidatePath(`/interventions/${id}`)
   return r

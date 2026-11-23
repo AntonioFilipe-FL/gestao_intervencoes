@@ -16,3 +16,16 @@ export async function setBillingEmailEnabled(enabled: boolean) {
     return { ok: false as const, error: (e as Error).message }
   }
 }
+
+/** Liga/desliga o envio dos emails ao suporte (Observações Gerais) */
+export async function setSupportEmailEnabled(enabled: boolean) {
+  try {
+    const user = await requirePerm('settings', 'write')
+    await sql`insert into app_settings (key, value, updated_by, updated_at) values ('support_email_enabled', ${enabled ? 'on' : 'off'}, ${user.email}, now())
+              on conflict (key) do update set value = excluded.value, updated_by = excluded.updated_by, updated_at = now()`
+    revalidatePath('/settings')
+    return { ok: true as const }
+  } catch (e) {
+    return { ok: false as const, error: (e as Error).message }
+  }
+}

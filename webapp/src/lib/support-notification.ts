@@ -7,6 +7,12 @@ import { senderEmail } from '@/lib/google'
 export const supportRecipients = () =>
   (process.env.SUPPORT_EMAIL_TO || 'suporte@pt.frotcom.com').split(',').map((s) => s.trim()).filter(Boolean)
 
+/** Envio ao suporte ligado/desligado (Configurações › Email). Por omissão: ligado. */
+export async function isSupportEmailEnabled() {
+  const [r] = await sql<{ value: string | null }[]>`select value from app_settings where key = 'support_email_enabled'`
+  return r?.value !== 'off'
+}
+
 const esc = (s: unknown) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 const fmtDate = (d: string | Date | null) => (!d ? '—' : (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10)).split('-').reverse().join('/'))
