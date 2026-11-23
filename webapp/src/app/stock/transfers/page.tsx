@@ -82,7 +82,9 @@ export default async function TransfersHistoryPage({ searchParams }: Props) {
                 <span className="fc-small w-64 truncate text-fc-dark-60" title={b.notes ?? undefined}>{b.created_by} · {fmtTime(b.created_at)}</span>
               </summary>
               <div className="border-t border-fc-dark-10 px-4 py-2">
-                {user.role === 'admin' && b.kind === 'ajuste' && b.superseded < b.n && (
+                {user.role === 'admin' && b.superseded < b.n && (b.notes ?? '').startsWith('Acerto de stock (contagem)') ? (
+                  <div className="mb-2"><UndoAdjustBatch count createdAt={b.created_at} fromId={b.from_id} toId={b.to_id} n={b.n - b.superseded} /></div>
+                ) : user.role === 'admin' && b.kind === 'ajuste' && b.superseded < b.n && (
                   <div className="mb-2"><UndoAdjustBatch createdAt={b.created_at} fromId={b.from_id} toId={b.to_id} n={b.n - b.superseded} /></div>
                 )}
                 {b.notes && <p className="fc-small mb-2 text-fc-dark-60">Observações: {b.notes}</p>}

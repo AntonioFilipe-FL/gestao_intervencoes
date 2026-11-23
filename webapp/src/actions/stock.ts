@@ -405,6 +405,35 @@ export async function undoAdjustBatch(input: { createdAt: string; fromId: string
   }
 }
 
+/**
+ * Anula uma CONTAGEM (acerto de stock) inteira: todos os lotes registados nesse acerto (saídas, entradas e transferências,
+ * mesma hora de registo, observação "Acerto de stock (contagem)…"). Os movimentos ficam no histórico como "já não conta"
+ * e os IMEIs voltam à posição anterior — exceto os que tiveram outro movimento depois (ficam como estão). Só admin e super admin.
+ */
+export async function undoStockCount(input: { createdAt: string }) {
+  try {
+    const user = await requireAdmin()
+    const rows = await sql<{ id: string; imei: string; later: boolean }[]>`
+      select m.id, m.imei, exists (
+               select 1 from stock_movements o where o.imei = m.imei and o.superseded_at is null and o.id <> m.id
+                 and (o.moved_at > m.moved_at or (o.moved_at = m.moved_at and o.seq > m.seq))) as later
+      from stock_movements m
+      where m.created_at::text = ${input.createdAt}::text and m.intervention_id is null and m.superseded_at is null
+        and m.notes like 'Acerto de stock (contagem)%'`
+    if (!rows.length) throw new Error('Contagem não encontrada ou já anulada.')
+    const todo = rows.filter((r) => !r.later)
+    if (todo.length) {
+      await sql`update stock_movements set superseded_at = now(), cancelled = true,
+                notes = concat_ws(' · ', notes, ${`anulado por ${user.email}`}::text) where id = any(${todo.map((r) => r.id)})`
+    }
+    revalidatePath('/stock')
+    revalidatePath('/stock/transfers')
+    return { ok: true as const, n: todo.length, skipped: rows.filter((r) => r.later).map((r) => r.imei) }
+  } catch (e) {
+    return { ok: false as const, error: (e as Error).message }
+  }
+}
+
 /* ---------------- Acerto de stock ---------------- */
 
 /** Contagem de um armazém: compara os IMEIs contados com o que a app tem lá */
