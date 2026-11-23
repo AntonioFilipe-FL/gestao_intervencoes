@@ -1,3 +1,5 @@
+import { Suspense } from 'react'
+import { ListQueryMemory } from '@/components/interventions/ListQueryMemory'
 import { redirect } from 'next/navigation'
 import { can } from '@/lib/permissions'
 import Link from 'next/link'
@@ -58,6 +60,7 @@ export default async function InterventionsPage({ searchParams }: Props) {
 
   return (
     <div className="mx-auto max-w-[1920px] space-y-5 px-4 py-6 sm:px-6 lg:px-8">
+      <Suspense fallback={null}><ListQueryMemory /></Suspense>
       <PageHeader
         title="Intervenções"
         subtitle={`${count.toLocaleString('pt-PT')} registos${hasFilters ? ' encontrados' : ''}`}
@@ -120,7 +123,7 @@ export default async function InterventionsPage({ searchParams }: Props) {
             <div className="flex gap-2">
               <button type="submit" className={buttonVariants({ variant: 'secondary' })}>Filtrar</button>
               {hasFilters && (
-                <Link href="/interventions" className={buttonVariants({ variant: 'inverse' })}>Limpar</Link>
+                <Link href="/interventions?limpar=1" className={buttonVariants({ variant: 'inverse' })}>Limpar</Link>
               )}
               <a href={`/interventions/export?${new URLSearchParams(Object.entries({ client: clientSearch, tech: techSearch, plate: plateSearch, from: dateFrom, to: dateTo, fat: billingFilter, mod: modalityFilter }).filter(([, v]) => v))}`}
                 className={buttonVariants({ variant: 'inverse' })} title={`Exporta para Excel as ${count} intervenções deste filtro, com os equipamentos e acessórios gastos/retomados`}>Exportar Excel</a>

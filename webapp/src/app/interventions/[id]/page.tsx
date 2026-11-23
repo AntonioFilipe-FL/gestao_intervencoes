@@ -1,3 +1,4 @@
+import { BackToList } from '@/components/interventions/ListQueryMemory'
 import { sql } from '@/lib/db'
 import { can } from '@/lib/permissions'
 import { getInterventionById } from '@/services/database'
@@ -72,9 +73,9 @@ export default async function InterventionDetailsPage({ params }: Props) {
     <div className="mx-auto max-w-[1920px] space-y-5 px-4 py-6 sm:px-6 lg:px-8">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <Link href="/interventions" className={buttonVariants({ variant: 'inverse', size: 'icon' })} aria-label="Voltar">
+          <BackToList className={buttonVariants({ variant: 'inverse', size: 'icon' })}>
             <ArrowLeft />
-          </Link>
+          </BackToList>
           <div>
             <h1>Detalhes da intervenção</h1>
             <p className="fc-small text-fc-dark-60">

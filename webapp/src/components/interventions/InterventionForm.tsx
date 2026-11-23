@@ -238,7 +238,8 @@ export function InterventionForm({ referenceData, billingRecipients, clientOptio
       const result = initial ? await updateIntervention(initial.id, values) : await createIntervention(values, prefill?.draftId)
       if (!result.success) throw new Error(result.error)
       if (result.emailWarning) alert(result.emailWarning)
-      router.push(`/interventions/${result.id}`)
+      // formulário do Creator por confirmar: volta à lista dos que ainda faltam confirmar
+      router.push(prefill ? '/interventions/drafts' : `/interventions/${result.id}`)
       router.refresh()
     } catch (error) {
       alert('Erro ao guardar intervenção: ' + (error as Error).message)
