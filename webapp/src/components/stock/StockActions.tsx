@@ -37,6 +37,9 @@ export function StockActions({ warehouses, originWarehouses, equipment }: { ware
   // transferência: equipamento + acessórios do kit, ou só o equipamento
   const [withAcc, setWithAcc] = useState<'' | 'sim' | 'nao'>('')
   const [intraAcc, setIntraAcc] = useState('')
+  // armazém Transit: opção de mudar também a conta na Intranet (Transit ↔ Frotcom Lusitana)
+  const [transitAcc, setTransitAcc] = useState(false)
+  const transitId = [...warehouses, ...(originWarehouses ?? [])].find((w) => /^\s*transit\s*$/i.test(w.name))?.id
   const [accounts, setAccounts] = useState<{ id: string; name: string }[] | null>(null)
   useEffect(() => {
     if (intra && accounts === null) getIntranetAccounts(true).then(setAccounts).catch(() => setAccounts([]))
@@ -50,6 +53,7 @@ export function StockActions({ warehouses, originWarehouses, equipment }: { ware
     setLoc(null)
     setIntra(false)
     setIntraAcc('')
+    setTransitAcc(false)
     setWithAcc('')
     setOpen(k)
   }
@@ -67,6 +71,8 @@ export function StockActions({ warehouses, originWarehouses, equipment }: { ware
     }, 400)
     return () => { alive = false; clearTimeout(t) }
   }, [isAuto, f.imeis, f.to])
+  const toTransit = open === 'transferencia' && !!transitId && f.to === transitId
+  const fromTransit = open === 'transferencia' && !!transitId && f.to !== transitId && (f.from === transitId || (isAuto && picked.includes(transitId)))
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
 
   const submit = () =>
@@ -74,7 +80,7 @@ export function StockActions({ warehouses, originWarehouses, equipment }: { ware
       const r =
         open === 'rececao'
           ? await registerReception({ warehouseId: f.to, modality: f.modality, equipmentId: f.equipment, imeis: f.imeis, date: f.date, notes: f.notes })
-          : await registerTransfer({ fromWarehouseId: isAuto ? undefined : f.from, fromWarehouseIds: isAuto ? picked : undefined, toWarehouseId: f.to, modality: f.modality, imeis: f.imeis, date: f.date, notes: f.notes, withAccessories: withAcc !== 'nao' })
+          : await registerTransfer({ fromWarehouseId: isAuto ? undefined : f.from, fromWarehouseIds: isAuto ? picked : undefined, toWarehouseId: f.to, modality: f.modality, imeis: f.imeis, date: f.date, notes: f.notes, withAccessories: withAcc !== 'nao', changeIntranetAccount: (toTransit || fromTransit) && !intra && transitAcc })
       if (!r.ok) return setMsg({ tone: 'err', text: r.error })
       const texts = [`${r.n} IMEI(s) registados.`, ...r.warnings]
       let tone: 'ok' | 'err' = 'ok'
@@ -186,6 +192,15 @@ export function StockActions({ warehouses, originWarehouses, equipment }: { ware
                   Só o equipamento
                 </label>
                 <p className="fc-small text-fc-dark-60">Os acessórios do kit só se movimentam nas transferências do A1/A2 para o armazém de um técnico.</p>
+              </div>
+            )}
+            {(toTransit || fromTransit) && !intra && (
+              <div className="space-y-1 border border-fc-dark-20 px-3 py-2">
+                <label className="flex items-center gap-2 fc-small font-semibold">
+                  <input type="checkbox" checked={transitAcc} onChange={(e) => setTransitAcc(e.target.checked)} />
+                  {toTransit ? 'Transferir também na Intranet para a conta “Frotcom Lusitana - Transit”' : 'Transferir também na Intranet para a conta “Frotcom Lusitana” (os que saem do Transit)'}
+                </label>
+                <p className="fc-small text-fc-dark-60">Só muda a conta (não mexe na matrícula nem apaga dados). Sem esta opção, a Intranet não é alterada.</p>
               </div>
             )}
             {open === 'transferencia' && (

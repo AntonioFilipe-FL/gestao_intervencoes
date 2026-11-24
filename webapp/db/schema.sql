@@ -934,3 +934,22 @@ alter table gestao_interv.interventions
   add column if not exists support_notified_at  timestamptz,
   add column if not exists support_notified_by  text,
   add column if not exists support_notify_error text;
+
+-- Armazém "Transit" (nov/2026): equipamentos intermédios da logística. Só se movimenta por transferências na app;
+-- opcionalmente, a transferência muda também a conta na Intranet para "Frotcom Lusitana - Transit" (src/lib/transit.ts).
+insert into gestao_interv.warehouses (name, type)
+select 'Transit', 'ambos'
+where not exists (select 1 from gestao_interv.warehouses where lower(btrim(name)) = 'transit');
+
+create or replace function gestao_interv.transit_wh() returns uuid language sql stable as $$
+  select id from gestao_interv.warehouses where lower(btrim(name)) = 'transit' order by active desc, created_at limit 1
+$$;
+
+create or replace function gestao_interv.is_transit_account(p_account text) returns boolean language sql stable as $$
+  select p_account is not null and exists (
+    select 1 from gestao_interv.clients c where c.intranet_account_id = p_account
+      and (c.name ~* 'frotcom lusitana\W*transit' or c.intranet_short_name ~* 'frotcom lusitana\W*transit')
+    union all
+    select 1 from gestao_interv.intranet_pending p where p.intranet_account_id = p_account
+      and (p.name ~* 'frotcom lusitana\W*transit' or p.full_name ~* 'frotcom lusitana\W*transit'))
+$$;

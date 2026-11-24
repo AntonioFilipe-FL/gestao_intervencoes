@@ -37,6 +37,7 @@ const SECTIONS: Section[] = [
       ]} />
       <H>Regras de stock nas intervenções</H>
       <L items={[
+        <><b>Armazém Transit</b>: equipamentos intermédios da logística. Só entram e saem por <b>transferência</b> na app (a app não vai à Intranet buscá-los). Ao transferir para o Transit, ou do Transit para outro armazém, aparece a opção <i>Transferir também na Intranet</i>: se for escolhida (admin), a conta do IMEI passa para <i>Frotcom Lusitana - Transit</i> (ou, ao sair, para <i>Frotcom Lusitana</i>); se não, a Intranet não é alterada.</>,
         <><b>Venda</b>: o equipamento instalado sai do stock. <b>Aluguer</b>: fica no armazém <i>Instalado Aluguer (Mobilizado)</i>.</>,
         <><b>Desinstalação</b> sem armazém de entrada: Aluguer → sai do Mobilizado e entra no armazém do técnico; Venda → o equipamento é do cliente e sai do stock (se ainda lá estivesse).</>,
         <>Clientes de Venda/Aluguer: a modalidade da intervenção define o destino do equipamento. Defina a modalidade de cada cliente em Configurações › Clientes.</>,
