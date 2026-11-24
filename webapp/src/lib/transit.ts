@@ -8,6 +8,7 @@ import { matchEquipment } from '@/lib/hardware'
  * (que já lê os equipamentos de todas as contas) que o mantém (`syncTransitWarehouse`, a seguir à receção automática):
  *   - IMEI na conta Transit e noutro armazém (ou fora do stock) → passa para o Trânsito;
  *   - IMEI no Trânsito que saiu da conta Transit → volta ao armazém onde estava antes (se entrou sem armazém, vai para o A1).
+ *   - IMEIs começados por 6 não entram no Trânsito; os que lá estiverem saem do stock (pedido do AF, 24/11/2026).
  * Os movimentos ficam com created_by 'auto:transito' e is_correction (uma intervenção posterior com o IMEI passa à frente).
  */
 
@@ -37,6 +38,7 @@ export async function syncTransitWarehouse(): Promise<{ moved: number; received:
     from devices d
     left join stock_current c on c.imei = d.imei
     where d.active and d.imei ~ '^[0-9]{15}$' and d.imei !~ '^80{6}'
+      and d.imei !~ '^6' -- os começados por 6 não entram no Trânsito
       and gestao_interv.is_transit_account(d.intranet_account_id)
       and not exists (select 1 from ignored_imeis ig where ig.imei = d.imei)
       and c.warehouse_id is distinct from ${wh}`
@@ -68,20 +70,24 @@ export async function syncTransitWarehouse(): Promise<{ moved: number; received:
     left join clients dc on dc.id = d.client_id
     left join intranet_pending p on p.intranet_account_id = d.intranet_account_id
     where c.warehouse_id = ${wh}
-      and not (coalesce(d.active, false) and gestao_interv.is_transit_account(d.intranet_account_id))`
+      and (c.imei ~ '^6' or not (coalesce(d.active, false) and gestao_interv.is_transit_account(d.intranet_account_id)))`
   let a1: string | null = null
-  if (outRows.some((r) => !r.back || r.back === wh)) {
+  const isSix = (imei: string) => imei.startsWith('6')
+  if (outRows.some((r) => !isSix(r.imei) && (!r.back || r.back === wh))) {
     const [w] = await sql<{ id: string }[]>`select id from warehouses where active and name ilike 'A1 %' order by name limit 1`
     a1 = w?.id ?? null
   }
   const outs = outRows
-    .map((r) => ({ ...r, to: r.back && r.back !== wh ? r.back : a1 }))
-    .filter((r) => r.to)
-    .map((r) => ({
-      imei: r.imei, equipment_id: null, kind: 'transferencia', is_correction: true,
-      from_warehouse_id: wh, to_warehouse_id: r.to!, modality: null, moved_at: today, created_by: 'auto:transito',
-      notes: `Saiu da conta Frotcom Lusitana - Transit (Intranet: ${r.account ?? 'sem conta'})`,
-    }))
+    .map((r) => ({ ...r, to: isSix(r.imei) ? null : r.back && r.back !== wh ? r.back : a1 }))
+    .filter((r) => r.to || isSix(r.imei))
+    .map((r) => isSix(r.imei)
+      // começados por 6: saem do stock
+      ? { imei: r.imei, equipment_id: null, kind: 'ajuste', is_correction: true,
+          from_warehouse_id: wh, to_warehouse_id: null as string | null, modality: null, moved_at: today, created_by: 'auto:transito',
+          notes: 'Saída de stock: IMEI começado por 6 (não conta no Trânsito)' }
+      : { imei: r.imei, equipment_id: null, kind: 'transferencia', is_correction: true,
+          from_warehouse_id: wh, to_warehouse_id: r.to as string | null, modality: null, moved_at: today, created_by: 'auto:transito',
+          notes: `Saiu da conta Frotcom Lusitana - Transit (Intranet: ${r.account ?? 'sem conta'})` })
 
   const all = [...ins, ...outs]
   for (let i = 0; i < all.length; i += 500) await sql`insert into stock_movements ${sql(all.slice(i, i + 500))}`

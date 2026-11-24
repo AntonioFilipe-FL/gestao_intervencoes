@@ -19,15 +19,20 @@ async function main() {
   const rows = await sql<{ wh: string; n: number }[]>`
     select coalesce(w.name, '(fora do stock → receção)') as wh, count(*)::int as n
     from devices d left join stock_current c on c.imei = d.imei left join warehouses w on w.id = c.warehouse_id
-    where d.active and d.imei ~ '^[0-9]{15}$' and d.imei !~ '^80{6}' and gestao_interv.is_transit_account(d.intranet_account_id)
+    where d.active and d.imei ~ '^[0-9]{15}$' and d.imei !~ '^80{6}' and d.imei !~ '^6' and gestao_interv.is_transit_account(d.intranet_account_id)
       and not exists (select 1 from ignored_imeis ig where ig.imei = d.imei)
     group by 1 order by 2 desc`
   console.log('\nIMEIs na conta Transit, por armazém atual na app:')
   for (const r of rows) console.log(`  ${String(r.n).padStart(5)}  ${r.wh}${r.wh === wh?.name ? '  (já está)' : '  → Trânsito'}`)
   const [{ n }] = await sql<{ n: number }[]>`
     select count(*)::int as n from stock_current c left join devices d on d.imei = c.imei
-    where c.warehouse_id = gestao_interv.transit_wh() and not (coalesce(d.active, false) and gestao_interv.is_transit_account(d.intranet_account_id))`
+    where c.warehouse_id = gestao_interv.transit_wh() and c.imei !~ '^6' and not (coalesce(d.active, false) and gestao_interv.is_transit_account(d.intranet_account_id))`
   console.log(`\nNo Trânsito mas já fora da conta Transit (voltam ao armazém de onde vieram): ${n}`)
+  const [{ six }] = await sql<{ six: number }[]>`
+    select count(*)::int as six from devices d where d.active and d.imei ~ '^6' and gestao_interv.is_transit_account(d.intranet_account_id)`
+  const [{ sixIn }] = await sql<{ sixIn: number }[]>`
+    select count(*)::int as "sixIn" from stock_current c where c.warehouse_id = gestao_interv.transit_wh() and c.imei ~ '^6'`
+  console.log(`IMEIs começados por 6 na conta Transit (não entram): ${six}; já no Trânsito (saem do stock): ${sixIn}`)
   console.log('\nNada foi alterado.')
 }
 main().then(() => sql.end(), async (e) => { console.error('FALHOU:', e.message); await sql.end(); process.exit(1) })
