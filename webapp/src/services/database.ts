@@ -20,10 +20,25 @@ export type InterventionListItem = {
   intervention_type: { name: string } | null
 }
 
-export type InterventionFilters = { clientSearch?: string; techSearch?: string; plateSearch?: string; dateFrom?: string; dateTo?: string; billingFilter?: string; modalityFilter?: string }
+export type InterventionFilters = { clientSearch?: string; techSearch?: string; plateSearch?: string; dateFrom?: string; dateTo?: string; billingFilter?: string; modalityFilter?: string; configFilter?: string }
+
+export const CONFIG_FILTERS = { nok: 'Algum NOK', plataforma: 'Plataforma NOK', configuracao: 'Configuração NOK', dtc: 'DTC NOK' } as const
+export const isConfigFilter = (v: string | undefined): v is keyof typeof CONFIG_FILTERS => !!v && v in CONFIG_FILTERS
+
+/** Configuração técnica com NOK (Plataforma, Configuração ou DTC Ativo Real Time) */
+function configNokWhere(f: string) {
+  if (!isConfigFilter(f)) return sql``
+  const plat = sql`exists (select 1 from platforms p where p.id = i.platform_id and p.name = 'NOK')`
+  const conf = sql`i.configuration = 'NOK'`
+  const dtc = sql`i.dtc_active_realtime = 'NOK'`
+  if (f === 'plataforma') return sql`and ${plat}`
+  if (f === 'configuracao') return sql`and ${conf}`
+  if (f === 'dtc') return sql`and ${dtc}`
+  return sql`and (${plat} or ${conf} or ${dtc})`
+}
 
 /** WHERE comum à lista de intervenções e à exportação para Excel (aliases: i, c, t) */
-function interventionWhere({ clientSearch = '', techSearch = '', plateSearch = '', dateFrom = '', dateTo = '', billingFilter = '', modalityFilter = '' }: InterventionFilters) {
+function interventionWhere({ clientSearch = '', techSearch = '', plateSearch = '', dateFrom = '', dateTo = '', billingFilter = '', modalityFilter = '', configFilter = '' }: InterventionFilters) {
   const like = (s: string) => `%${s.replace(/[\\%_]/g, m => '\\' + m)}%`
   const isDate = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d)
   return sql`
@@ -34,6 +49,7 @@ function interventionWhere({ clientSearch = '', techSearch = '', plateSearch = '
     ${techSearch ? sql`and t.name ilike ${like(techSearch)}` : sql``}
     ${billingFilter ? sql`and lower(btrim(i.billing)) = 'sim'` : sql``}
     ${modalityFilter === 'Venda' || modalityFilter === 'Aluguer' ? sql`and lower(btrim(i.venda_aluguer)) = lower(${modalityFilter})` : sql``}
+    ${configNokWhere(configFilter)}
     ${billingFilter === 'pendente' ? sql`and i.billing_processed_at is null` : billingFilter === 'processado' ? sql`and i.billing_processed_at is not null` : sql``}
     ${plateSearch ? sql`and (i.license_plate ilike ${like(plateSearch)} or i.imei ilike ${like(plateSearch)} or i.crm_vehicle ilike ${like(plateSearch)}
            or i.spent_equipment_imei ilike ${like(plateSearch)} or i.return_equipment_imei ilike ${like(plateSearch)})` : sql``}
@@ -50,6 +66,7 @@ export async function getInterventions({
   dateTo = '',
   billingFilter = '',
   modalityFilter = '',
+  configFilter = '',
   orderBy = 'intervencao',
 }: {
   page?: number
@@ -64,12 +81,14 @@ export async function getInterventions({
   billingFilter?: string
   /** 'Venda' | 'Aluguer' */
   modalityFilter?: string
+  /** 'nok' | 'plataforma' | 'configuracao' | 'dtc' */
+  configFilter?: string
   /** 'intervencao' (data da intervenção) | 'registo' (data de registo/validação) */
   orderBy?: string
 } = {}) {
   await requireUser()
   try {
-    const where = interventionWhere({ clientSearch, techSearch, plateSearch, dateFrom, dateTo, billingFilter, modalityFilter })
+    const where = interventionWhere({ clientSearch, techSearch, plateSearch, dateFrom, dateTo, billingFilter, modalityFilter, configFilter })
     const from = sql`
       from interventions i
       left join clients c on c.id = i.client_id
@@ -217,6 +236,15 @@ export async function getStats(f: { equipmentType?: string; clientType?: string;
     byTypeOf('client', f.mClientType, month),
   ])
   return { totals, byMonth, byTech, byEquipment, byClient, byMonthType, month, mByEquipment, mByClient }
+}
+
+/** Quantas intervenções desde `from` (YYYY-MM-DD) têm a Configuração técnica em NOK */
+export async function getRecentNokCount(from: string) {
+  await requireUser()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) return 0
+  const [{ n }] = await sql<{ n: number }[]>`
+    select count(*)::int as n from interventions i where i.intervention_date >= ${from}::date ${configNokWhere('nok')}`
+  return n
 }
 
 /** Intervenções para exportar para Excel (mesmos filtros da lista), com equipamentos e acessórios gastos/retomados */

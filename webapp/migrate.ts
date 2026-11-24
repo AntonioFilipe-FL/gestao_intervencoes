@@ -70,15 +70,16 @@ const val = (s: unknown): string | null => {
 const okNotOk = (s: unknown): string | null => {
   const n = norm(s)
   if (!n || n === 'na') return null
-  if (n === 'ok') return 'Ok'
-  if (n === 'notok' || n === 'nok') return 'NotOk'
+  // uniformizado (nov/2026): OK / NOK
+  if (n === 'ok') return 'OK'
+  if (n === 'notok' || n === 'nok') return 'NOK'
   return clean(s)
 }
 
 /** Plataforma na Sheet é um estado (Ok/NotOk); outros valores são ruído */
 const onlyOkNotOk = (s: unknown): string | null => {
   const v = okNotOk(s)
-  return v === 'Ok' || v === 'NotOk' ? v : null
+  return v === 'OK' || v === 'NOK' ? v : null
 }
 
 const vendaAluguer = (s: unknown): string | null => {

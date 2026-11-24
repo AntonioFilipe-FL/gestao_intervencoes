@@ -23,6 +23,16 @@ const merge = (lines: AccessoryLine[]) => {
   return [...m.entries()].map(([accessory_id, quantity]) => ({ accessory_id, quantity }))
 }
 
+/** Configuração e DTC só aceitam OK / NOK (ou vazio); ao editar, um valor antigo diferente pode ficar como estava */
+const OK_NOK = ['', 'OK', 'NOK']
+function okNokError(d: { configuration?: string; dtc_active_realtime?: string }, prev?: { configuration?: string | null; dtc_active_realtime?: string | null }) {
+  for (const [k, label] of [['configuration', 'Configuração'], ['dtc_active_realtime', 'DTC Ativo Real time']] as const) {
+    const v = d[k] ?? ''
+    if (!OK_NOK.includes(v) && v !== (prev?.[k] ?? '')) return `${label}: escolha OK ou NOK.`
+  }
+  return null
+}
+
 export async function createIntervention(input: unknown, draftId?: string) {
   try {
     const user = await requirePerm('interventions', 'write')
@@ -30,6 +40,8 @@ export async function createIntervention(input: unknown, draftId?: string) {
     if (!parsed.success) {
       return { success: false as const, error: parsed.error.issues.map(i => i.message).join('; ') }
     }
+    const okNok = okNokError(parsed.data)
+    if (okNok) return { success: false as const, error: okNok }
     // formulário do Creator por confirmar: não deixa gravar se a intervenção já estiver registada
     // (mesma data e mesmo IMEI ou matrícula) — o formulário fica resolvido e ligado a essa intervenção
     if (draftId && /^[0-9a-f-]{36}$/i.test(draftId)) {
@@ -109,6 +121,9 @@ export async function updateIntervention(id: string, input: unknown) {
     }
     if (isBillable(parsed.data.support_email) && !parsed.data.observations?.trim())
       return { success: false as const, error: 'Para enviar ao suporte, escreva as Observações Gerais.' }
+    const [cur] = await sql<{ configuration: string | null; dtc_active_realtime: string | null }[]>`select configuration, dtc_active_realtime from interventions where id = ${id}`
+    const okNok = okNokError(parsed.data, cur)
+    if (okNok) return { success: false as const, error: okNok }
     const client_id = await resolveClientId(parsed.data.client_id)
     // a data de validação é a da criação do registo: não muda ao editar
     const { validation_date: _vd, ...rest } = toDbValues(parsed.data) // eslint-disable-line @typescript-eslint/no-unused-vars

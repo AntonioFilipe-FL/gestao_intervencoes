@@ -9,7 +9,7 @@ const LABELS: Record<string, string> = {
   extra_imeis: 'IMEIs adicionais', warranty_rental: 'Garantia/Aluguer', intranet_account: 'Conta Intranet', intranet_license_plate: 'Matrícula Intranet',
   motive_id: 'Motivo', action_description: 'Descrição', assisted_material: 'Material assistido', spent_equipment_id: 'Equipamento gasto',
   spent_equipment_imei: 'IMEI gasto', return_equipment_id: 'Equipamento retomado', return_equipment_imei: 'IMEI retomado', return_modality: 'Modalidade da retoma',
-  billing: 'Faturar', billing_observations: 'Obs. faturação', bundle_id: 'Bundle', dtc_active_realtime: 'DTC tempo real', configuration: 'Configuração',
+  billing: 'Faturar', billing_observations: 'Obs. faturação', bundle_id: 'Bundle', dtc_active_realtime: 'DTC tempo real', configuration: 'Configuração', config_notes: 'Notas configuração',
   platform_id: 'Plataforma', observations: 'Observações', wow: 'WOW', services_status: 'Serviços ativo/desativo', account_services: 'Serviços da conta',
   validated_by: 'Validado por', crm_vehicle: 'Viatura CRM', contract_addendum: 'Contrato/Adenda', zoho_form: 'Formulário Zoho', ticket: 'Ticket',
   stock_exit_warehouse_id: 'Armazém de saída', stock_entry_warehouse_id: 'Armazém de entrada',

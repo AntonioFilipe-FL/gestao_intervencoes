@@ -221,6 +221,7 @@ export default async function InterventionDetailsPage({ params }: Props) {
               <DetailItem label="Plataforma" value={intervention.platform?.name} />
               <DetailItem label="Configuração" value={intervention.configuration} />
               <DetailItem label="DTC Ativo Real Time" value={intervention.dtc_active_realtime} />
+              {intervention.config_notes && <DetailItem label="Notas" value={<span className="whitespace-pre-wrap">{intervention.config_notes}</span>} />}
             </CardContent>
           </Card>
 

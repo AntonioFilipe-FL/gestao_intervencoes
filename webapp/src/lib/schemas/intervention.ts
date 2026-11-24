@@ -67,6 +67,7 @@ export const interventionSchema = z.object({
   dtc_active_realtime: text,
   configuration: text,
   platform_id: optionalId,
+  config_notes: text,
 
   // Outros
   observations: text,

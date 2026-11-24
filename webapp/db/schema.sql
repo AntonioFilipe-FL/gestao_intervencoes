@@ -355,6 +355,8 @@ create index if not exists stock_movements_imei_idx on stock_movements (imei, mo
 create index if not exists stock_movements_interv_idx on stock_movements (intervention_id);
 
 alter table interventions add column if not exists return_modality text;
+-- notas sobre a configuração técnica (ex.: porque ficou NOK)
+alter table interventions add column if not exists config_notes text;
 
 -- IMEIs a ignorar em toda a app (números inválidos / de teste): não contam no stock nem são sincronizados da Intranet
 create table if not exists gestao_interv.ignored_imeis (

@@ -38,6 +38,20 @@ interface Props {
   prefill?: { draftId: string; values: Partial<InterventionFormInput>; notes: string[] }
 }
 
+/** Configuração e DTC: só OK / NOK (um valor antigo diferente, vindo da Sheet, continua visível para não se perder) */
+const OK_NOK_SELECT = 'h-[26px] w-full rounded-[2px] border border-fc-dark-40 bg-fc-grey-80 px-2 text-[13px] outline-none focus:border-fc-light-60'
+function okNokOptions(current?: string | null) {
+  const legacy = current && current !== 'OK' && current !== 'NOK' ? current : ''
+  return (
+    <>
+      <option value="">—</option>
+      <option value="OK">OK</option>
+      <option value="NOK">NOK</option>
+      {legacy && <option value={legacy}>{legacy.length > 40 ? legacy.slice(0, 40) + '…' : legacy} (valor antigo)</option>}
+    </>
+  )
+}
+
 export function InterventionForm({ referenceData, billingRecipients, supportRecipients = [], clientOptions, initial, validator, prefill }: Props) {
   const editing = !!initial
   const router = useRouter()
@@ -807,11 +821,19 @@ export function InterventionForm({ referenceData, billingRecipients, supportReci
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="configuration">Configuração</Label>
-              <Input id="configuration" {...register('configuration')} />
+              <select id="configuration" {...register('configuration')} className={OK_NOK_SELECT}>
+                {okNokOptions(initial?.values?.configuration)}
+              </select>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="dtc_active_realtime">DTC Ativo Real time</Label>
-              <Input id="dtc_active_realtime" {...register('dtc_active_realtime')} />
+              <select id="dtc_active_realtime" {...register('dtc_active_realtime')} className={OK_NOK_SELECT}>
+                {okNokOptions(initial?.values?.dtc_active_realtime)}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="config_notes">Notas</Label>
+              <Textarea id="config_notes" rows={2} placeholder="Ex.: porque a configuração não ficou OK" {...register('config_notes')} />
             </div>
           </CardContent>
         </Card>

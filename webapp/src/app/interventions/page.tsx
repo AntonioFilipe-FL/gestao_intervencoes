@@ -3,7 +3,7 @@ import { ListQueryMemory } from '@/components/interventions/ListQueryMemory'
 import { redirect } from 'next/navigation'
 import { can } from '@/lib/permissions'
 import Link from 'next/link'
-import { getInterventions } from '@/services/database'
+import { getInterventions, getRecentNokCount, CONFIG_FILTERS, isConfigFilter } from '@/services/database'
 import { getCurrentUser } from '@/lib/auth'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -19,7 +19,7 @@ import { BillingProcessed } from '@/components/interventions/BillingProcessed'
 const PAGE_SIZE = 25
 
 interface Props {
-  searchParams: Promise<{ page?: string; client?: string; tech?: string; plate?: string; from?: string; to?: string; fat?: string; mod?: string; ord?: string }>
+  searchParams: Promise<{ page?: string; client?: string; tech?: string; plate?: string; from?: string; to?: string; fat?: string; mod?: string; cfg?: string; ord?: string }>
 }
 
 const fmtDate = (d: string) => d.split('-').reverse().join('/')
@@ -35,10 +35,14 @@ export default async function InterventionsPage({ searchParams }: Props) {
   const orderBy = params.ord === 'registo' ? 'registo' : 'intervencao'
   const billingFilter = ['faturar', 'pendente', 'processado'].includes(params.fat ?? '') ? params.fat! : ''
   const modalityFilter = params.mod === 'Venda' || params.mod === 'Aluguer' ? params.mod : ''
+  const configFilter = isConfigFilter(params.cfg) ? params.cfg : ''
 
-  const [user, { interventions, totalPages, count, error }] = await Promise.all([
+  // contador de intervenções com Configuração técnica NOK nos últimos 30 dias (data da intervenção)
+  const nokFrom = new Date(Date.now() - 30 * 864e5).toLocaleDateString('sv-SE', { timeZone: 'Europe/Lisbon' })
+  const [user, { interventions, totalPages, count, error }, nokCount] = await Promise.all([
     getCurrentUser(),
-    getInterventions({ page: currentPage, pageSize: PAGE_SIZE, clientSearch, techSearch, plateSearch, dateFrom, dateTo, billingFilter, modalityFilter, orderBy }),
+    getInterventions({ page: currentPage, pageSize: PAGE_SIZE, clientSearch, techSearch, plateSearch, dateFrom, dateTo, billingFilter, modalityFilter, configFilter, orderBy }),
+    getRecentNokCount(nokFrom).catch(() => 0),
   ])
 
   if (!can(user, 'interventions')) redirect('/help')
@@ -50,11 +54,11 @@ export default async function InterventionsPage({ searchParams }: Props) {
     )
   }
 
-  const hasFilters = clientSearch || techSearch || plateSearch || dateFrom || dateTo || billingFilter || modalityFilter
+  const hasFilters = clientSearch || techSearch || plateSearch || dateFrom || dateTo || billingFilter || modalityFilter || configFilter
   const pageHref = (p: number) =>
-    `/interventions?${new URLSearchParams({ page: String(p), client: clientSearch, tech: techSearch, plate: plateSearch, from: dateFrom, to: dateTo, fat: billingFilter, mod: modalityFilter, ord: orderBy === 'registo' ? 'registo' : '' })}`
+    `/interventions?${new URLSearchParams({ page: String(p), client: clientSearch, tech: techSearch, plate: plateSearch, from: dateFrom, to: dateTo, fat: billingFilter, mod: modalityFilter, cfg: configFilter, ord: orderBy === 'registo' ? 'registo' : '' })}`
   const sortHref = (o: string) =>
-    `/interventions?${new URLSearchParams(Object.entries({ client: clientSearch, tech: techSearch, plate: plateSearch, from: dateFrom, to: dateTo, fat: billingFilter, mod: modalityFilter, ord: o === 'registo' ? 'registo' : '' }).filter(([, v]) => v))}`
+    `/interventions?${new URLSearchParams(Object.entries({ client: clientSearch, tech: techSearch, plate: plateSearch, from: dateFrom, to: dateTo, fat: billingFilter, mod: modalityFilter, cfg: configFilter, ord: o === 'registo' ? 'registo' : '' }).filter(([, v]) => v))}`
   const from = count === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
   const to = Math.min(currentPage * PAGE_SIZE, count)
 
@@ -70,6 +74,10 @@ export default async function InterventionsPage({ searchParams }: Props) {
               {user?.role === 'admin' && (
                 <Link href="/interventions/drafts" className={buttonVariants({ size: 'lg', variant: 'inverse' })}>Por confirmar</Link>
               )}
+              {nokCount > 0 && (
+                <Link href={`/interventions?cfg=nok&from=${nokFrom}`} className={buttonVariants({ size: 'lg', variant: 'inverse' })}
+                  title="Intervenções dos últimos 30 dias com Plataforma, Configuração ou DTC em NOK">NOK 30 dias: {nokCount}</Link>
+              )}
               <Link href="/interventions/new" className={buttonVariants({ size: 'lg' })}>
                 Nova intervenção
               </Link>
@@ -81,7 +89,7 @@ export default async function InterventionsPage({ searchParams }: Props) {
       {/* Filtros */}
       <Card>
         <CardContent className="py-4">
-          <form className="grid grid-cols-1 items-end gap-4 md:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_9.5rem_9.5rem_10rem_8rem_auto]">
+          <form className="grid grid-cols-1 items-end gap-4 md:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_9.5rem_9.5rem_10rem_8rem_10rem_auto]">
             <div className="space-y-1.5">
               <Label htmlFor="client">Cliente</Label>
               <Input id="client" name="client" placeholder="Nome do cliente" defaultValue={clientSearch} />
@@ -119,13 +127,20 @@ export default async function InterventionsPage({ searchParams }: Props) {
                 <option value="Aluguer">Aluguer</option>
               </select>
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="cfg">Config. técnica</Label>
+              <select id="cfg" name="cfg" defaultValue={configFilter} className="h-[26px] w-full rounded-[2px] border border-fc-dark-40 bg-fc-grey-80 px-2 text-[13px] outline-none focus:border-fc-light-60">
+                <option value="">Todas</option>
+                {Object.entries(CONFIG_FILTERS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
             {orderBy === 'registo' && <input type="hidden" name="ord" value="registo" />}
             <div className="flex gap-2">
               <button type="submit" className={buttonVariants({ variant: 'secondary' })}>Filtrar</button>
               {hasFilters && (
                 <Link href="/interventions?limpar=1" className={buttonVariants({ variant: 'inverse' })}>Limpar</Link>
               )}
-              <a href={`/interventions/export?${new URLSearchParams(Object.entries({ client: clientSearch, tech: techSearch, plate: plateSearch, from: dateFrom, to: dateTo, fat: billingFilter, mod: modalityFilter }).filter(([, v]) => v))}`}
+              <a href={`/interventions/export?${new URLSearchParams(Object.entries({ client: clientSearch, tech: techSearch, plate: plateSearch, from: dateFrom, to: dateTo, fat: billingFilter, mod: modalityFilter, cfg: configFilter }).filter(([, v]) => v))}`}
                 className={buttonVariants({ variant: 'inverse' })} title={`Exporta para Excel as ${count} intervenções deste filtro, com os equipamentos e acessórios gastos/retomados`}>Exportar Excel</a>
             </div>
           </form>

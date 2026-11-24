@@ -26,6 +26,7 @@ export async function GET(request: Request) {
     dateFrom: q.get('from') ?? '', dateTo: q.get('to') ?? '',
     billingFilter: ['faturar', 'pendente', 'processado'].includes(fat) ? fat : '',
     modalityFilter: mod === 'Venda' || mod === 'Aluguer' ? mod : '',
+    configFilter: q.get('cfg') ?? '',
   })
 
   const wb = new ExcelJS.Workbook()
@@ -49,7 +50,7 @@ export async function GET(request: Request) {
     { header: 'Processado em', key: 'bproc', width: 14 }, { header: 'Processado por', key: 'bby', width: 24 },
     { header: 'Bundle', key: 'bundle', width: 16 }, { header: 'Plataforma', key: 'plat', width: 14 },
     { header: 'Configuração', key: 'conf', width: 16 }, { header: 'CANbus via', key: 'can', width: 12 },
-    { header: 'DTC tempo real', key: 'dtc', width: 12 }, { header: 'Serviços', key: 'serv', width: 20 },
+    { header: 'DTC tempo real', key: 'dtc', width: 12 }, { header: 'Notas configuração', key: 'cnotes', width: 30 }, { header: 'Serviços', key: 'serv', width: 20 },
     { header: 'Viatura CRM', key: 'crm', width: 16 }, { header: 'Ticket', key: 'ticket', width: 10 }, { header: 'Formulário Zoho', key: 'zf', width: 30 }, { header: 'Adenda contrato', key: 'add', width: 14 },
     { header: 'Report/Projeto', key: 'rep', width: 16 }, { header: 'Observações', key: 'obs', width: 40 },
     { header: 'Validado por', key: 'val', width: 10 }, { header: 'Registado por', key: 'by', width: 26 },
@@ -75,7 +76,7 @@ export async function GET(request: Request) {
       req: s(r.return_equipment_name ?? r.equipment_return), rimei: s(r.return_equipment_imei), rmod: s(r.return_modality), racc: retAcc,
       wout: s(r.exit_wh), win: s(r.entry_wh), war: s(r.warranty_rental), acc: s(r.intranet_account), iplate: s(r.intranet_license_plate),
       assist: s(r.assisted_material), bill: s(r.billing), bobs: s(r.billing_observations), bproc: day(r.billing_processed_at), bby: s(r.billing_processed_by),
-      bundle: s(r.bundle_name), plat: s(r.platform_name), conf: s(r.configuration), can: s(r.canbus_via), dtc: s(r.dtc_active_realtime),
+      bundle: s(r.bundle_name), plat: s(r.platform_name), conf: s(r.configuration), can: s(r.canbus_via), dtc: s(r.dtc_active_realtime), cnotes: s(r.config_notes),
       serv: s(r.services_status ?? r.account_services), crm: s(r.crm_vehicle), ticket: s(r.ticket), zf: s(r.zoho_form), add: s(r.contract_addendum), rep: s(r.report_projeto),
       obs: s(r.observations), val: s(r.validated_by_name), by: s(r.created_by),
     })

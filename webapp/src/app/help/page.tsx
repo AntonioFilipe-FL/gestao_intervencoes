@@ -33,6 +33,7 @@ const SECTIONS: Section[] = [
         <>O detalhe da intervenção mostra o <b>Equipamento</b>, que é o que movimenta o stock.</>,
         <>Editar ou eliminar uma intervenção recalcula o stock dessa intervenção (e os acessórios).</>,
         <>Na lista, as colunas <b>Faturar</b> e <b>Processado</b> controlam a faturação; o filtro <i>Faturação</i> mostra as que estão por processar.</>,
+        <><b>Configuração técnica</b>: Plataforma, Configuração e DTC Ativo Real time escolhem-se numa lista (<b>OK</b> / <b>NOK</b>). Um valor antigo diferente, vindo da Sheet, aparece como <i>(valor antigo)</i> e pode manter-se ao editar. O campo <b>Notas</b> serve para explicar, por exemplo, porque a configuração não ficou OK (aparece no detalhe e no Excel). Na lista, o filtro <i>Config. técnica</i> mostra as que têm NOK (em qualquer dos três ou num só) e o botão <b>NOK 30 dias</b> abre as dos últimos 30 dias.</>,
       ]} />
       <H>Regras de stock nas intervenções</H>
       <L items={[
