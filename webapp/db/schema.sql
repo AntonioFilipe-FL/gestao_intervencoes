@@ -956,3 +956,23 @@ create or replace function gestao_interv.is_transit_account(p_account text) retu
     select 1 from gestao_interv.intranet_pending p where p.intranet_account_id = p_account
       and (p.name ~* 'frotcom lusitana\W*transit' or p.full_name ~* 'frotcom lusitana\W*transit'))
 $$;
+
+-- Armazém "Suspensos" (nov/2026) — só de leitura: mostra os equipamentos da conta da Intranet "Frotcom Lusitana - Suspended"
+-- (tira-os do Instalado Aluguer enquanto estiverem nessa conta). Atualizado pela sincronização (src/lib/transit.ts).
+-- Fica fora do total em stock (como o Mobilizado) e não conta como conflito "instalado na Intranet".
+insert into gestao_interv.warehouses (name, type)
+select 'Suspensos', 'ambos'
+where not exists (select 1 from gestao_interv.warehouses where lower(btrim(name)) = 'suspensos');
+
+create or replace function gestao_interv.suspended_wh() returns uuid language sql stable as $$
+  select id from gestao_interv.warehouses where lower(btrim(name)) = 'suspensos' order by active desc, created_at limit 1
+$$;
+
+create or replace function gestao_interv.is_suspended_account(p_account text) returns boolean language sql stable as $$
+  select p_account is not null and exists (
+    select 1 from gestao_interv.clients c where c.intranet_account_id = p_account
+      and (c.name ~* 'frotcom lusitana\W*suspended' or c.intranet_short_name ~* 'frotcom lusitana\W*suspended')
+    union all
+    select 1 from gestao_interv.intranet_pending p where p.intranet_account_id = p_account
+      and (p.name ~* 'frotcom lusitana\W*suspended' or p.full_name ~* 'frotcom lusitana\W*suspended'))
+$$;

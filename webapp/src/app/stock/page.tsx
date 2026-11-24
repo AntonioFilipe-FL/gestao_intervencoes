@@ -51,13 +51,13 @@ export default async function StockPage({ searchParams }: Props) {
   ])
   const margin = await getStockMinMargin()
   const warehouses = allWarehouses.filter((w) => w.type !== 'mobilizado')
-  // Trânsito: só de leitura (espelha a conta Transit da Intranet) — fora das listas de receção, transferência e contagem
-  const isTransit = (w: { name: string }) => /^\s*tr[aâ]nsito?\s*$/i.test(w.name)
+  // Trânsito e Suspensos: só de leitura (espelham contas da Intranet) — fora das listas de receção, transferência e contagem
+  const isTransit = (w: { name: string }) => /^\s*(tr[aâ]nsito?|suspensos)\s*$/i.test(w.name)
   const mobilizedIds = new Set(allWarehouses.filter((w) => w.type === 'mobilizado').map((w) => w.id))
   const conflictOf = (wh?: string) => conflicts.filter((c) => !wh || c.warehouse_id === wh).reduce((a, c) => a + c.n, 0)
 
-  // fora do total em stock: Mobilizado (instalado em clientes), Abate e Trash Bin
-  const outOfStock = (w: { warehouse: string; mobilized: boolean }) => w.mobilized || /^(abate|trash bin)$/i.test(w.warehouse.trim())
+  // fora do total em stock: Mobilizado (instalado em clientes), Suspensos (clientes suspensos), Abate e Trash Bin
+  const outOfStock = (w: { warehouse: string; mobilized: boolean }) => w.mobilized || /^(abate|trash bin|suspensos)$/i.test(w.warehouse.trim())
   const total = byWarehouse.filter((w) => !outOfStock(w)).reduce((a, w) => ({ venda: a.venda + w.venda, aluguer: a.aluguer + w.aluguer, sem: a.sem + w.sem, total: a.total + w.total }), { venda: 0, aluguer: 0, sem: 0, total: 0 })
   const href = (q: Record<string, string | undefined>) => {
     const s = new URLSearchParams(Object.entries({ wh: p.wh, mod: p.mod, q: p.q, inst: p.inst, imei: p.imei, ...q }).filter(([, v]) => v) as [string, string][])
@@ -172,7 +172,7 @@ export default async function StockPage({ searchParams }: Props) {
                 <TableHeader><TableRow>
                   <TableHead>Equipamento</TableHead>
                   {cols.map((c) => <TableHead key={c.warehouse_id} className="text-right">{c.warehouse}</TableHead>)}
-                  <TableHead className="text-right" title="Total em stock (sem Mobilizado, Abate e Trash Bin)">Total em stock</TableHead>
+                  <TableHead className="text-right" title="Total em stock (sem Mobilizado, Suspensos, Abate e Trash Bin)">Total em stock</TableHead>
                   {mobCols.map((c) => <TableHead key={c.warehouse_id} className="border-l border-fc-dark-20 text-right">{c.warehouse}</TableHead>)}
                 </TableRow></TableHeader>
                 <TableBody>

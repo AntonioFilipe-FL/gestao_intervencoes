@@ -11,8 +11,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 import { locateImeis, registerReception, registerTransfer } from '@/actions/stock'
 
-/** Armazém Trânsito: só de leitura (espelha a conta "Frotcom Lusitana - Transit" da Intranet) */
-const isTransitName = (name: string) => /^\s*tr[aâ]nsito?\s*$/i.test(name)
+/** Armazéns Trânsito e Suspensos: só de leitura (espelham as contas "Frotcom Lusitana - Transit" / "- Suspended" da Intranet) */
+const isTransitName = (name: string) => /^\s*(tr[aâ]nsito?|suspensos)\s*$/i.test(name)
 import { applyIntranetForTransfer, getIntranetAccounts } from '@/actions/intranet-write'
 
 type Opt = { id: string; name: string }
@@ -153,7 +153,7 @@ export function StockActions({ warehouses, originWarehouses, equipment }: { ware
                   <div key={o.id}>
                     <div className="flex items-center gap-2 fc-small">
                       <input type="checkbox" disabled={o.id === f.to || isTransitName(o.name)} checked={picked.includes(o.id) && o.id !== f.to && !isTransitName(o.name)} onChange={() => toggle(o.id)} />
-                      <span>{o.name}</span><span className="text-fc-dark-60">— {o.n}{o.id === f.to ? ' (já no destino)' : isTransitName(o.name) ? ' (só de leitura: conta Transit da Intranet)' : ''}</span>
+                      <span>{o.name}</span><span className="text-fc-dark-60">— {o.n}{o.id === f.to ? ' (já no destino)' : isTransitName(o.name) ? ' (só de leitura: conta da Intranet)' : ''}</span>
                       <button type="button" className="ml-auto text-fc-light-100 hover:text-fc-light-60" onClick={() => setShown((s) => (s === o.id ? null : o.id))}>
                         {shown === o.id ? 'esconder IMEIs' : 'ver IMEIs'}
                       </button>

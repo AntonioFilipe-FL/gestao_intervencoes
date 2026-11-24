@@ -117,7 +117,10 @@ export function IntranetSettings({
                   <Row k="Sem cliente associado" v={last.devices.withoutClient.toLocaleString('pt-PT')} />
                   <Row k="Com data de envio (Shipped on)" v={(last.devices.withShippedOn ?? 0).toLocaleString('pt-PT')} />
                   <Row k="Receção automática no A1" v={last.devices.autoReceiveError ? <span className="text-[#c7830b]">{last.devices.autoReceiveError}</span> : `${(last.devices.autoReceived ?? 0).toLocaleString('pt-PT')} IMEI(s) novos`} />
-                  <Row k="Armazém Trânsito" v={last.devices.transitError ? <span className="text-[#c7830b]">{last.devices.transitError}</span> : `${((last.devices.transitMoved ?? 0) + (last.devices.transitReceived ?? 0)).toLocaleString('pt-PT')} entraram · ${(last.devices.transitReturned ?? 0).toLocaleString('pt-PT')} saíram (conta Frotcom Lusitana - Transit)`} />
+                  {([['transito', 'Armazém Trânsito', 'Transit'], ['suspensos', 'Armazém Suspensos', 'Suspended']] as const).map(([k, label, acc]) => {
+                    const r = last.devices.mirrors?.[k]
+                    return <Row key={k} k={label} v={!r ? '—' : r.error ? <span className="text-[#c7830b]">{r.error}</span> : `${r.in.toLocaleString('pt-PT')} entraram · ${r.out.toLocaleString('pt-PT')} saíram (conta Frotcom Lusitana - ${acc})`} />
+                  })}
                   {last.devices.error && <Row k="Aviso" v={<span className="text-[#c7830b]">{last.devices.error}</span>} />}
                 </>
               )}

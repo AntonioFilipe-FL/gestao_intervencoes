@@ -252,6 +252,7 @@ export async function getInstalledConflicts() {
     from stock_current c join devices d on d.imei = c.imei
     where c.warehouse_id is not null and d.active and nullif(btrim(d.license_plate), '') is not null and not gestao_interv.is_internal_account(d.intranet_account_id)
       and c.warehouse_id is distinct from gestao_interv.mobilized_wh() -- no Mobilizado estar instalado é o normal
+      and c.warehouse_id is distinct from gestao_interv.suspended_wh() -- nos Suspensos também (clientes suspensos)
     group by c.warehouse_id`
 }
 
@@ -276,6 +277,7 @@ export async function removeInstalledFromStock(input: { warehouseId?: string; im
       where c.warehouse_id is not null and d.active and nullif(btrim(d.license_plate), '') is not null
         and not gestao_interv.is_internal_account(d.intranet_account_id)
         and c.warehouse_id is distinct from gestao_interv.mobilized_wh()
+        and c.warehouse_id is distinct from gestao_interv.suspended_wh()
         ${input.warehouseId ? sql`and c.warehouse_id = ${input.warehouseId}` : sql``}
         ${imeis.length ? sql`and c.imei = any(${imeis})` : sql``}`
     if (!rows.length) throw new Error('Não há IMEIs assinalados para dar saída.')

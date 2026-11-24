@@ -201,7 +201,7 @@ export type SyncResult = {
   ok: boolean
   error?: string
   accounts: { total: number; linked: number; renamed: number; deactivated: number; pending: number }
-  devices: { total: number; upserted: number; withoutClient: number; error?: string; sampleKeys?: string[]; mode?: string; withShippedOn?: number; autoReceived?: number; autoReceiveError?: string; transitMoved?: number; transitReceived?: number; transitReturned?: number; transitError?: string }
+  devices: { total: number; upserted: number; withoutClient: number; error?: string; sampleKeys?: string[]; mode?: string; withShippedOn?: number; autoReceived?: number; autoReceiveError?: string; mirrors?: Record<string, { in: number; out: number; error?: string }> }
   unmatchedLocal: string[] // clientes da BD sem correspondência na Intranet
 }
 
@@ -393,12 +393,12 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
         if (!result.devices.withShippedOn) result.devices.sampleKeys = Object.keys(raw[0] ?? {}).filter(k => k !== '__accountId')
         try { result.devices.autoReceived = await autoReceiveNewDevices() }
         catch (e) { result.devices.autoReceiveError = (e as Error).message }
-        // armazém Trânsito = equipamentos da conta "Frotcom Lusitana - Transit" (só leitura; usa os dados acabados de sincronizar)
+        // armazéns Trânsito e Suspensos = equipamentos das contas "Frotcom Lusitana - Transit" / "- Suspended"
+        // (só leitura; usa os dados acabados de sincronizar, sem pedidos extra à Intranet)
         try {
-          const { syncTransitWarehouse } = await import('@/lib/transit')
-          const t = await syncTransitWarehouse()
-          result.devices.transitMoved = t.moved; result.devices.transitReceived = t.received; result.devices.transitReturned = t.returned
-        } catch (e) { result.devices.transitError = (e as Error).message }
+          const { syncMirrorWarehouses } = await import('@/lib/transit')
+          result.devices.mirrors = await syncMirrorWarehouses()
+        } catch (e) { result.devices.mirrors = { transito: { in: 0, out: 0, error: (e as Error).message } } }
       }
     } catch (e) {
       result.devices.error = (e as Error).message
