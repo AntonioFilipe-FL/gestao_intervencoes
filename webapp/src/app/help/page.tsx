@@ -37,7 +37,7 @@ const SECTIONS: Section[] = [
       ]} />
       <H>Regras de stock nas intervenções</H>
       <L items={[
-        <><b>Armazém Trânsito</b> (só de leitura): mostra os equipamentos que estão na conta da Intranet <i>Frotcom Lusitana - Transit</i>. É atualizado sozinho em cada sincronização com a Intranet: os IMEIs que entram nessa conta passam para o Trânsito e os que saem voltam ao armazém de onde vieram (ou ao A1). Os IMEIs começados por 6 não entram no Trânsito (os que lá estiverem saem do stock). Na app não se fazem transferências, receções nem contagens para ou do Trânsito — a logística muda a conta na Intranet.</>,
+        <><b>Armazém Trânsito</b> (só de leitura): mostra os equipamentos que estão na conta da Intranet <i>Frotcom Lusitana - Transit</i>. É atualizado sozinho em cada sincronização com a Intranet: os IMEIs que entram nessa conta passam para o Trânsito e os que saem voltam ao armazém de onde vieram (ou ao A1). Só contam os IMEIs com equipamento (os começados por 6 ou por 900000 nunca): os outros não entram no Trânsito e os que lá estiverem saem do stock. Na app não se fazem transferências, receções nem contagens para ou do Trânsito — a logística muda a conta na Intranet.</>,
         <><b>Venda</b>: o equipamento instalado sai do stock. <b>Aluguer</b>: fica no armazém <i>Instalado Aluguer (Mobilizado)</i>.</>,
         <><b>Desinstalação</b> sem armazém de entrada: Aluguer → sai do Mobilizado e entra no armazém do técnico; Venda → o equipamento é do cliente e sai do stock (se ainda lá estivesse).</>,
         <>Clientes de Venda/Aluguer: a modalidade da intervenção define o destino do equipamento. Defina a modalidade de cada cliente em Configurações › Clientes.</>,
