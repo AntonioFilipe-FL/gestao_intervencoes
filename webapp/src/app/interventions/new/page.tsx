@@ -77,9 +77,27 @@ async function buildPrefill(draft: Draft, ref: ReferenceData) {
   const text = `${draft.form_values.action_description ?? ''} ${material}`
   const ftext = fold(text)
   const accessories = (ref.accessories ?? []).filter((a) => a.active !== false)
-  // modelo do equipamento da viatura, para escolher entre acessórios do mesmo género (ex.: "Antena C4MAX" vs "Antena GPS FMC6x0")
+  // equipamento da intervenção, para escolher entre acessórios do mesmo género (ex.: "Cablagem GV57" vs "Cablagem FMC"):
+  // o equipamento gasto (novo) segundo o stock; senão o modelo do equipamento da viatura na Intranet
+  const [spentEq] = draft.form_values.spent_equipment_imei
+    ? await sql<{ equipment_id: string | null }[]>`select equipment_id from stock_current where imei = ${draft.form_values.spent_equipment_imei}` : []
   const [dev] = draft.form_values.imei ? await sql<{ model: string | null }[]>`select model from devices where imei = ${draft.form_values.imei} limit 1` : []
-  const eqName = matchEquipment(dev?.model, ref.equipmentList ?? [], ref.hardwareMap ?? [])?.item.name ?? ''
+  const eqItem = (spentEq?.equipment_id && (ref.equipmentList ?? []).find((e) => e.id === spentEq.equipment_id))
+    || matchEquipment(dev?.model, ref.equipmentList ?? [], ref.hardwareMap ?? [])?.item
+  const eqName = eqItem?.name ?? ''
+  // 1.º critério: o kit do equipamento (Configurações › Equipamentos); 2.º: o nome do acessório com o modelo
+  // (por prefixo nos dois sentidos: "GV57" serve para "GV57CEU")
+  const kitIds = new Set((ref.equipmentKits ?? []).filter((k) => k.equipment_id === eqItem?.id).map((k) => k.accessory_id))
+  const eqTokens = eqName.split(/[^A-Za-z0-9]+/).map(fold).filter((t) => t.length >= 3)
+  const matchesEq = (accName: string) => accName.split(/[^A-Za-z0-9]+/).map(fold).filter((t) => t.length >= 3 && /\d/.test(t))
+    .some((t) => eqTokens.some((e) => e.startsWith(t) || t.startsWith(e)))
+  /** De vários acessórios possíveis, o único que está no kit; senão o único cujo nome tem o modelo do equipamento */
+  const pickForEquipment = <T extends { id: string; name: string }>(list: T[]) => {
+    const inKit = list.filter((a) => kitIds.has(a.id))
+    if (inKit.length === 1) return inKit[0]
+    const byName = (inKit.length ? inKit : list).filter((a) => matchesEq(a.name))
+    return byName.length === 1 ? byName[0] : null
+  }
   const picked = new Map<string, string>() // id → nome
   const doubts: string[] = []
   // 1) nome completo do acessório escrito no texto
@@ -93,9 +111,7 @@ async function buildPrefill(draft: Draft, ref: ReferenceData) {
     }
     for (const [kw, list] of groups) {
       if (!ftext.includes(kw) || list.some((a) => picked.has(a.id))) continue
-      const eqTokens = eqName.split(/\s+/).map(fold).filter((t) => t.length >= 3)
-      const byEq = list.filter((a) => eqTokens.some((t) => fold(a.name).includes(t)))
-      const choice = list.length === 1 ? list[0] : byEq.length === 1 ? byEq[0] : null
+      const choice = list.length === 1 ? list[0] : pickForEquipment(list)
       if (choice) picked.set(choice.id, choice.name)
       else doubts.push(`⚠ O formulário fala em “${list[0].name.split(/\s+/)[0].toLowerCase()}” — escolher qual nos acessórios gastos (${list.slice(0, 4).map((a) => a.name).join(', ')}${list.length > 4 ? '…' : ''}).`)
     }
@@ -122,7 +138,8 @@ async function buildPrefill(draft: Draft, ref: ReferenceData) {
     // candidatos: acessórios cujo nome contém todas as palavras do item (por prefixo)
     const cands = accessories.map((a) => ({ a, t: tokens(a.name) })).filter(({ t }) => want.every((w) => t.some((x) => x.startsWith(w) || w.startsWith(x))))
     const best = cands.sort((x, y) => x.t.length - y.t.length)
-    const choice = best.length === 1 || (best.length > 1 && best[0].t.length < best[1].t.length) ? best[0].a : null
+    const choice = best.length === 1 || (best.length > 1 && best[0].t.length < best[1].t.length) ? best[0].a
+      : best.length > 1 ? pickForEquipment(best.map((c) => c.a)) : null
     if (choice) { picked.set(choice.id, choice.name); qty.set(choice.id, Math.min(99, Number(m[1]))) }
     else if (best.length) doubts.push(`⚠ “${raw}” — escolher qual nos acessórios gastos (${best.slice(0, 4).map((c) => c.a.name).join(', ')}${best.length > 4 ? '…' : ''}).`)
     else notFound.push(raw)
