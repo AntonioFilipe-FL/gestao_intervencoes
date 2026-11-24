@@ -1,57 +1,89 @@
 import 'server-only'
 import { sql } from '@/lib/db'
-import { transferIntranetAccount } from '@/lib/intranet'
+import { matchEquipment } from '@/lib/hardware'
 
 /**
- * Armazém "Transit": equipamentos intermédios da logística. Só entram e saem por transferências feitas na app
- * (a app não vai ler a Intranet para o encher).
- * Na transferência há a opção de mudar também a conta na Intranet (só se for escolhida):
- *   para o Transit → conta "Frotcom Lusitana - Transit"; do Transit para outro armazém → conta "Frotcom Lusitana".
+ * Armazém "Trânsito" — só de leitura: mostra os equipamentos que estão na conta da Intranet "Frotcom Lusitana - Transit".
+ * Na app não se fazem transferências, receções nem contagens para/de este armazém; é a sincronização com a Intranet
+ * (que já lê os equipamentos de todas as contas) que o mantém (`syncTransitWarehouse`, a seguir à receção automática):
+ *   - IMEI na conta Transit e noutro armazém (ou fora do stock) → passa para o Trânsito;
+ *   - IMEI no Trânsito que saiu da conta Transit → volta ao armazém onde estava antes (se entrou sem armazém, vai para o A1).
+ * Os movimentos ficam com created_by 'auto:transito' e is_correction (uma intervenção posterior com o IMEI passa à frente).
  */
+
+export const TRANSIT_NAME_RE = /^\s*tr[aâ]nsito?\s*$/i
+export const isTransitName = (name: string | null | undefined) => TRANSIT_NAME_RE.test(name ?? '')
 
 export async function transitWarehouseId(): Promise<string | null> {
   const [w] = await sql<{ id: string | null }[]>`select gestao_interv.transit_wh() as id`
   return w?.id ?? null
 }
 
-/** Conta "Frotcom Lusitana - Transit" e conta principal "Frotcom Lusitana" (das contas já guardadas na app) */
-export async function transitAccounts() {
-  const [t] = await sql<{ id: string }[]>`
-    select intranet_account_id as id from clients where intranet_account_id is not null and gestao_interv.is_transit_account(intranet_account_id)
-    union select intranet_account_id from intranet_pending where gestao_interv.is_transit_account(intranet_account_id) limit 1`
-  const [m] = await sql<{ id: string }[]>`
-    select intranet_account_id as id from clients where intranet_account_id is not null and lower(btrim(coalesce(intranet_short_name, name))) = 'frotcom lusitana'
-    union select intranet_account_id from intranet_pending where lower(btrim(name)) = 'frotcom lusitana' limit 1`
-  return { transit: t?.id ?? null, main: m?.id ?? null }
+/** Erro se algum dos armazéns indicados for o Trânsito (só de leitura) */
+export async function assertNotTransit(...warehouseIds: (string | null | undefined)[]) {
+  const wh = await transitWarehouseId()
+  if (wh && warehouseIds.includes(wh))
+    throw new Error('O armazém Trânsito é só de leitura: mostra os equipamentos da conta "Frotcom Lusitana - Transit" da Intranet e é atualizado pela sincronização.')
 }
 
-/**
- * Depois de uma transferência na app em que se escolheu "mudar também a conta na Intranet":
- * os IMEIs que entraram no Transit passam para a conta Transit; os que saíram do Transit passam para a conta Frotcom Lusitana.
- * Devolve mensagens para o utilizador (nunca lança erro: o stock já ficou gravado).
- */
-export async function changeTransitAccounts(moves: { imei: string; from: string | null; to: string }[], by: string): Promise<string[]> {
-  try {
-    const wh = await transitWarehouseId()
-    if (!wh) return []
-    const toTransit = moves.filter((m) => m.to === wh && m.from !== wh).map((m) => m.imei)
-    const fromTransit = moves.filter((m) => m.from === wh && m.to !== wh).map((m) => m.imei)
-    if (!toTransit.length && !fromTransit.length) return []
-    const acc = await transitAccounts()
-    const msgs: string[] = []
-    const run = async (imeis: string[], dest: string | null, label: string) => {
-      if (!imeis.length) return
-      if (!dest) { msgs.push(`Conta "${label}" não encontrada (sincronize as contas da Intranet) — conta não alterada em ${imeis.length} IMEI(s).`); return }
-      const res = await transferIntranetAccount(imeis, dest, `Transferido pela app Gestão de Intervenções (${by})`)
-      const ok = res.filter((r) => r.ok).length
-      const bad = res.filter((r) => !r.ok)
-      if (ok) msgs.push(`Intranet: ${ok} IMEI(s) na conta "${label}".`)
-      if (bad.length) msgs.push(`Intranet: conta NÃO alterada em ${bad.length} IMEI(s): ${bad.slice(0, 5).map((b) => `${b.imei} (${b.error})`).join('; ')}${bad.length > 5 ? '…' : ''}`)
-    }
-    await run(toTransit, acc.transit, 'Frotcom Lusitana - Transit')
-    await run(fromTransit, acc.main, 'Frotcom Lusitana')
-    return msgs
-  } catch (e) {
-    return [`Intranet: conta NÃO alterada — ${(e as Error).message}`]
+export async function syncTransitWarehouse(): Promise<{ moved: number; received: number; returned: number }> {
+  const wh = await transitWarehouseId()
+  if (!wh) throw new Error('Não existe o armazém "Trânsito" (aplique o db/schema.sql).')
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Lisbon' })
+
+  // 1) entram: IMEIs da conta Transit que não estão no Trânsito
+  const inRows = await sql<{ imei: string; model: string | null; plate: string | null; warehouse_id: string | null; equipment_id: string | null; modality: string | null }[]>`
+    select d.imei, d.model, d.license_plate as plate, c.warehouse_id, c.equipment_id, c.modality
+    from devices d
+    left join stock_current c on c.imei = d.imei
+    where d.active and d.imei ~ '^[0-9]{15}$' and d.imei !~ '^80{6}'
+      and gestao_interv.is_transit_account(d.intranet_account_id)
+      and not exists (select 1 from ignored_imeis ig where ig.imei = d.imei)
+      and c.warehouse_id is distinct from ${wh}`
+  const needEq = inRows.some((r) => !r.equipment_id)
+  const [equipment, mappings] = needEq
+    ? await Promise.all([
+        sql<{ id: string; name: string }[]>`select id, name from equipment_list where active`,
+        sql<{ hardware: string; equipment_id: string }[]>`select hardware, equipment_id from hardware_map`,
+      ])
+    : [[], []]
+  const ins = inRows.map((r) => ({
+    imei: r.imei,
+    equipment_id: r.equipment_id ?? matchEquipment(r.model, equipment, mappings)?.item.id ?? null,
+    kind: r.warehouse_id ? 'transferencia' : 'rececao', is_correction: true,
+    from_warehouse_id: r.warehouse_id, to_warehouse_id: wh,
+    modality: r.modality ?? 'Venda', moved_at: today, created_by: 'auto:transito',
+    notes: `Trânsito (Intranet: conta Frotcom Lusitana - Transit${r.plate ? ` · ${r.plate}` : ''})`,
+  }))
+
+  // 2) saem: IMEIs no Trânsito que já não estão na conta Transit → armazém de onde vieram (senão A1)
+  const outRows = await sql<{ imei: string; back: string | null; account: string | null }[]>`
+    select c.imei,
+           (select m.from_warehouse_id from stock_movements m
+             where m.imei = c.imei and m.to_warehouse_id = ${wh} and m.superseded_at is null
+             order by m.moved_at desc, m.seq desc limit 1) as back,
+           coalesce(dc.intranet_short_name, dc.name, p.name) as account
+    from stock_current c
+    left join devices d on d.imei = c.imei
+    left join clients dc on dc.id = d.client_id
+    left join intranet_pending p on p.intranet_account_id = d.intranet_account_id
+    where c.warehouse_id = ${wh}
+      and not (coalesce(d.active, false) and gestao_interv.is_transit_account(d.intranet_account_id))`
+  let a1: string | null = null
+  if (outRows.some((r) => !r.back || r.back === wh)) {
+    const [w] = await sql<{ id: string }[]>`select id from warehouses where active and name ilike 'A1 %' order by name limit 1`
+    a1 = w?.id ?? null
   }
+  const outs = outRows
+    .map((r) => ({ ...r, to: r.back && r.back !== wh ? r.back : a1 }))
+    .filter((r) => r.to)
+    .map((r) => ({
+      imei: r.imei, equipment_id: null, kind: 'transferencia', is_correction: true,
+      from_warehouse_id: wh, to_warehouse_id: r.to!, modality: null, moved_at: today, created_by: 'auto:transito',
+      notes: `Saiu da conta Frotcom Lusitana - Transit (Intranet: ${r.account ?? 'sem conta'})`,
+    }))
+
+  const all = [...ins, ...outs]
+  for (let i = 0; i < all.length; i += 500) await sql`insert into stock_movements ${sql(all.slice(i, i + 500))}`
+  return { moved: ins.filter((r) => r.kind === 'transferencia').length, received: ins.filter((r) => r.kind === 'rececao').length, returned: outs.length }
 }

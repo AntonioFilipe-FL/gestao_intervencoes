@@ -201,7 +201,7 @@ export type SyncResult = {
   ok: boolean
   error?: string
   accounts: { total: number; linked: number; renamed: number; deactivated: number; pending: number }
-  devices: { total: number; upserted: number; withoutClient: number; error?: string; sampleKeys?: string[]; mode?: string; withShippedOn?: number; autoReceived?: number; autoReceiveError?: string }
+  devices: { total: number; upserted: number; withoutClient: number; error?: string; sampleKeys?: string[]; mode?: string; withShippedOn?: number; autoReceived?: number; autoReceiveError?: string; transitMoved?: number; transitReceived?: number; transitReturned?: number; transitError?: string }
   unmatchedLocal: string[] // clientes da BD sem correspondência na Intranet
 }
 
@@ -393,6 +393,12 @@ export async function syncFromIntranet(by: string): Promise<SyncResult> {
         if (!result.devices.withShippedOn) result.devices.sampleKeys = Object.keys(raw[0] ?? {}).filter(k => k !== '__accountId')
         try { result.devices.autoReceived = await autoReceiveNewDevices() }
         catch (e) { result.devices.autoReceiveError = (e as Error).message }
+        // armazém Trânsito = equipamentos da conta "Frotcom Lusitana - Transit" (só leitura; usa os dados acabados de sincronizar)
+        try {
+          const { syncTransitWarehouse } = await import('@/lib/transit')
+          const t = await syncTransitWarehouse()
+          result.devices.transitMoved = t.moved; result.devices.transitReceived = t.received; result.devices.transitReturned = t.returned
+        } catch (e) { result.devices.transitError = (e as Error).message }
       }
     } catch (e) {
       result.devices.error = (e as Error).message
@@ -792,65 +798,6 @@ export async function updateIntranetDevices(items: IntranetDeviceUpdate[]): Prom
       }
       if (transferError) problems.unshift(transferError)
       out.push(problems.length ? { imei: it.imei, ok: false, before, plate, error: problems.join(' · ') } : { imei: it.imei, ok: true, before, plate })
-    }
-    return out
-  } finally {
-    await logout(token)
-  }
-}
-
-/**
- * Muda SÓ a conta de equipamentos na Intranet (POST /api/devices/transfer, clearData: false — não apaga dados nem mexe na matrícula).
- * Usado pelas transferências de/para o armazém Transit. Lê a lista antes (vehicleId, conta atual) e depois (confirma a conta).
- */
-export async function transferIntranetAccount(imeis: string[], destinationAccountId: string, notes: string): Promise<{ imei: string; ok: boolean; error?: string }[]> {
-  if (!imeis.length) return []
-  const token = await login()
-  try {
-    const read = async () => {
-      const m = new Map<string, { vid: string | null; acc: string | null }>()
-      for (const d of asList(await getJson('/api/devices', token))) {
-        const imei = pick(d, ['imei', 'IMEI', 'Imei', 'deviceImei'])
-        if (imei) m.set(imei, { vid: pick(d, ['vehicleId', 'VehicleId', 'vehicle.id', 'id']), acc: pick(d, ['accountId', 'AccountId']) })
-      }
-      return m
-    }
-    const before = await read()
-    const out: { imei: string; ok: boolean; error?: string }[] = []
-    const todo: { imei: string; vid: string }[] = []
-    for (const imei of imeis) {
-      const b = before.get(imei)
-      if (!b) out.push({ imei, ok: false, error: 'IMEI não encontrado na Intranet' })
-      else if (String(b.acc ?? '') === String(destinationAccountId)) out.push({ imei, ok: true })
-      else if (!b.vid) out.push({ imei, ok: false, error: 'sem vehicleId na Intranet' })
-      else todo.push({ imei, vid: b.vid })
-    }
-    // em lotes de 50 (um pedido por lote)
-    for (let i = 0; i < todo.length; i += 50) {
-      const batch = todo.slice(i, i + 50)
-      const tr = await intranetFetch(`${baseUrl()}/api/devices/transfer?api_key=${encodeURIComponent(token)}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
-        body: JSON.stringify({ vehicleIds: batch.map((b) => (/^\d+$/.test(b.vid) ? Number(b.vid) : b.vid)), destinationAccountId: String(destinationAccountId),
-          transferNotes: notes, clearData: false }),
-      })
-      if (!tr.ok) {
-        const msg = `HTTP ${tr.status} ${(await tr.text()).slice(0, 160)}`
-        for (const b of batch) out.push({ imei: b.imei, ok: false, error: `a transferência de conta falhou: ${msg}` })
-        batch.length = 0
-      }
-    }
-    // confirma na Intranet e guarda a conta nova em devices
-    const sent = todo.filter((t) => !out.some((o) => o.imei === t.imei))
-    if (sent.length) {
-      const after = await read()
-      for (const t of sent) {
-        const acc = after.get(t.imei)?.acc ?? null
-        if (String(acc ?? '') === String(destinationAccountId)) {
-          await sql`update devices set intranet_account_id = ${String(destinationAccountId)},
-            client_id = (select c.id from clients c where c.intranet_account_id = ${String(destinationAccountId)} order by c.created_at limit 1) where imei = ${t.imei}`
-          out.push({ imei: t.imei, ok: true })
-        } else out.push({ imei: t.imei, ok: false, error: 'pedido aceite, mas a conta na Intranet não mudou' })
-      }
     }
     return out
   } finally {

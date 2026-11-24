@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { changeTransitAccounts } from '@/lib/transit'
+import { assertNotTransit } from '@/lib/transit'
 import { sql } from '@/lib/db'
 import { requireAdmin, requirePerm, requireUser } from '@/lib/auth'
 import { matchEquipment } from '@/lib/hardware'
@@ -114,6 +114,7 @@ export async function registerReception(input: {
   try {
     const user = await requirePerm('stock', 'write')
     if (!input.warehouseId) throw new Error('Escolha o armazém.')
+    await assertNotTransit(input.warehouseId)
     if (input.modality !== 'Venda' && input.modality !== 'Aluguer') throw new Error('Escolha Venda ou Aluguer.')
     const imeis = parseImeis(input.imeis)
     const bad = imeis.filter((i) => !/^\d{15}$/.test(i) || /^80{6}/.test(i))
@@ -192,8 +193,6 @@ export async function registerTransfer(input: {
   fromWarehouseId?: string; fromWarehouseIds?: string[]; toWarehouseId: string; imeis: string; date: string; modality?: string; notes?: string
   /** false = só o equipamento (os acessórios do kit não acompanham) */
   withAccessories?: boolean
-  /** armazém Transit: mudar também a conta na Intranet (Transit ↔ Frotcom Lusitana) — só admin */
-  changeIntranetAccount?: boolean
 }): Promise<Result> {
   try {
     const user = await requirePerm('stock', 'write')
@@ -201,6 +200,7 @@ export async function registerTransfer(input: {
     const auto = !input.fromWarehouseId
     const origins = auto ? (input.fromWarehouseIds ?? []) : [input.fromWarehouseId!]
     if (!origins.length) throw new Error('Escolha pelo menos um armazém de origem.')
+    await assertNotTransit(input.toWarehouseId, ...origins) // Trânsito: só de leitura (espelha a conta Transit da Intranet)
     if (!auto && input.fromWarehouseId === input.toWarehouseId) throw new Error('O armazém de origem e o de destino são iguais.')
     const imeis = parseImeis(input.imeis)
     if (!imeis.length) throw new Error('Indique pelo menos um IMEI.')
@@ -222,11 +222,6 @@ export async function registerTransfer(input: {
     await sql`insert into stock_movements ${sql(rows)}`
     revalidatePath('/stock')
     const warnings: string[] = []
-    // armazém Transit: muda também a conta na Intranet (Transit ↔ Frotcom Lusitana), só se foi pedido
-    if (input.changeIntranetAccount) {
-      if (user.role !== 'admin' && !user.superadmin) warnings.push('Intranet: conta não alterada (só admin pode mudar a conta na Intranet).')
-      else warnings.push(...(await changeTransitAccounts(rows.map((r) => ({ imei: r.imei, from: r.from_warehouse_id, to: r.to_warehouse_id })), user.email)))
-    }
     if (already.length) warnings.push(`${already.length} já estavam no destino.`)
     const skipped = notThere.filter((i) => !already.includes(i))
     if (skipped.length) warnings.push(`${skipped.length} ignorado(s) (fora dos armazéns escolhidos ou sem stock): ${skipped.slice(0, 8).join(', ')}${skipped.length > 8 ? '…' : ''}`)
@@ -471,6 +466,7 @@ export async function previewStockCount(input: { warehouseId: string; imeis: str
 export async function applyStockCount(input: { warehouseId: string; imeis: string; date: string; modality?: string; notes?: string }): Promise<Result> {
   try {
     const user = await requirePerm('stock', 'write')
+    await assertNotTransit(input.warehouseId)
     const p = await previewStockCount(input)
     if (!p.missing.length && !p.extra.length) throw new Error('A contagem bate certo — não há nada a acertar.')
     const date = input.date || new Date().toISOString().slice(0, 10)

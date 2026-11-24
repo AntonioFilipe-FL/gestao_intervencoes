@@ -51,6 +51,8 @@ export default async function StockPage({ searchParams }: Props) {
   ])
   const margin = await getStockMinMargin()
   const warehouses = allWarehouses.filter((w) => w.type !== 'mobilizado')
+  // Trânsito: só de leitura (espelha a conta Transit da Intranet) — fora das listas de receção, transferência e contagem
+  const isTransit = (w: { name: string }) => /^\s*tr[aâ]nsito?\s*$/i.test(w.name)
   const mobilizedIds = new Set(allWarehouses.filter((w) => w.type === 'mobilizado').map((w) => w.id))
   const conflictOf = (wh?: string) => conflicts.filter((c) => !wh || c.warehouse_id === wh).reduce((a, c) => a + c.n, 0)
 
@@ -85,8 +87,8 @@ export default async function StockPage({ searchParams }: Props) {
             <a href={`/stock/export${p.wh ? `?wh=${p.wh}` : ''}`} className={buttonVariants({ size: 'lg', variant: 'inverse' })}>
               <FileSpreadsheet /> Exportar Excel{selectedWhName ? ` (${selectedWhName})` : ''}
             </a>
-            <StockActions warehouses={warehouses} originWarehouses={allWarehouses} equipment={equipment} />
-            <StockAdjust warehouses={warehouses} />
+            <StockActions warehouses={warehouses.filter((w) => !isTransit(w))} originWarehouses={allWarehouses.filter((w) => !isTransit(w))} equipment={equipment} />
+            <StockAdjust warehouses={warehouses.filter((w) => !isTransit(w))} />
             <StockMinimums warehouses={warehouses} equipment={equipment} minimums={minimums} margin={margin} />
             </>}
           </>

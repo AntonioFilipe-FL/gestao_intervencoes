@@ -935,14 +935,17 @@ alter table gestao_interv.interventions
   add column if not exists support_notified_by  text,
   add column if not exists support_notify_error text;
 
--- Armazém "Transit" (nov/2026): equipamentos intermédios da logística. Só se movimenta por transferências na app;
--- opcionalmente, a transferência muda também a conta na Intranet para "Frotcom Lusitana - Transit" (src/lib/transit.ts).
+-- Armazém "Trânsito" (nov/2026) — só de leitura: mostra os equipamentos da conta da Intranet "Frotcom Lusitana - Transit".
+-- Atualizado pela sincronização com a Intranet (src/lib/transit.ts); sem transferências, receções nem contagens manuais.
+update gestao_interv.warehouses set name = 'Trânsito'
+where lower(btrim(name)) = 'transit'
+  and not exists (select 1 from gestao_interv.warehouses where btrim(name) ~* '^tr[aâ]nsito$');
 insert into gestao_interv.warehouses (name, type)
-select 'Transit', 'ambos'
-where not exists (select 1 from gestao_interv.warehouses where lower(btrim(name)) = 'transit');
+select 'Trânsito', 'ambos'
+where not exists (select 1 from gestao_interv.warehouses where btrim(name) ~* '^tr[aâ]nsito?$');
 
 create or replace function gestao_interv.transit_wh() returns uuid language sql stable as $$
-  select id from gestao_interv.warehouses where lower(btrim(name)) = 'transit' order by active desc, created_at limit 1
+  select id from gestao_interv.warehouses where btrim(name) ~* '^tr[aâ]nsito?$' order by active desc, created_at limit 1
 $$;
 
 create or replace function gestao_interv.is_transit_account(p_account text) returns boolean language sql stable as $$
