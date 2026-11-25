@@ -1,12 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
-import { Camera, CameraOff, Download, Trash2, X, ArrowRightLeft } from 'lucide-react'
+import { Camera, CameraOff, Download, Trash2, X, ArrowRightLeft, Flashlight, ZoomIn, ImageUp } from 'lucide-react'
 import { locateImeis, registerTransfer } from '@/actions/stock'
 import { applyIntranetForTransfer, getIntranetAccounts } from '@/actions/intranet-write'
 
 /**
- * PWA de picagem: lê IMEIs por QR / código de barras (câmara do telemóvel, com o BarcodeDetector do Chrome Android)
+ * PWA de picagem: lê IMEIs por QR / código de barras (câmara do telemóvel: BarcodeDetector do Chrome Android + jsQR para os QR
+ *   que o BarcodeDetector não apanha — pequenos, invertidos; ou por fotografia, com o foco da câmara do telemóvel)
  * ou por um leitor que escreve como teclado (pistola / terminal: escreve o código e carrega Enter).
  * Depois transfere todos para um armazém, com as mesmas opções da Transferência do Stock.
  */
@@ -19,6 +20,9 @@ type DetectedBarcode = { rawValue: string }
 type BarcodeDetectorT = { detect: (src: CanvasImageSource) => Promise<DetectedBarcode[]> }
 type BarcodeDetectorCtor = { new (o?: { formats?: string[] }): BarcodeDetectorT; getSupportedFormats?: () => Promise<string[]> }
 type InstallPrompt = Event & { prompt: () => Promise<void> }
+type JsQR = (data: Uint8ClampedArray, w: number, h: number, o?: { inversionAttempts?: 'dontInvert' | 'onlyInvert' | 'attemptBoth' | 'invertFirst' }) => { data: string } | null
+// capacidades da câmara (lanterna, zoom, foco) — ainda não estão nos tipos do TypeScript
+type CamCaps = { torch?: boolean; zoom?: { min: number; max: number }; focusMode?: string[] }
 
 const WANTED_FORMATS = ['qr_code', 'code_128', 'code_39', 'code_93', 'ean_13', 'ean_8', 'itf', 'upc_a', 'data_matrix', 'pdf417', 'codabar']
 const READ_ONLY = /^\s*(tr[aâ]nsito?|suspensos)\s*$/i
@@ -92,53 +96,136 @@ export function Picagem({ destinations, isAdmin, userName }: { destinations: Opt
   const streamRef = useRef<MediaStream | null>(null)
   const loopRef = useRef<number | null>(null)
   const lastRef = useRef<{ code: string; at: number }>({ code: '', at: 0 })
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const jsqrRef = useRef<JsQR | null>(null)
+  const detectorRef = useRef<BarcodeDetectorT | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
   const [camOn, setCamOn] = useState(false)
   const [camError, setCamError] = useState<string | null>(null)
-  const [hasDetector, setHasDetector] = useState<boolean | null>(null)
-  useEffect(() => { setHasDetector('BarcodeDetector' in window) }, [])
+  const [caps, setCaps] = useState<{ torch: boolean; zoom: { min: number; max: number } | null }>({ torch: false, zoom: null })
+  const [torch, setTorch] = useState(false)
+  const [zoom, setZoom] = useState(1)
+
+  /** leitores: BarcodeDetector (se o browser tiver) e jsQR (sempre; carregado só quando é preciso) */
+  const loadReaders = useCallback(async () => {
+    if (!jsqrRef.current) jsqrRef.current = (await import('jsqr')).default as unknown as JsQR
+    const BD = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector
+    if (BD && !detectorRef.current) {
+      try {
+        const supported = (await BD.getSupportedFormats?.()) ?? WANTED_FORMATS
+        const formats = WANTED_FORMATS.filter((f) => supported.includes(f))
+        if (formats.length) detectorRef.current = new BD({ formats })
+      } catch { /* sem BarcodeDetector: fica só o jsQR (QR) */ }
+    }
+  }, [])
+
+  /** QR com jsQR numa imagem: recorte central (crop 0..1) reduzido a no máx. maxPx; tenta também a imagem invertida */
+  const qrFrom = useCallback((src: CanvasImageSource, w: number, h: number, crop: number, maxPx: number): string | null => {
+    const qr = jsqrRef.current
+    if (!qr || !w || !h) return null
+    const c = (canvasRef.current ??= document.createElement('canvas'))
+    const cw = Math.round(w * crop), ch = Math.round(h * crop)
+    const scale = Math.min(1, maxPx / Math.max(cw, ch))
+    c.width = Math.max(1, Math.round(cw * scale)); c.height = Math.max(1, Math.round(ch * scale))
+    const ctx = c.getContext('2d', { willReadFrequently: true })
+    if (!ctx) return null
+    ctx.drawImage(src, (w - cw) / 2, (h - ch) / 2, cw, ch, 0, 0, c.width, c.height)
+    const img = ctx.getImageData(0, 0, c.width, c.height)
+    return qr(img.data, c.width, c.height, { inversionAttempts: 'attemptBoth' })?.data ?? null
+  }, [])
+
+  const handleCode = useCallback((raw: string) => {
+    const now = Date.now()
+    // o mesmo código seguido só conta uma vez (2,5 s)
+    if (raw === lastRef.current.code && now - lastRef.current.at < 2500) return
+    lastRef.current = { code: raw, at: now }
+    addFromText(raw)
+  }, [addFromText])
 
   const stopCamera = useCallback(() => {
     if (loopRef.current) { window.clearInterval(loopRef.current); loopRef.current = null }
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
-    setCamOn(false)
+    setCamOn(false); setTorch(false); setZoom(1)
   }, [])
 
   const startCamera = useCallback(async () => {
     setCamError(null)
-    const BD = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector
-    if (!BD) { setCamError('Este browser não lê códigos pela câmara. Use o Chrome no Android, o leitor de códigos ou escreva o IMEI.'); return }
+    if (!navigator.mediaDevices?.getUserMedia) { setCamError('Este browser não deixa usar a câmara aqui. Use "Fotografar código", o leitor ou escreva o IMEI.'); return }
     try {
-      const supported = (await BD.getSupportedFormats?.()) ?? WANTED_FORMATS
-      const detector = new BD({ formats: WANTED_FORMATS.filter((f) => supported.includes(f)) })
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false })
+      await loadReaders()
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false,
+      })
       streamRef.current = stream
+      const track = stream.getVideoTracks()[0]
+      const tc = (track.getCapabilities?.() ?? {}) as CamCaps
+      // foco contínuo (se a câmara deixar): ajuda nos QR pequenos
+      if (tc.focusMode?.includes('continuous')) await track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }).catch(() => {})
+      setCaps({ torch: !!tc.torch, zoom: tc.zoom && tc.zoom.max > tc.zoom.min ? tc.zoom : null })
       const v = videoRef.current!
       v.srcObject = stream
       await v.play()
       setCamOn(true)
       let busy = false
+      let tick = 0
       loopRef.current = window.setInterval(async () => {
         if (busy || v.readyState < 2) return
         busy = true
+        tick++
         try {
-          const codes = await detector.detect(v)
-          for (const c of codes) {
-            const now = Date.now()
-            // o mesmo código seguido só conta uma vez (2,5 s)
-            if (c.rawValue === lastRef.current.code && now - lastRef.current.at < 2500) continue
-            lastRef.current = { code: c.rawValue, at: now }
-            addFromText(c.rawValue)
+          let found = false
+          if (detectorRef.current) {
+            const codes = await detectorRef.current.detect(v)
+            for (const c of codes) { found = true; handleCode(c.rawValue) }
+          }
+          // QR que o BarcodeDetector não apanhou: jsQR, alternando o centro (onde se aponta) e a imagem toda
+          if (!found) {
+            const raw = qrFrom(v, v.videoWidth, v.videoHeight, tick % 2 ? 0.6 : 1, tick % 2 ? 800 : 1000)
+            if (raw) handleCode(raw)
           }
         } catch { /* frame sem leitura */ }
         busy = false
-      }, 200)
+      }, 180)
     } catch (e) {
       stopCamera()
       setCamError((e as Error).name === 'NotAllowedError' ? 'Sem autorização para usar a câmara. Autorize nas definições do browser.' : `Não foi possível abrir a câmara: ${(e as Error).message}`)
     }
-  }, [addFromText, stopCamera])
+  }, [loadReaders, qrFrom, handleCode, stopCamera])
   useEffect(() => () => stopCamera(), [stopCamera])
+
+  const applyTrack = useCallback(async (c: Record<string, unknown>) => {
+    const track = streamRef.current?.getVideoTracks()[0]
+    if (track) await track.applyConstraints({ advanced: [c as MediaTrackConstraintSet] }).catch(() => {})
+  }, [])
+  const toggleTorch = () => { const t = !torch; setTorch(t); void applyTrack({ torch: t }) }
+  const cycleZoom = () => {
+    if (!caps.zoom) return
+    const steps = [1, 2, 3].filter((z) => z >= caps.zoom!.min && z <= caps.zoom!.max)
+    const next = steps[(steps.indexOf(zoom) + 1) % steps.length] ?? 1
+    setZoom(next); void applyTrack({ zoom: next })
+  }
+
+  /** Fotografia do código (câmara do telemóvel, com o foco e a resolução toda): lê QR e códigos de barras */
+  const readPhoto = useCallback(async (file: File) => {
+    try {
+      await loadReaders()
+      const bmp = await createImageBitmap(file)
+      let raws: string[] = []
+      if (detectorRef.current) raws = (await detectorRef.current.detect(bmp).catch(() => [])).map((c) => c.rawValue)
+      if (!raws.length) {
+        for (const [crop, max] of [[1, 1600], [0.6, 1400], [1, 2400], [0.4, 1200]] as const) {
+          const raw = qrFrom(bmp, bmp.width, bmp.height, crop, max)
+          if (raw) { raws = [raw]; break }
+        }
+      }
+      bmp.close()
+      if (!raws.length) { setFeedback({ tone: 'err', text: 'Não encontrei nenhum código na fotografia. Tente mais perto e com o código direito.' }); beep(false); return }
+      for (const r of raws) addFromText(r)
+    } catch (e) {
+      setFeedback({ tone: 'err', text: `Não foi possível ler a fotografia: ${(e as Error).message}` })
+    }
+  }, [loadReaders, qrFrom, addFromText, beep])
 
   // ---------- PWA: service worker e "Instalar" ----------
   const [install, setInstall] = useState<InstallPrompt | null>(null)
@@ -220,16 +307,37 @@ export function Picagem({ destinations, isAdmin, userName }: { destinations: Opt
         <div className="overflow-hidden rounded-[2px] border border-fc-dark-20 bg-black">
           <div className={camOn ? 'relative' : 'hidden'}>
             <video ref={videoRef} playsInline muted className="aspect-[4/3] w-full object-cover" />
-            <div className="pointer-events-none absolute inset-x-6 top-1/2 h-0.5 -translate-y-1/2 bg-fc-red shadow-[0_0_8px_#cf0a2c]" />
+            {/* zona de leitura: apontar o código para o centro */}
+            <div className="pointer-events-none absolute top-1/2 left-1/2 aspect-square w-[60%] -translate-x-1/2 -translate-y-1/2 rounded-[4px] border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.25)]" />
+            <div className="pointer-events-none absolute inset-x-[20%] top-1/2 h-0.5 -translate-y-1/2 bg-fc-red shadow-[0_0_8px_#cf0a2c]" />
+            <div className="absolute right-2 bottom-2 flex gap-2">
+              {caps.torch && (
+                <button type="button" onClick={toggleTorch} aria-label="Lanterna" className={`rounded-full p-3 ${torch ? 'bg-yellow-300 text-black' : 'bg-black/60 text-white'}`}>
+                  <Flashlight className="size-5" />
+                </button>
+              )}
+              {caps.zoom && (
+                <button type="button" onClick={cycleZoom} aria-label="Zoom" className="flex items-center gap-1 rounded-full bg-black/60 px-3 py-2 text-[14px] font-bold text-white">
+                  <ZoomIn className="size-5" /> {zoom}×
+                </button>
+              )}
+            </div>
           </div>
-          <button type="button" onClick={() => (camOn ? stopCamera() : void startCamera())} disabled={hasDetector === false}
-            className="flex h-14 w-full items-center justify-center gap-2 bg-fc-dark-100 text-[16px] font-bold uppercase tracking-[0.03em] text-white disabled:opacity-60">
-            {camOn ? <><CameraOff className="size-5" /> Parar câmara</> : <><Camera className="size-5" /> Ler com a câmara</>}
-          </button>
+          <div className="grid grid-cols-[1fr_auto]">
+            <button type="button" onClick={() => (camOn ? stopCamera() : void startCamera())}
+              className="flex h-14 items-center justify-center gap-2 bg-fc-dark-100 text-[16px] font-bold uppercase tracking-[0.03em] text-white">
+              {camOn ? <><CameraOff className="size-5" /> Parar câmara</> : <><Camera className="size-5" /> Ler com a câmara</>}
+            </button>
+            <button type="button" onClick={() => { stopCamera(); fileRef.current?.click() }} title="Tirar uma fotografia ao código (usa o foco da câmara do telemóvel)"
+              className="flex h-14 items-center gap-2 border-l border-white/20 bg-fc-dark-100 px-4 text-[13px] font-bold uppercase text-white">
+              <ImageUp className="size-5" /> Foto
+            </button>
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void readPhoto(f); e.target.value = '' }} />
         </div>
-        {(camError || hasDetector === false) && (
-          <p className="bg-fc-warning/15 px-3 py-2 text-[13px]">{camError ?? 'Este browser não lê códigos pela câmara. Use o Chrome no Android, o leitor de códigos ou escreva o IMEI.'}</p>
-        )}
+        {camError && <p className="bg-fc-warning/15 px-3 py-2 text-[13px]">{camError}</p>}
+        {camOn && <p className="text-center text-[12px] text-fc-dark-60">Aponte o código para o quadrado. QR pequenos: aproxime ou use o zoom; se não ler, use <b>Foto</b>.</p>}
 
         {/* leitor (escreve como teclado + Enter) ou escrita à mão */}
         <form onSubmit={(e) => { e.preventDefault(); if (typed.trim()) addFromText(typed); setTyped(''); inputRef.current?.focus() }} className="flex gap-2">
