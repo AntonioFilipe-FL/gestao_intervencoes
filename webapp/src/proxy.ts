@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { decrypt, SESSION_COOKIE } from '@/lib/session'
 
 // /api/cron: sem sessão, protegido por CRON_SECRET na própria rota
-const PUBLIC_PATHS = ['/login', '/auth', '/unauthorized', '/api/cron/']
+// manifesto, service worker e ícones da PWA de picagem: o browser pede-os sem cookies
+const PUBLIC_PATHS = ['/login', '/auth', '/unauthorized', '/api/cron/', '/picagem.webmanifest', '/picagem-sw.js', '/icons/']
 
 /**
  * Verificação otimista: sem sessão válida → /login.
@@ -16,10 +17,14 @@ export async function proxy(request: NextRequest) {
   if (!session) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
-    url.search = ''
+    // PWA de picagem: depois do login volta à picagem
+    url.search = pathname.startsWith('/picagem') ? '?next=/picagem' : ''
     return NextResponse.redirect(url)
   }
-  return NextResponse.next()
+  // o layout usa o caminho para mostrar a picagem sem menu nem avisos
+  const headers = new Headers(request.headers)
+  headers.set('x-pathname', pathname)
+  return NextResponse.next({ request: { headers } })
 }
 
 export const config = {

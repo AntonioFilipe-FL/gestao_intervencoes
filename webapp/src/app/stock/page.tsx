@@ -82,6 +82,7 @@ export default async function StockPage({ searchParams }: Props) {
         actions={(
           <>
             <Link href="/stock/mobilized" className={buttonVariants({ size: 'lg', variant: 'inverse' })}>Mobilizado por cliente</Link>
+            {isAdmin && <Link href="/picagem" className={buttonVariants({ size: 'lg', variant: 'inverse' })} title="Picar IMEIs com a câmara ou o leitor e transferir (instalável no telemóvel)">Picagem</Link>}
             {isAdmin && <>
             <Link href="/stock/transfers" className={buttonVariants({ size: 'lg', variant: 'inverse' })}>Histórico de transferências</Link>
             <a href={`/stock/export${p.wh ? `?wh=${p.wh}` : ''}`} className={buttonVariants({ size: 'lg', variant: 'inverse' })}>

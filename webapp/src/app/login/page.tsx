@@ -7,8 +7,10 @@ const ERRORS: Record<string, string> = {
   oauth: 'Não foi possível concluir o login com Google. Tente novamente.',
 }
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { error } = await searchParams
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; next?: string }> }) {
+  const { error, next } = await searchParams
+  // só caminhos internos (ex.: /picagem)
+  const safeNext = next && /^\/[a-z0-9/_-]*$/i.test(next) && !next.startsWith('//') ? next : ''
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-fc-dark-100 p-4">
@@ -25,7 +27,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
 
         <div className="mt-8">
           <a
-            href="/auth/google"
+            href={safeNext ? `/auth/google?next=${encodeURIComponent(safeNext)}` : '/auth/google'}
             className={cn(buttonVariants({ variant: 'inverse', size: 'lg' }), 'w-full gap-3')}
           >
             <svg className="size-4" viewBox="0 0 24 24" aria-hidden>

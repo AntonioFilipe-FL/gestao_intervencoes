@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { authorizationUrl, createPkce, OAUTH_PURPOSE_COOKIE, OAUTH_STATE_COOKIE, OAUTH_VERIFIER_COOKIE } from '@/lib/google'
+import { authorizationUrl, createPkce, OAUTH_NEXT_COOKIE, OAUTH_PURPOSE_COOKIE, OAUTH_STATE_COOKIE, OAUTH_VERIFIER_COOKIE } from '@/lib/google'
 import { getCurrentUser } from '@/lib/auth'
 
 /**
@@ -33,5 +33,9 @@ export async function GET(request: Request) {
   response.cookies.set(OAUTH_STATE_COOKIE, state, opts)
   response.cookies.set(OAUTH_VERIFIER_COOKIE, verifier, opts)
   response.cookies.set(OAUTH_PURPOSE_COOKIE, purpose, opts)
+  // login: página para onde voltar (só caminhos internos)
+  const next = new URL(request.url).searchParams.get('next') ?? ''
+  if (purpose === 'login' && /^\/[a-z0-9/_-]*$/i.test(next) && !next.startsWith('//')) response.cookies.set(OAUTH_NEXT_COOKIE, next, opts)
+  else response.cookies.delete(OAUTH_NEXT_COOKIE)
   return response
 }

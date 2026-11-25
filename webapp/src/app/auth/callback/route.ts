@@ -3,7 +3,7 @@ import { cookies } from 'next/headers'
 import { sql } from '@/lib/db'
 import { createSession } from '@/lib/session'
 import { encryptSecret } from '@/lib/crypto'
-import { appUrl, exchangeCode, senderEmail, OAUTH_PURPOSE_COOKIE, OAUTH_STATE_COOKIE, OAUTH_VERIFIER_COOKIE } from '@/lib/google'
+import { appUrl, exchangeCode, senderEmail, OAUTH_NEXT_COOKIE, OAUTH_PURPOSE_COOKIE, OAUTH_STATE_COOKIE, OAUTH_VERIFIER_COOKIE } from '@/lib/google'
 import { getCurrentUser } from '@/lib/auth'
 import { syncInBackgroundIfStale } from '@/lib/intranet'
 
@@ -21,6 +21,8 @@ export async function GET(request: Request) {
   const expectedState = store.get(OAUTH_STATE_COOKIE)?.value
   const verifier = store.get(OAUTH_VERIFIER_COOKIE)?.value
   const purpose = store.get(OAUTH_PURPOSE_COOKIE)?.value
+  const nextPath = store.get(OAUTH_NEXT_COOKIE)?.value ?? ''
+  store.delete(OAUTH_NEXT_COOKIE)
   store.delete(OAUTH_STATE_COOKIE)
   store.delete(OAUTH_VERIFIER_COOKIE)
   store.delete(OAUTH_PURPOSE_COOKIE)
@@ -46,7 +48,7 @@ export async function GET(request: Request) {
     await createSession({ email, name: user.name, picture: user.picture })
     // clientes e IMEIs da Intranet: atualiza em segundo plano, sem atrasar a entrada
     void syncInBackgroundIfStale(email)
-    return NextResponse.redirect(`${base}/interventions`)
+    return NextResponse.redirect(`${base}${/^\/[a-z0-9/_-]*$/i.test(nextPath) && !nextPath.startsWith('//') ? nextPath : '/interventions'}`)
   } catch (e) {
     console.error('Erro no login Google:', e)
     return NextResponse.redirect(`${base}/login?error=oauth`)

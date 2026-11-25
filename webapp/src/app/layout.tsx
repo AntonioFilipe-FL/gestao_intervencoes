@@ -3,6 +3,7 @@ import { Lato } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/navbar";
 import { getCurrentUser } from "@/lib/auth";
+import { headers } from "next/headers";
 import { AutoReceptionNotice } from "@/components/AutoReceptionNotice";
 import { LowStockNotice } from "@/components/LowStockNotice";
 import { NewAccountsNotice } from "@/components/NewAccountsNotice";
@@ -28,6 +29,8 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const user = await getCurrentUser();
+  // PWA de picagem: ecrã próprio, sem menu nem avisos
+  const bare = ((await headers()).get("x-pathname") ?? "").startsWith("/picagem");
 
   return (
     <html lang="pt" className={`${lato.variable} h-full antialiased`} suppressHydrationWarning>
@@ -36,12 +39,12 @@ export default async function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: "try{if(localStorage.getItem('theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}" }} />
       </head>
       <body className="flex min-h-full flex-col bg-fc-grey-100 text-fc-dark-100">
-        {user && <Navbar user={user} />}
-        {user?.role === "admin" && <PendingDraftsNotice />}
-        {user?.role === "admin" && <AutoReceptionNotice />}
-        {user?.role === "admin" && <LowStockNotice />}
-        {user?.superadmin && <NewAccountsNotice />}
-        {user?.superadmin && <JobProblemsNotice />}
+        {user && !bare && <Navbar user={user} />}
+        {!bare && user?.role === "admin" && <PendingDraftsNotice />}
+        {!bare && user?.role === "admin" && <AutoReceptionNotice />}
+        {!bare && user?.role === "admin" && <LowStockNotice />}
+        {!bare && user?.superadmin && <NewAccountsNotice />}
+        {!bare && user?.superadmin && <JobProblemsNotice />}
         <main className="flex-1">{children}</main>
       </body>
     </html>

@@ -5,6 +5,8 @@ export const OAUTH_STATE_COOKIE = 'gi_oauth_state'
 export const OAUTH_VERIFIER_COOKIE = 'gi_oauth_verifier'
 /** 'login' (entrada normal), 'sender' (ligar a conta de envio de emails) ou 'drive' (ligar o Google Drive das cópias de segurança) */
 export const OAUTH_PURPOSE_COOKIE = 'gi_oauth_purpose'
+/** página para onde voltar depois do login (ex.: /picagem) */
+export const OAUTH_NEXT_COOKIE = 'gi_oauth_next'
 
 /** Conta de onde saem os emails automáticos */
 export const senderEmail = () => (process.env.BILLING_EMAIL_FROM || 'logistica@pt.frotcom.com').toLowerCase()
